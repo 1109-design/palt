@@ -1,10 +1,15 @@
+/// history_screen.dart — transfer log (Beacon).
+///
+/// Entries grouped by day. Direction encoded consistently with the rest of
+/// the app: outgoing ↑ amber, incoming ↓ green. Wire-derived values in mono.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/history_provider.dart';
 
 import '../../utils/version.dart';
 import '../../theme/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -26,38 +31,79 @@ class HistoryScreen extends ConsumerWidget {
     return '${(ms / 1000).toStringAsFixed(1)}s';
   }
 
+  String _formatTime(DateTime t) {
+    final local = t.toLocal();
+    final h = local.hour.toString().padLeft(2, '0');
+    final m = local.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  /// "Today" / "Yesterday" / "Mon, 14 Jul"
+  String _dayLabel(DateTime t) {
+    final d = t.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${weekdays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
+  }
+
+  void _confirmClear(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Clear history?', style: display(fontSize: 19)),
+        content: const Text(
+          'The whole transfer log is removed. Files already on this phone stay where they are.',
+          style: TextStyle(color: kTextSecondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: kDanger,
+              foregroundColor: kBg,
+            ),
+            onPressed: () {
+              ref.read(historyProvider.notifier).clearHistory();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(historyProvider);
 
+    // Group by day, preserving order.
+    final groups = <String, List<dynamic>>{};
+    for (final entry in history) {
+      groups.putIfAbsent(_dayLabel(entry.timestamp), () => []).add(entry);
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('History',
-          style: GoogleFonts.archivo(fontWeight: FontWeight.w900)
-        ),
+        title: const Text('History'),
         actions: [
           if (history.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Clear History'),
-                    content: const Text('Are you sure you want to wipe the transfer log?'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                      TextButton(
-                        onPressed: () {
-                          ref.read(historyProvider.notifier).clearHistory();
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text('Clear'),
-                      ),
-                    ],
-                  ),
-                );
-              },
+              icon: const Icon(Icons.delete_outline_rounded, color: kTextSecondary),
+              tooltip: 'Clear history',
+              onPressed: () => _confirmClear(context, ref),
             ),
           const SizedBox(width: 8),
         ],
@@ -70,92 +116,42 @@ class HistoryScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.history_toggle_off_rounded, size: 80, color: kSecondary.withValues(alpha: 0.3)),
+                        const Icon(Icons.history_rounded,
+                            size: 56, color: kTextFaint),
                         const SizedBox(height: 16),
-                        Text('No transfer history found', style: TextStyle(fontSize: 14, color: kSecondary.withValues(alpha: 0.6))),
+                        Text('No transfers yet', style: display(fontSize: 19)),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Every file you send or receive is logged here.',
+                          style: TextStyle(fontSize: 13, color: kTextSecondary),
+                        ),
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    itemCount: history.length,
-                    itemBuilder: (context, index) {
-                      final entry = history[index];
-                      final isIncoming = entry.direction == 'incoming';
-                      final isSuccess = entry.status == 'completed';
-
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: kSurface,
-                          borderRadius: const BorderRadius.all(Radius.circular(2)),
-                          border: Border.all(color: kSecondary.withValues(alpha: 0.3)),
+                : ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    children: [
+                      for (final group in groups.entries) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                          child: Row(
+                            children: [
+                              Text(group.key.toUpperCase(), style: overline()),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                  child: Divider(color: kHairline, height: 1)),
+                            ],
+                          ),
                         ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          leading: Container(
-                            width: 48,
-                            height: 48,
-                            color: isIncoming
-                                ? kSecondary.withValues(alpha: 0.1)
-                                : kTertiary.withValues(alpha: 0.2),
-                            child: Icon(
-                              isIncoming ? Icons.south_west_rounded : Icons.north_east_rounded,
-                              color: isIncoming ? kSecondary : kPrimary,
-                              size: 20,
-                            ),
+                        for (final entry in group.value)
+                          _HistoryTile(
+                            entry: entry,
+                            formatSize: _formatSize,
+                            formatDuration: _formatDuration,
+                            formatTime: _formatTime,
                           ),
-                          title: Text(
-                            entry.files.length == 1 ? entry.files[0].name : '${entry.files.length} items',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${isIncoming ? 'From' : 'To'}: ${entry.partnerName} • ${_formatSize(entry.totalSize)}',
-                                  style: const TextStyle(fontSize: 12, color: kSecondary),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${entry.timestamp.toLocal().toString().split('.')[0]} • ${_formatDuration(entry.durationMillis)}',
-                                  style: TextStyle(fontSize: 11, color: kSecondary.withValues(alpha: 0.6)),
-                                ),
-                              ],
-                            ),
-                          ),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            color: isSuccess
-                                ? Colors.green.withValues(alpha: 0.1)
-                                : Colors.red.withValues(alpha: 0.1),
-                            child: Text(
-                              isSuccess ? 'SUCCESS' : 'FAILED',
-                              style: TextStyle(
-                                color: isSuccess ? Colors.green : Colors.red,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                          onTap: !isSuccess && entry.errorMessage != null
-                              ? () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error: ${entry.errorMessage}'),
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: const RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.all(Radius.circular(2)),
-                                      ),
-                                    ),
-                                  );
-                                }
-                              : null,
-                        ),
-                      );
-                    },
+                      ],
+                    ],
                   ),
           ),
           _buildFooter(context),
@@ -168,15 +164,125 @@ class HistoryScreen extends ConsumerWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(bottom: 24, top: 8),
-      child: Text(
+      child: const Text(
         'made with ❤️ by uriel • $kAppVersion',
         textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-          color: kSecondary.withValues(alpha: 0.4),
-        ),
+        style: TextStyle(fontSize: 10, color: kTextFaint),
+      ),
+    );
+  }
+}
+
+class _HistoryTile extends StatelessWidget {
+  final dynamic entry;
+  final String Function(int) formatSize;
+  final String Function(int) formatDuration;
+  final String Function(DateTime) formatTime;
+
+  const _HistoryTile({
+    required this.entry,
+    required this.formatSize,
+    required this.formatDuration,
+    required this.formatTime,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isIncoming = entry.direction == 'incoming';
+    final failed = entry.status != 'completed';
+    final dirColor = failed ? kDanger : (isIncoming ? kOk : kAccent);
+
+    return GestureDetector(
+      onTap: failed && entry.errorMessage != null
+          ? () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(entry.errorMessage!)),
+              )
+          : null,
+      child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kHairline),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: dirColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              failed
+                  ? Icons.error_outline_rounded
+                  : (isIncoming
+                      ? Icons.south_west_rounded
+                      : Icons.north_east_rounded),
+              color: dirColor,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.files.length == 1
+                      ? entry.files[0].name
+                      : '${entry.files.length} files',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: kText,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text.rich(
+                  TextSpan(
+                    style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                    children: [
+                      TextSpan(text: isIncoming ? 'from ' : 'to '),
+                      TextSpan(
+                        text: entry.partnerName,
+                        style: const TextStyle(
+                          color: kText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (failed)
+                        const TextSpan(
+                          text: ' — failed',
+                          style: TextStyle(color: kDanger),
+                        ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(formatSize(entry.totalSize),
+                  style: mono(color: kText, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(
+                '${formatDuration(entry.durationMillis)} · ${formatTime(entry.timestamp)}',
+                style: mono(fontSize: 10.5, color: kTextFaint),
+              ),
+            ],
+          ),
+        ],
+      ),
       ),
     );
   }

@@ -18,18 +18,21 @@ Powered by **Go** and **Wails** on Desktop, **Flutter** on Mobile.
 
 ## Design
 
-**Concrete Lemon** — brutalist restraint with a lemon accent.
+**Beacon** — dark instrument panel, signal-amber accent, mono data readouts.
 
 | Token | Value |
 |---|---|
-| Primary | `#1A1A1A` |
-| Secondary | `#6B6B6B` |
-| Accent | `#D4E157` |
-| Neutral | `#D9D6D0` |
-| Surface | `#F0EDE6` |
-| Font | Archivo / Archivo Narrow |
+| Background | `#0C1220` |
+| Surface | `#131B2C` / `#1A2438` |
+| Hairline | `#263450` |
+| Accent | `#FFB454` |
+| Text | `#EAF0FB` / `#8FA0BC` |
+| Fonts | Bricolage Grotesque / Inter / JetBrains Mono |
 
-Flat. No gradients. No shadows. Single accent per screen.
+Depth from surface steps and hairlines — no shadows. One amber action per
+screen. Every wire-derived value (IPs, speeds, sizes) is set in mono. The
+local device is drawn as a live beacon: rings pulse while mDNS broadcasts.
+Full spec in [`design.md`](design.md).
 
 ---
 
@@ -38,6 +41,7 @@ Flat. No gradients. No shadows. Single accent per screen.
 - **Blazing Fast TCP:** Core transfer runs strictly over local interfaces — unthrottled, no cloud hops.
 - **Zero-Config Discovery:** ZeroConf / mDNS (`_palt._tcp.local.`) — devices see each other the moment the app opens.
 - **Cross-Platform:** Linux Desktop (Wails + React + MUI) and Android (Flutter + Material 3 + Riverpod).
+- **Drag & Drop:** Drop files straight onto a device card on desktop to send them.
 - **Inbound Safety:** Manual accept/reject handshake on every incoming transfer.
 - **Native Downloads:** Received files land directly in the Android public `Downloads` directory.
 

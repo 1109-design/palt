@@ -5,13 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PALT — Local File Transfer</title>
     <meta name="description" content="PALT: fast, frictionless local network file transfer between your devices." />
-    <!-- Archivo — Concrete Lemon design system -->
+    <!-- Beacon design system: Bricolage Grotesque (display) / Inter (UI) / JetBrains Mono (data) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&family=Ubuntu+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <style>
+      /* Painted before React mounts — prevents a light flash on launch. */
+      html, body { background: #0C1220; }
+      /* Beacon scrollbars */
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #263450; border-radius: 5px; border: 2px solid #0C1220; }
+      ::-webkit-scrollbar-thumb:hover { background: #3A4A6B; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

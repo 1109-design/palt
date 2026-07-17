@@ -33,4 +33,6 @@ export function SaveLastSeenVersion(arg1:string):Promise<void>;
 
 export function SendFile(arg1:string,arg2:number):Promise<void>;
 
+export function SendFilePaths(arg1:string,arg2:number,arg3:Array<string>):Promise<void>;
+
 export function SetAlias(arg1:string,arg2:string):Promise<void>;

@@ -62,6 +62,10 @@ export function SendFile(arg1, arg2) {
   return window['go']['main']['App']['SendFile'](arg1, arg2);
 }
 
+export function SendFilePaths(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendFilePaths'](arg1, arg2, arg3);
+}
+
 export function SetAlias(arg1, arg2) {
   return window['go']['main']['App']['SetAlias'](arg1, arg2);
 }

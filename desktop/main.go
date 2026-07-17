@@ -34,10 +34,13 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		// Light grey — matches MUI background.default in theme.ts
-		BackgroundColour: &options.RGBA{R: 248, G: 249, B: 250, A: 1},
+		// Deep ink — matches Beacon background.default in theme.ts
+		BackgroundColour: &options.RGBA{R: 12, G: 18, B: 32, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop: true,
+		},
 		Bind: []interface{}{
 			app,
 		},

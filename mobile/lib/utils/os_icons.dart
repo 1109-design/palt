@@ -12,15 +12,15 @@ class OsInfo {
 OsInfo getOsInfo(String os) {
   switch (os.toLowerCase()) {
     case 'android':
-      return const OsInfo('Android', kSecondary, Icons.phone_android);
+      return const OsInfo('Android', kTextSecondary, Icons.smartphone_rounded);
     case 'linux':
-      return const OsInfo('Linux', kSecondary, Icons.computer);
+      return const OsInfo('Linux', kTextSecondary, Icons.computer_rounded);
     case 'darwin':
-      return const OsInfo('macOS', kPrimary, Icons.laptop_mac);
+      return const OsInfo('macOS', kTextSecondary, Icons.laptop_mac_rounded);
     case 'windows':
-      return const OsInfo('Windows', kSecondary, Icons.window);
+      return const OsInfo('Windows', kTextSecondary, Icons.window_rounded);
     default:
-      return OsInfo(
-          os.isEmpty ? 'Unknown' : os, kSecondary, Icons.device_unknown);
+      return OsInfo(os.isEmpty ? 'Unknown' : os, kTextFaint,
+          Icons.device_unknown_rounded);
   }
 }

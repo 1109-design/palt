@@ -1,75 +1,107 @@
 ---
-version: alpha
-name: Concrete Lemon
-description: Raw concrete, structural grid, lemon accent.
+version: 2.0
+name: Beacon
+description: Deep-ink night surfaces, signal-amber accent, instrument-grade mono data, live pulse motif.
 colors:
-  primary: "#1A1A1A"
-  secondary: "#6B6B6B"
-  tertiary: "#D4E157"
-  neutral: "#D9D6D0"
-  surface: "#F0EDE6"
-  on-primary: "#1A1A1A"
+  bg: "#0C1220"
+  surface: "#131B2C"
+  surface-raised: "#1A2438"
+  hairline: "#263450"
+  text: "#EAF0FB"
+  text-secondary: "#8FA0BC"
+  text-faint: "#55637F"
+  accent: "#FFB454"
+  accent-hover: "#FFC474"
+  accent-pressed: "#E69A38"
+  on-accent: "#201503"
+  ok: "#53D993"
+  danger: "#FF7B72"
 typography:
   display:
-    fontFamily: Archivo
-    fontSize: 4.5rem
+    fontFamily: Bricolage Grotesque
     fontWeight: 800
-    letterSpacing: "-0.04em"
-  h1:
-    fontFamily: Archivo
-    fontSize: 2.5rem
-    fontWeight: 800
+    letterSpacing: "-0.03em"
+  heading:
+    fontFamily: Bricolage Grotesque
+    fontWeight: 700
+    letterSpacing: "-0.02em"
   body:
-    fontFamily: Archivo
-    fontSize: 0.95rem
-    lineHeight: 1.5
-  label:
-    fontFamily: Archivo Narrow
-    fontSize: 0.72rem
-    letterSpacing: "0.1em"
+    fontFamily: Inter
+    fontSize: 0.9rem
+    lineHeight: 1.55
+  data:
+    fontFamily: JetBrains Mono
+    fontSize: 0.8rem
+    letterSpacing: "0"
 rounded:
-  sm: 0px
-  md: 0px
-  lg: 2px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  pill: 999px
 spacing:
   sm: 8px
   md: 16px
-  lg: 32px
+  lg: 24px
+  xl: 40px
 components:
   button-primary:
-    backgroundColor: "{colors.tertiary}"
-    textColor: "{colors.on-primary}"
-    rounded: "{rounded.md}"
-    padding: 12px 20px
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.on-accent}"
+    rounded: "{rounded.sm}"
+    padding: 10px 18px
   card:
     backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    rounded: "{rounded.lg}"
-    padding: 24px
+    border: "1px solid {colors.hairline}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: 20px
 ---
 ## Overview
 
-Brutalist restraint with a jolt. Concrete greys, hard sans, a single high-visibility lemon for wayfinding.
+**Beacon** — PALT's design language. The app's whole job is devices announcing
+themselves over mDNS and streaming files point-to-point, so the UI borrows its
+world from network hardware: dark instrument panels, amber "on air" lamps,
+readouts set in mono. Calm ink-blue surfaces, one warm signal color, and data
+that reads like a meter, not a paragraph.
 
 ## Colors
 
-The palette is built around high-contrast neutrals and a single accent that drives interaction.
+Dark, hue-rich ink — never pure black. One interactive accent.
 
-- **Primary (`#1A1A1A`):** Headlines and core text.
-- **Secondary (`#6B6B6B`):** Borders, captions, and metadata.
-- **Tertiary (`#D4E157`):** The sole driver for interaction. Reserve it.
-- **Neutral (`#D9D6D0`):** The page foundation.
+- **bg (`#0C1220`):** The room. Every screen sits on this.
+- **surface (`#131B2C`) / surface-raised (`#1A2438`):** Cards and sheets. Depth
+  comes from these two steps plus a hairline — no drop shadows.
+- **hairline (`#263450`):** All borders and dividers, 1px.
+- **accent (`#FFB454`, signal amber):** The transmit lamp. Primary actions,
+  live progress, the beacon pulse, focus rings. Exactly one solid-amber action
+  per view.
+- **ok (`#53D993`):** Completed transfers and incoming direction only.
+- **danger (`#FF7B72`):** Failures and destructive actions only.
 
 ## Typography
 
-- **display:** Archivo 4.5rem
-- **h1:** Archivo 2.5rem
-- **body:** Archivo 0.95rem
-- **label:** Archivo Narrow 0.72rem
+Three voices, each with one job:
+
+- **Bricolage Grotesque** — display and headings. Device names, screen titles,
+  the wordmark. Weights 700–800, tight tracking.
+- **Inter** — UI body, labels, buttons. Weights 400–600.
+- **JetBrains Mono** — every machine-readable value: IP:port, speeds, sizes,
+  percentages, timestamps, versions, `_palt._tcp.local`. If a value comes off
+  the wire, it is set in mono.
+
+## Signature: the beacon pulse
+
+The local device is drawn as a beacon — concentric rings emanate from it while
+discovery is broadcasting (2.8s ease-out, fade to nothing). Peers ripple into
+the list as they are discovered. This is the one animated flourish; everything
+else moves only to communicate state. Respect reduced-motion settings: rings
+freeze to a static halo.
 
 ## Do's and Don'ts
 
-- **Do** use Tertiary for exactly one action per screen.
-- **Do** let Neutral carry the composition — negative space is a feature.
-- **Don't** introduce gradients. This system is flat on purpose.
-- **Don't** mix Tertiary with alternate accents; the single-accent rule is load-bearing.
+- **Do** set every wire-derived value in JetBrains Mono.
+- **Do** encode transfer direction consistently: outgoing ↑ amber, incoming ↓ green.
+- **Do** use hairline borders for structure; hover states brighten the border, not the fill.
+- **Don't** use drop shadows — depth is surface steps.
+- **Don't** put solid amber on more than one action per view.
+- **Don't** use pure black or pure white anywhere.

@@ -1,25 +1,20 @@
 /**
- * App.tsx — PALT Desktop Root Component
+ * App.tsx — PALT Desktop Root Component (Beacon)
  *
  * Orchestrates:
  *   1. Polling the Go backend (or mock) for the peer list.
  *   2. Maintaining local state: loading, peers, local device, search.
- *   3. Rendering:
- *        TopBar → LocalDeviceCard → peer grid → EmptyState → StatusBar
+ *   3. Drag-and-drop: Wails OnFileDrop → SendFilePaths to the card under
+ *      the cursor.
+ *   4. Rendering: TopBar → LocalDeviceCard → tabs → peer grid / history →
+ *      StatusBar, plus dialogs and the transfer shelf.
  *
  * When Wails is available the real wailsjs/go/main/App bindings are used.
  * In standalone browser dev the mock in src/wailsjs/App.mock.ts is used.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Box,
-  Container,
-  Grid,
-  Typography,
-  Skeleton,
-  Snackbar,
-  Alert,
-} from '@mui/material';
+import { Box, Container, Grid, Typography, Skeleton, Snackbar, Alert } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 
 import TopBar from './components/TopBar';
 import LocalDeviceCard from './components/LocalDeviceCard';
@@ -33,6 +28,8 @@ import type { TransferProgress } from './components/ProgressSnack';
 import UpdateDialog from './components/UpdateDialog';
 import ChangelogDialog from './components/ChangelogDialog';
 import HistoryView from './components/HistoryView';
+import RenameDialog from './components/RenameDialog';
+import { beacon, fonts } from './theme/theme';
 
 import type { Peer } from './types/peer';
 import type { HistoryEntry } from './types/history';
@@ -82,25 +79,26 @@ const App: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Phase 2 State
   const [offer, setOffer] = useState<OfferData | null>(null);
   const [progress, setProgress] = useState<TransferProgress | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [aliases, setAliases] = useState<Record<string, string>>({});
   const [currentTab, setCurrentTab] = useState(0); // 0 = Devices, 1 = History
+  const [renamingPeer, setRenamingPeer] = useState<Peer | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
-  // ── Update state ─────────────────────────────────────────────────────────────
+  // ── Update state ───────────────────────────────────────────────────────────
   const [appVersion, setAppVersion] = useState('');
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [changelogNotes, setChangelogNotes] = useState('');
-  // ─────────────────────────────────────────────────────────────────────────────────
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Update + Changelog on mount ──────────────────────────────────────────────
+  // ── Update + Changelog on mount ────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -145,7 +143,7 @@ const App: React.FC = () => {
     }
   }, [updateInfo]);
 
-  // ── Data fetching ──────────────────────────────────────────────────────────────
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
   const fetchPeers = useCallback(async () => {
     try {
@@ -217,11 +215,11 @@ const App: React.FC = () => {
     });
 
     win.runtime.EventsOn('transfer_offer', (data: OfferData) => {
-      setOffer(data); 
+      setOffer(data);
     });
 
     win.runtime.EventsOn('transfer_started', (data: any) => {
-      setProgress({ transferId: data.transferId, written: 0, total: 100 }); 
+      setProgress({ transferId: data.transferId, written: 0, total: 100 });
     });
 
     win.runtime.EventsOn('transfer_progress', (data: TransferProgress) => {
@@ -243,7 +241,7 @@ const App: React.FC = () => {
     win.runtime.EventsOn('history_updated', (data: HistoryEntry[]) => {
       setHistory(data);
     });
-    
+
     return () => {
       win.runtime.EventsOff('peers_changed');
       win.runtime.EventsOff('history_updated');
@@ -252,6 +250,47 @@ const App: React.FC = () => {
       win.runtime.EventsOff('transfer_started');
       win.runtime.EventsOff('transfer_complete');
       win.runtime.EventsOff('transfer_error');
+    };
+  }, []);
+
+  // ── Drag & drop → send to the peer card under the cursor ───────────────────
+  useEffect(() => {
+    // Track "files are being dragged over the window" for card highlighting.
+    // The native drop is swallowed by Wails, so a short timeout (reset on
+    // every dragover) is the reliable way to clear the state.
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      setDragActive(true);
+      if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
+      dragTimerRef.current = setTimeout(() => setDragActive(false), 400);
+    };
+    const onDrop = () => setDragActive(false);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', onDrop);
+
+    if (isWails) {
+      const win = window as any;
+      win.runtime?.OnFileDrop?.((x: number, y: number, paths: string[]) => {
+        setDragActive(false);
+        if (!paths || paths.length === 0) return;
+        const el = document.elementFromPoint(x, y)?.closest('[data-peer-ip]') as HTMLElement | null;
+        if (!el) return;
+        const ip = el.getAttribute('data-peer-ip')!;
+        const port = parseInt(el.getAttribute('data-peer-port') || '0', 10);
+        const sendPaths = (WailsApp as any).SendFilePaths;
+        if (typeof sendPaths === 'function') {
+          sendPaths(ip, port, paths).catch((e: any) =>
+            setErrorMsg(`Send failed: ${e?.message || e}`),
+          );
+        }
+      }, true);
+    }
+
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', onDrop);
+      if (isWails) (window as any).runtime?.OnFileDropOff?.();
+      if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
     };
   }, []);
 
@@ -265,7 +304,7 @@ const App: React.FC = () => {
     pollRef.current = setInterval(fetchPeers, POLL_INTERVAL_MS);
   }, [fetchPeers]);
 
-  // ── Send file (Phase 2 stub) ───────────────────────────────────────────────
+  // ── Send file ──────────────────────────────────────────────────────────────
 
   const handleSendFile = useCallback(async (peer: Peer) => {
     try {
@@ -335,16 +374,11 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleSetAlias = useCallback(async (peer: Peer) => {
-    const current = aliases[peer.deviceName] || '';
-    const newAlias = window.prompt(`Set nickname for ${peer.deviceName}:`, current);
-    
-    if (newAlias === null) return; // Cancelled
-    
-    await SetAlias(peer.deviceName, newAlias);
+  const handleSaveAlias = useCallback(async (peer: Peer, alias: string) => {
+    await SetAlias(peer.deviceName, alias);
     const updated = await GetAliases();
     setAliases(updated);
-  }, [aliases]);
+  }, []);
 
   // ── Filtered peers ─────────────────────────────────────────────────────────
 
@@ -361,18 +395,20 @@ const App: React.FC = () => {
 
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /** Renders a 3-column skeleton grid while the first load is in progress */
+  /** Skeleton grid while the first load is in progress */
   const renderSkeletons = () =>
     Array.from({ length: 3 }).map((_, i) => (
       <Grid item xs={12} sm={6} md={4} key={i}>
         <Skeleton
           variant="rounded"
-          height={148}
-          sx={{ borderRadius: 2, transform: 'none' }}
+          height={172}
+          sx={{ borderRadius: '12px', backgroundColor: beacon.surface, transform: 'none' }}
           animation="wave"
         />
       </Grid>
     ));
+
+  const tabs = ['Devices', 'History'];
 
   return (
     <Box
@@ -383,7 +419,6 @@ const App: React.FC = () => {
         backgroundColor: 'background.default',
       }}
     >
-      {/* ── Top App Bar ───────────────────────────────────────────────────── */}
       <TopBar
         peerCount={peers.length}
         loading={loading}
@@ -395,58 +430,85 @@ const App: React.FC = () => {
         onUpdateClick={() => setUpdateDialogOpen(true)}
       />
 
-      {/* ── Main content (offset for AppBar + StatusBar) ──────────────────── */}
-      <Container
-        maxWidth="lg"
-        component="main"
-        sx={{ pt: { xs: 10, sm: 11 }, pb: 6, flex: 1 }}
-      >
-        {/* ── This Device ─────────────────────────────────────────────────── */}
-        <LocalDeviceCard device={localDevice} />
+      {/* ── Main content (offset for AppBar + StatusBar) ───────────────────── */}
+      <Container maxWidth="lg" component="main" sx={{ pt: 12, pb: 8, flex: 1 }}>
+        <LocalDeviceCard device={localDevice} broadcasting />
 
-        {/* ── Tabs ────────────────────────────────────────────────────────── */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Grid container spacing={2}>
-            <Grid item sx={{ 
-              pb: 1, 
-              cursor: 'pointer', 
-              borderBottom: currentTab === 0 ? '2px solid' : 'none',
-              borderColor: 'primary.main',
-              opacity: currentTab === 0 ? 1 : 0.6
-            }} onClick={() => setCurrentTab(0)}>
-              <Typography variant="subtitle2" fontWeight={600} color={currentTab === 0 ? 'primary.main' : 'inherit'}>
-                Nearby Devices
-              </Typography>
-            </Grid>
-            <Grid item sx={{ 
-              pb: 1, 
-              cursor: 'pointer', 
-              borderBottom: currentTab === 1 ? '2px solid' : 'none',
-              borderColor: 'primary.main',
-              opacity: currentTab === 1 ? 1 : 0.6
-            }} onClick={() => setCurrentTab(1)}>
-              <Typography variant="subtitle2" fontWeight={600} color={currentTab === 1 ? 'primary.main' : 'inherit'}>
-                History
-              </Typography>
-            </Grid>
-          </Grid>
+        {/* ── Segmented tabs ─────────────────────────────────────────────── */}
+        <Box
+          sx={{
+            display: 'inline-flex',
+            gap: 0.5,
+            p: 0.5,
+            mb: 3,
+            borderRadius: 999,
+            backgroundColor: beacon.surface,
+            border: `1px solid ${beacon.hairline}`,
+          }}
+          role="tablist"
+        >
+          {tabs.map((label, i) => (
+            <Box
+              key={label}
+              component="button"
+              role="tab"
+              aria-selected={currentTab === i}
+              onClick={() => setCurrentTab(i)}
+              sx={{
+                border: 'none',
+                cursor: 'pointer',
+                px: 2.5,
+                py: 0.9,
+                borderRadius: 999,
+                fontFamily: fonts.body,
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                lineHeight: 1,
+                transition: 'background-color 150ms, color 150ms',
+                backgroundColor: currentTab === i ? beacon.surfaceRaised : 'transparent',
+                color: currentTab === i ? beacon.text : beacon.textSecondary,
+                boxShadow: currentTab === i ? `inset 0 0 0 1px ${beacon.hairline}` : 'none',
+                '&:hover': { color: beacon.text },
+              }}
+            >
+              {label}
+              {i === 0 && peers.length > 0 && (
+                <Box
+                  component="span"
+                  sx={{
+                    ml: 1,
+                    fontFamily: fonts.mono,
+                    fontSize: '0.7rem',
+                    color: currentTab === i ? beacon.accent : beacon.textFaint,
+                  }}
+                >
+                  {peers.length}
+                </Box>
+              )}
+            </Box>
+          ))}
         </Box>
 
         {currentTab === 0 ? (
           <>
-            {/* ── Section heading ──────────────────────────────────────────────── */}
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 2 }}>
-              <Typography variant="h6" fontWeight={600} color="text.primary">
-                Available Peers
-              </Typography>
-              {!loading && (
-                <Typography variant="caption" color="text.secondary">
-                  {filteredPeers.length} of {peers.length} device{peers.length !== 1 ? 's' : ''}
+            {/* Drop hint appears while dragging files over the window */}
+            {dragActive && filteredPeers.length > 0 && (
+              <Box
+                sx={{
+                  mb: 2,
+                  px: 2,
+                  py: 1,
+                  borderRadius: '8px',
+                  border: `1px dashed ${alpha(beacon.accent, 0.5)}`,
+                  backgroundColor: alpha(beacon.accent, 0.05),
+                }}
+              >
+                <Typography sx={{ fontSize: '0.8rem', color: beacon.accent, fontWeight: 500 }}>
+                  Drop files on a device to send them
                 </Typography>
-              )}
-            </Box>
+              </Box>
+            )}
 
-            {/* ── Peer grid ────────────────────────────────────────────────────── */}
             {loading && peers.length === 0 ? (
               <Grid container spacing={2}>
                 {renderSkeletons()}
@@ -455,11 +517,12 @@ const App: React.FC = () => {
               <Grid container spacing={2}>
                 {filteredPeers.map((peer) => (
                   <Grid item xs={12} sm={6} md={4} key={peer.id}>
-                    <PeerCard 
-                      peer={peer} 
+                    <PeerCard
+                      peer={peer}
                       alias={aliases[peer.deviceName]}
+                      dragActive={dragActive}
                       onSendFile={handleSendFile}
-                      onRename={handleSetAlias}
+                      onRename={setRenamingPeer}
                     />
                   </Grid>
                 ))}
@@ -477,7 +540,6 @@ const App: React.FC = () => {
         )}
       </Container>
 
-      {/* ── Bottom Status Bar ─────────────────────────────────────────────── */}
       <StatusBar
         loading={loading}
         peerCount={peers.length}
@@ -485,7 +547,7 @@ const App: React.FC = () => {
         appVersion={appVersion}
       />
 
-      {/* ── Toast notifications ──────────────────────────────────────────── */}
+      {/* ── Toast notifications ────────────────────────────────────────────── */}
       <Snackbar
         open={errorMsg !== null}
         autoHideDuration={4000}
@@ -496,31 +558,42 @@ const App: React.FC = () => {
         <Alert
           onClose={() => setErrorMsg(null)}
           severity="info"
-          variant="filled"
-          sx={{ borderRadius: 2 }}
+          variant="outlined"
+          sx={{
+            borderRadius: '10px',
+            backgroundColor: beacon.surfaceRaised,
+            borderColor: beacon.hairline,
+            color: beacon.text,
+          }}
         >
           {errorMsg}
         </Alert>
       </Snackbar>
 
-      <TransferDialog 
-        open={offer !== null} 
-        offer={offer} 
-        onAccept={acceptOffer} 
-        onReject={rejectOffer} 
+      <TransferDialog
+        open={offer !== null}
+        offer={offer}
+        onAccept={acceptOffer}
+        onReject={rejectOffer}
       />
 
-      <ProgressSnack 
-        progress={progress} 
-        error={transferError} 
+      <ProgressSnack
+        progress={progress}
+        error={transferError}
         onOpenFolder={handleOpenFolder}
         onClose={() => {
           setProgress(null);
           setTransferError(null);
-        }} 
+        }}
       />
 
-      {/* ── Update Available Dialog ──────────────────────────────────────── */}
+      <RenameDialog
+        peer={renamingPeer}
+        currentAlias={renamingPeer ? aliases[renamingPeer.deviceName] || '' : ''}
+        onSave={handleSaveAlias}
+        onClose={() => setRenamingPeer(null)}
+      />
+
       {updateInfo && (
         <UpdateDialog
           open={updateDialogOpen}
@@ -533,7 +606,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* ── First-Boot Changelog Dialog ─────────────────────────────────── */}
       <ChangelogDialog
         open={changelogOpen}
         version={appVersion}

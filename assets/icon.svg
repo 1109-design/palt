@@ -1,9 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Concrete Lemon — PALT app icon -->
-  <!-- Background: primary #1A1A1A -->
-  <rect width="1024" height="1024" fill="#1A1A1A"/>
-  <!-- Up arrow (send) — left, lemon #D4E157 -->
-  <polygon points="140,500 230,500 230,860 330,860 330,500 420,500 280,180" fill="#D4E157"/>
-  <!-- Down arrow (receive) — right, lemon #D4E157 -->
-  <polygon points="604,524 694,524 694,164 794,164 794,524 884,524 744,844" fill="#D4E157"/>
+  <!-- Beacon — PALT app icon -->
+  <!-- A device announcing itself: amber transmit lamp, pulse rings travelling
+       outward. Each ring is an open arc with a staggered gap so the beacon
+       reads as live motion, not a target. -->
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#FFB454" stop-opacity="0.28"/>
+      <stop offset="55%" stop-color="#FFB454" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FFB454" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lamp" cx="0.42" cy="0.38" r="0.75">
+      <stop offset="0%" stop-color="#FFD394"/>
+      <stop offset="60%" stop-color="#FFB454"/>
+      <stop offset="100%" stop-color="#F09E3A"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Deep ink background -->
+  <rect width="1024" height="1024" fill="#0C1220"/>
+  <!-- Faint surface vignette for depth -->
+  <circle cx="512" cy="512" r="430" fill="#131B2C"/>
+
+  <!-- Amber glow behind the lamp -->
+  <circle cx="512" cy="512" r="420" fill="url(#glow)"/>
+
+  <!-- Pulse rings: open arcs, gaps staggered 120° apart -->
+  <g fill="none" stroke="#FFB454" stroke-linecap="round">
+    <circle cx="512" cy="512" r="182" stroke-opacity="0.85" stroke-width="38"
+            stroke-dasharray="1000 143" transform="rotate(-35 512 512)"/>
+    <circle cx="512" cy="512" r="282" stroke-opacity="0.45" stroke-width="30"
+            stroke-dasharray="1550 222" transform="rotate(85 512 512)"/>
+    <circle cx="512" cy="512" r="382" stroke-opacity="0.20" stroke-width="22"
+            stroke-dasharray="2100 300" transform="rotate(205 512 512)"/>
+  </g>
+
+  <!-- The transmit lamp -->
+  <circle cx="512" cy="512" r="92" fill="url(#lamp)"/>
 </svg>

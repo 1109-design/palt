@@ -1,10 +1,10 @@
 /**
- * TopBar.tsx — PALT App Bar
+ * TopBar.tsx — PALT App Bar (Beacon)
  *
- * A Google-style top app bar with:
- *   - The PALT logo / wordmark on the left.
- *   - A centred search field for filtering peers.
- *   - Action icons on the right (refresh, settings placeholder).
+ * Ink surface with a hairline underline:
+ *   - Beacon mark + PALT wordmark on the left.
+ *   - Centered search field for filtering peers.
+ *   - Update chip, live device count, refresh on the right.
  */
 import React from 'react';
 import {
@@ -16,13 +16,12 @@ import {
   Box,
   Tooltip,
   CircularProgress,
-  Badge,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
-import WifiIcon from '@mui/icons-material/Wifi';
-import { alpha, useTheme } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
 import UpdateBanner from './UpdateBanner';
+import { beacon, fonts } from '../theme/theme';
 
 interface TopBarProps {
   peerCount: number;
@@ -45,116 +44,160 @@ const TopBar: React.FC<TopBarProps> = ({
   latestVersion = '',
   onUpdateClick,
 }) => {
-  const theme = useTheme();
-
   return (
-    <AppBar position="fixed" elevation={0}>
-      <Toolbar sx={{ gap: 1 }}>
-        {/* ── Logo ─────────────────────────────────────────────────────────── */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 140 }}>
-          {/* Yellow accent square — stands in for a proper SVG logo */}
+    <AppBar
+      position="fixed"
+      elevation={0}
+      sx={{
+        backgroundColor: alpha(beacon.bg, 0.88),
+        backdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${beacon.hairline}`,
+        color: beacon.text,
+      }}
+    >
+      <Toolbar sx={{ gap: 1.5, minHeight: { xs: 60 } }}>
+        {/* ── Beacon mark + wordmark ─────────────────────────────────────── */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 140 }}>
           <Box
             sx={{
-              width: 32,
-              height: 32,
-              backgroundColor: '#D4E157',
+              width: 34,
+              height: 34,
+              borderRadius: '10px',
+              border: `1px solid ${beacon.hairline}`,
+              backgroundColor: beacon.surface,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <WifiIcon sx={{ fontSize: 18, color: '#1A1A1A' }} />
+            {/* The transmit lamp */}
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                backgroundColor: beacon.accent,
+                boxShadow: `0 0 10px 2px ${alpha(beacon.accent, 0.5)}`,
+                animation: 'lamp-breathe 2.8s ease-in-out infinite',
+                '@keyframes lamp-breathe': {
+                  '0%, 100%': { opacity: 1 },
+                  '50%': { opacity: 0.55 },
+                },
+                '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+              }}
+            />
           </Box>
           <Typography
-            variant="h6"
             sx={{
+              fontFamily: fonts.display,
               fontWeight: 800,
-              color: 'white',
+              fontSize: '1.2rem',
+              letterSpacing: '0.02em',
+              color: beacon.text,
+              userSelect: 'none',
             }}
           >
             PALT
           </Typography>
         </Box>
 
-        {/* ── Search Bar ───────────────────────────────────────────────────── */}
+        {/* ── Search ─────────────────────────────────────────────────────── */}
         <Box
           sx={{
             flex: 1,
-            maxWidth: 540,
+            maxWidth: 480,
             mx: 'auto',
             display: 'flex',
             alignItems: 'center',
-            backgroundColor: alpha('#fff', 0.08),
-            borderRadius: 0,
-            px: 2,
-            height: 40,
-            border: `1px solid ${alpha('#fff', 0.15)}`,
+            backgroundColor: beacon.surface,
+            borderRadius: '8px',
+            px: 1.5,
+            height: 38,
+            border: `1px solid ${beacon.hairline}`,
             transition: 'border-color 150ms',
-            '&:focus-within': {
-              borderColor: '#D4E157',
-            },
+            '&:focus-within': { borderColor: beacon.accent },
           }}
         >
-          <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 20 }} />
+          <SearchIcon sx={{ color: beacon.textFaint, mr: 1, fontSize: 19 }} />
           <InputBase
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search devices…"
-            inputProps={{ 'aria-label': 'search devices' }}
-            sx={{ flex: 1, fontSize: '0.9rem' }}
+            placeholder="Filter devices…"
+            inputProps={{ 'aria-label': 'filter devices' }}
+            sx={{ flex: 1, fontSize: '0.86rem', color: beacon.text }}
           />
         </Box>
 
-        {/* ── Right Actions ────────────────────────────────────────────────── */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 100, justifyContent: 'flex-end' }}>
-          {/* Update available chip */}
+        {/* ── Right actions ──────────────────────────────────────────────── */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            minWidth: 140,
+            justifyContent: 'flex-end',
+          }}
+        >
           {updateAvailable && latestVersion && onUpdateClick && (
             <UpdateBanner latestVersion={latestVersion} onClick={onUpdateClick} />
           )}
 
-          {/* Device count badge */}
+          {/* Live device count readout */}
           <Tooltip title={`${peerCount} device${peerCount !== 1 ? 's' : ''} on network`}>
-            <Badge
-              badgeContent={peerCount}
-              color="primary"
+            <Box
               sx={{
-                '& .MuiBadge-badge': {
-                  fontWeight: 700,
-                  fontSize: '0.7rem',
-                  color: '#1A1A1A',
-                  backgroundColor: '#D4E157',
-                },
-                mr: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.75,
+                px: 1.25,
+                height: 28,
+                borderRadius: 999,
+                border: `1px solid ${beacon.hairline}`,
               }}
             >
-              <WifiIcon sx={{ color: 'text.secondary' }} />
-            </Badge>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: peerCount > 0 ? beacon.ok : beacon.textFaint,
+                  transition: 'background-color 300ms',
+                }}
+              />
+              <Typography
+                sx={{
+                  fontFamily: fonts.mono,
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  color: beacon.textSecondary,
+                  lineHeight: 1,
+                }}
+              >
+                {peerCount}
+              </Typography>
+            </Box>
           </Tooltip>
 
-          {/* Refresh button — spins while loading */}
-          <Tooltip title="Refresh devices">
-            <IconButton
-              id="btn-refresh"
-              onClick={onRefresh}
-              disabled={loading}
-              size="medium"
-              aria-label="refresh device list"
-              sx={{
-                color: 'text.secondary',
-                '&:hover': { backgroundColor: alpha('#fff', 0.1) },
-              }}
-            >
-              {loading ? (
-                <CircularProgress size={20} thickness={4} sx={{ color: 'primary.main' }} />
-              ) : (
-                <RefreshIcon
-                  sx={{
-                    transition: 'transform 600ms ease',
-                    '&:hover': { transform: 'rotate(360deg)' },
-                  }}
-                />
-              )}
-            </IconButton>
+          <Tooltip title="Scan again">
+            <span>
+              <IconButton
+                id="btn-refresh"
+                onClick={onRefresh}
+                disabled={loading}
+                size="medium"
+                aria-label="scan for devices"
+                sx={{
+                  color: beacon.textSecondary,
+                  '&:hover': { color: beacon.text, backgroundColor: alpha(beacon.text, 0.06) },
+                }}
+              >
+                {loading ? (
+                  <CircularProgress size={19} thickness={4} sx={{ color: beacon.accent }} />
+                ) : (
+                  <RefreshIcon sx={{ fontSize: 21 }} />
+                )}
+              </IconButton>
+            </span>
           </Tooltip>
         </Box>
       </Toolbar>

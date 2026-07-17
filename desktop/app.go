@@ -35,7 +35,7 @@ import (
 
 // AppVersion is the canonical version string for this build.
 // Bump this manually to match the git tag when cutting a release.
-const AppVersion = "v1.1.0"
+const AppVersion = "v1.2.0"
 
 // UpdateInfo is returned by CheckForUpdate and passed to the React frontend.
 type UpdateInfo struct {
@@ -271,15 +271,19 @@ func (a *App) CheckForUpdate() UpdateInfo {
 		return UpdateInfo{LatestVersion: latest}
 	}
 
-	// Find the .deb asset download URL.
+	// Find the asset matching this platform (.exe on Windows, .deb elsewhere).
+	assetSuffix := ".deb"
+	if runtime.GOOS == "windows" {
+		assetSuffix = ".exe"
+	}
 	downloadURL := ""
 	for _, asset := range release.Assets {
-		if strings.HasSuffix(asset.Name, ".deb") {
+		if strings.HasSuffix(asset.Name, assetSuffix) {
 			downloadURL = asset.BrowserDownloadURL
 			break
 		}
 	}
-	// Fall back to the releases page if no .deb is attached.
+	// Fall back to the releases page if no matching asset is attached.
 	if downloadURL == "" {
 		downloadURL = "https://github.com/h200137j/palt/releases/latest"
 	}
@@ -517,7 +521,7 @@ func (a *App) SendFile(peerIP string, peerPort int) error {
 	filePaths, err := wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Select Files to Send via PALT",
 	})
-	
+
 	if err != nil {
 		log.Printf("[app] OpenMultipleFilesDialog error: %v\n", err)
 		return err
@@ -528,7 +532,22 @@ func (a *App) SendFile(peerIP string, peerPort int) error {
 	}
 
 	log.Printf("[app] User selected %d files to send.", len(filePaths))
+	return a.sendPaths(peerIP, peerPort, filePaths)
+}
 
+// SendFilePaths is called by React when files are drag-and-dropped onto a
+// PeerCard. The paths come from the Wails OnFileDrop runtime event.
+func (a *App) SendFilePaths(peerIP string, peerPort int, filePaths []string) error {
+	log.Printf("[app] SendFilePaths triggered for peer %s:%d (%d files)\n", peerIP, peerPort, len(filePaths))
+	if len(filePaths) == 0 {
+		return nil
+	}
+	return a.sendPaths(peerIP, peerPort, filePaths)
+}
+
+// sendPaths streams the given local file paths to a peer, emitting the same
+// transfer_* events the UI already listens to.
+func (a *App) sendPaths(peerIP string, peerPort int, filePaths []string) error {
 	transferID := generateTransferID()
 	hostname, _ := os.Hostname()
 

@@ -1,158 +1,225 @@
-import React from 'react';
-import {
-  Card,
-  CardContent,
-  Avatar,
-  Typography,
-  Box,
-  Chip,
-  Button,
-  IconButton,
-  Tooltip,
-} from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import SendIcon from '@mui/icons-material/Send';
+/**
+ * PeerCard.tsx — a discovered peer (Beacon)
+ *
+ * Surface card with an OS tile, display-type name, mono address readout and
+ * a single amber Send action. Doubles as a drag-and-drop target: dropping
+ * files anywhere on the card streams them to this peer (wired in App.tsx via
+ * the Wails OnFileDrop runtime + the data-peer-* attributes below).
+ */
+import React, { useState } from 'react';
+import { Box, Typography, IconButton, Tooltip, Button } from '@mui/material';
+import EditIcon from '@mui/icons-material/EditOutlined';
+import SendIcon from '@mui/icons-material/NorthEast';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
+import DownloadIcon from '@mui/icons-material/SouthWest';
 import type { Peer } from '../types/peer';
 import { getOsInfo } from '../utils/osHelpers';
-import { alpha, useTheme } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
+import { beacon, fonts } from '../theme/theme';
 
 interface PeerCardProps {
   peer: Peer;
   alias?: string;
+  /** True while the user is dragging files over the window. */
+  dragActive?: boolean;
   onSendFile?: (peer: Peer) => void;
   onRename?: (peer: Peer) => void;
 }
 
-const PeerCard: React.FC<PeerCardProps> = ({ peer, alias, onSendFile, onRename }) => {
-  const theme = useTheme();
+const PeerCard: React.FC<PeerCardProps> = ({
+  peer,
+  alias,
+  dragActive = false,
+  onSendFile,
+  onRename,
+}) => {
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
+  const [copied, setCopied] = useState(false);
+  const [hoverDrop, setHoverDrop] = useState(false);
 
   const handleCopyIp = () => {
     navigator.clipboard.writeText(`${peer.ipAddress}:${peer.port}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
   };
 
   const displayName = alias || peer.deviceName;
   const isAliased = !!alias;
+  const highlighted = dragActive && hoverDrop;
 
   return (
-    <Card
+    <Box
       id={`card-peer-${peer.id}`}
+      data-peer-ip={peer.ipAddress}
+      data-peer-port={peer.port}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setHoverDrop(true);
+      }}
+      onDragLeave={() => setHoverDrop(false)}
+      onDrop={() => setHoverDrop(false)}
       sx={{
+        // Wails: marks this element as a native file-drop target.
+        '--wails-drop-target': 'drop',
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: '2px',
-        border: `1px solid ${alpha(theme.palette.text.secondary!, 0.3)}`,
-        transition: 'border-color 0.15s ease',
+        backgroundColor: beacon.surface,
+        border: `1px solid ${highlighted ? beacon.accent : beacon.hairline}`,
+        borderRadius: '12px',
+        p: 2.5,
+        transition: 'border-color 150ms ease, transform 150ms ease, background-color 150ms ease',
+        animation: 'peer-arrive 320ms ease-out backwards',
+        '@keyframes peer-arrive': {
+          from: { opacity: 0, transform: 'translateY(8px)' },
+          to:   { opacity: 1, transform: 'translateY(0)' },
+        },
+        '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+        ...(highlighted && { backgroundColor: alpha(beacon.accent, 0.06) }),
         '&:hover': {
-          borderColor: theme.palette.text.primary,
+          borderColor: highlighted ? beacon.accent : beacon.textFaint,
+        },
+        '&:hover .peer-rename': { opacity: 1 },
+        '&:hover .peer-send': {
+          backgroundColor: beacon.accent,
+          borderColor: beacon.accent,
+          color: beacon.onAccent,
         },
       }}
     >
-      <CardContent sx={{ flex: 1, p: 3, pb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2.5 }}>
-          {/* OS avatar */}
-          <Avatar
-            id={`avatar-peer-${peer.id}`}
-            sx={{
-              width: 56,
-              height: 56,
-              backgroundColor: theme.palette.background.default,
-              color: theme.palette.text.secondary,
-              borderRadius: 0,
-              flexShrink: 0,
-            }}
-          >
-            <OsIcon sx={{ fontSize: 28 }} />
-          </Avatar>
-
-          {/* Device name + address */}
-          <Box sx={{ minWidth: 0, flex: 1, pt: 0.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Tooltip title={isAliased ? `Original: ${peer.deviceName}` : 'Set nickname'}>
-                <Typography
-                  variant="h6"
-                  noWrap
-                  sx={{ fontWeight: 800, lineHeight: 1.2, color: 'text.primary' }}
-                >
-                  {displayName}
-                </Typography>
-              </Tooltip>
-              {onRename && (
-                <IconButton
-                  size="small"
-                  onClick={() => onRename(peer)}
-                  sx={{ p: 0.5, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-                >
-                  <EditIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              )}
-            </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: 'text.secondary',
-                  fontFamily: '"Ubuntu Mono", monospace',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                }}
-              >
-                {peer.ipAddress}:{peer.port}
-              </Typography>
-              <Tooltip title="Copy address">
-                <IconButton
-                  size="small"
-                  onClick={handleCopyIp}
-                  sx={{ p: 0.2, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-                >
-                  <ContentCopyIcon sx={{ fontSize: 14 }} />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Box>
-        </Box>
-
-        {/* OS chip */}
-        <Box sx={{ mt: 2.5 }}>
-          <Chip
-            id={`chip-os-${peer.id}`}
-            icon={<OsIcon sx={{ fontSize: '14px !important' }} />}
-            label={osInfo.label}
-            size="small"
-            sx={{
-              backgroundColor: theme.palette.background.default,
-              color: 'text.secondary',
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              borderRadius: 0,
-              px: 0.5,
-              '& .MuiChip-icon': { color: theme.palette.text.secondary },
-            }}
-          />
-        </Box>
-      </CardContent>
-
-      <Box sx={{ p: 2.5, pt: 1 }}>
-        <Button
-          id={`btn-send-${peer.id}`}
-          variant="contained"
-          startIcon={<SendIcon sx={{ fontSize: 18 }} />}
-          onClick={() => onSendFile?.(peer)}
-          fullWidth
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flex: 1 }}>
+        {/* OS tile */}
+        <Box
           sx={{
-            fontWeight: 800,
-            fontSize: '0.9rem',
-            py: 1.25,
+            width: 48,
+            height: 48,
+            borderRadius: '12px',
+            backgroundColor: beacon.surfaceRaised,
+            border: `1px solid ${beacon.hairline}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: beacon.textSecondary,
+            flexShrink: 0,
           }}
         >
-          Send Files
-        </Button>
+          <OsIcon sx={{ fontSize: 24 }} />
+        </Box>
+
+        {/* Name + address */}
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title={isAliased ? `Broadcast name: ${peer.deviceName}` : ''}>
+              <Typography
+                noWrap
+                sx={{
+                  fontFamily: fonts.display,
+                  fontWeight: 700,
+                  fontSize: '1.05rem',
+                  letterSpacing: '-0.01em',
+                  color: beacon.text,
+                  lineHeight: 1.3,
+                }}
+              >
+                {displayName}
+              </Typography>
+            </Tooltip>
+            {onRename && (
+              <Tooltip title="Rename">
+                <IconButton
+                  size="small"
+                  className="peer-rename"
+                  aria-label={`rename ${displayName}`}
+                  onClick={() => onRename(peer)}
+                  sx={{
+                    p: 0.5,
+                    color: beacon.textFaint,
+                    opacity: { xs: 1, sm: 0 },
+                    transition: 'opacity 150ms',
+                    '&:hover': { color: beacon.text },
+                    '&:focus-visible': { opacity: 1 },
+                  }}
+                >
+                  <EditIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+
+          <Typography sx={{ fontSize: '0.78rem', color: beacon.textFaint, mt: 0.25 }}>
+            {osInfo.label}
+          </Typography>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
+            <Typography
+              sx={{
+                fontFamily: fonts.mono,
+                fontSize: '0.74rem',
+                color: beacon.textSecondary,
+              }}
+            >
+              {peer.ipAddress}:{peer.port}
+            </Typography>
+            <Tooltip title={copied ? 'Copied' : 'Copy address'}>
+              <IconButton
+                size="small"
+                aria-label="copy address"
+                onClick={handleCopyIp}
+                sx={{ p: 0.4, color: beacon.textFaint, '&:hover': { color: beacon.text } }}
+              >
+                {copied ? (
+                  <CheckIcon sx={{ fontSize: 13, color: beacon.ok }} />
+                ) : (
+                  <ContentCopyIcon sx={{ fontSize: 13 }} />
+                )}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
       </Box>
-    </Card>
+
+      {/* Action row */}
+      <Box sx={{ mt: 2.5 }}>
+        {highlighted ? (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1,
+              height: 40,
+              borderRadius: '8px',
+              border: `1.5px dashed ${beacon.accent}`,
+              color: beacon.accent,
+            }}
+          >
+            <DownloadIcon sx={{ fontSize: 16 }} />
+            <Typography sx={{ fontSize: '0.82rem', fontWeight: 600 }}>
+              Drop to send
+            </Typography>
+          </Box>
+        ) : (
+          <Button
+            id={`btn-send-${peer.id}`}
+            className="peer-send"
+            variant="outlined"
+            fullWidth
+            endIcon={<SendIcon sx={{ fontSize: 16 }} />}
+            onClick={() => onSendFile?.(peer)}
+            sx={{
+              height: 40,
+              fontSize: '0.85rem',
+              color: beacon.textSecondary,
+              transition: 'background-color 150ms, color 150ms, border-color 150ms',
+            }}
+          >
+            Send files
+          </Button>
+        )}
+      </Box>
+    </Box>
   );
 };
 

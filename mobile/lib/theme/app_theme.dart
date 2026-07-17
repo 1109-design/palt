@@ -1,94 +1,195 @@
+/// app_theme.dart — Beacon design tokens + ThemeData (see /design.md).
+///
+/// Deep-ink night surfaces, signal-amber accent, mono data readouts.
+///   - Bricolage Grotesque: display / headings / device names
+///   - Inter: UI body
+///   - JetBrains Mono: every wire-derived value (IPs, sizes, speeds, versions)
 library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-const kPrimary   = Color(0xFF1A1A1A);
-const kSecondary = Color(0xFF6B6B6B);
-const kTertiary  = Color(0xFFD4E157);
-const kNeutral   = Color(0xFFD9D6D0);
-const kSurface   = Color(0xFFF0EDE6);
-const kOnPrimary = Color(0xFF1A1A1A);
+// ── Beacon palette ───────────────────────────────────────────────────────────
+const kBg            = Color(0xFF0C1220);
+const kSurface       = Color(0xFF131B2C);
+const kSurfaceRaised = Color(0xFF1A2438);
+const kHairline      = Color(0xFF263450);
+const kText          = Color(0xFFEAF0FB);
+const kTextSecondary = Color(0xFF8FA0BC);
+const kTextFaint     = Color(0xFF55637F);
+const kAccent        = Color(0xFFFFB454);
+const kAccentPressed = Color(0xFFE69A38);
+const kOnAccent      = Color(0xFF201503);
+const kOk            = Color(0xFF53D993);
+const kDanger        = Color(0xFFFF7B72);
+
+// ── Type helpers ─────────────────────────────────────────────────────────────
+
+/// Display voice — device names, screen titles, the wordmark.
+TextStyle display({
+  double fontSize = 24,
+  FontWeight fontWeight = FontWeight.w700,
+  Color color = kText,
+  double letterSpacing = -0.5,
+}) =>
+    GoogleFonts.bricolageGrotesque(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+    );
+
+/// Data voice — anything that came off the wire.
+TextStyle mono({
+  double fontSize = 12,
+  FontWeight fontWeight = FontWeight.w500,
+  Color color = kTextSecondary,
+}) =>
+    GoogleFonts.jetBrainsMono(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+    );
+
+/// Overline voice — tiny uppercase section labels.
+TextStyle overline({Color color = kTextFaint}) => GoogleFonts.inter(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 1.6,
+      color: color,
+    );
 
 ThemeData buildAppTheme() {
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: const ColorScheme.light(
-      primary: kPrimary,
-      onPrimary: Colors.white,
-      secondary: kSecondary,
-      onSecondary: Colors.white,
-      tertiary: kTertiary,
-      onTertiary: kOnPrimary,
+  final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
+
+  return base.copyWith(
+    colorScheme: const ColorScheme.dark(
+      primary: kAccent,
+      onPrimary: kOnAccent,
+      secondary: kTextSecondary,
+      onSecondary: kBg,
+      tertiary: kOk,
+      onTertiary: kBg,
       surface: kSurface,
-      onSurface: kPrimary,
-      surfaceContainer: kNeutral,
-      surfaceContainerLow: kNeutral,
-      surfaceContainerHigh: Color(0xFFC9C6C0),
-      error: Color(0xFFD32F2F),
+      onSurface: kText,
+      surfaceContainerLowest: kBg,
+      surfaceContainerLow: kSurface,
+      surfaceContainer: kSurface,
+      surfaceContainerHigh: kSurfaceRaised,
+      surfaceContainerHighest: kSurfaceRaised,
+      outline: kHairline,
+      outlineVariant: kHairline,
+      error: kDanger,
+      onError: kBg,
     ),
-
-    textTheme: GoogleFonts.archivoTextTheme(const TextTheme(
-      displayLarge:   TextStyle(fontSize: 72,   fontWeight: FontWeight.w800, letterSpacing: -2.88),
-      displayMedium:  TextStyle(fontSize: 45,   fontWeight: FontWeight.w800),
-      displaySmall:   TextStyle(fontSize: 36,   fontWeight: FontWeight.w800),
-      headlineMedium: TextStyle(fontSize: 28,   fontWeight: FontWeight.w800),
-      headlineSmall:  TextStyle(fontSize: 24,   fontWeight: FontWeight.w800),
-      titleLarge:     TextStyle(fontSize: 22,   fontWeight: FontWeight.w700),
-      titleMedium:    TextStyle(fontSize: 16,   fontWeight: FontWeight.w600),
-      titleSmall:     TextStyle(fontSize: 14,   fontWeight: FontWeight.w600),
-      bodyLarge:      TextStyle(fontSize: 16,   height: 1.5),
-      bodyMedium:     TextStyle(fontSize: 15.2, height: 1.5),
-      bodySmall:      TextStyle(fontSize: 12,   height: 1.5),
-      labelLarge:     TextStyle(fontSize: 14,   fontWeight: FontWeight.w700, letterSpacing: 1.6),
-      labelSmall:     TextStyle(fontSize: 11.52, fontWeight: FontWeight.w700, letterSpacing: 1.6),
-    )),
-
+    textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
+      bodyColor: kText,
+      displayColor: kText,
+    ),
+    scaffoldBackgroundColor: kBg,
     appBarTheme: AppBarTheme(
-      backgroundColor: kPrimary,
-      foregroundColor: Colors.white,
+      backgroundColor: kBg,
+      foregroundColor: kText,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: GoogleFonts.archivo(
-        color: Colors.white,
-        fontSize: 24,
-        fontWeight: FontWeight.w800,
-      ),
+      titleTextStyle: display(fontSize: 22, fontWeight: FontWeight.w800),
     ),
-
     cardTheme: const CardThemeData(
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(2)),
-      ),
       color: kSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(14)),
+        side: BorderSide(color: kHairline),
+      ),
       margin: EdgeInsets.zero,
     ),
-
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: kTertiary,
-        foregroundColor: kOnPrimary,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        shape: const RoundedRectangleBorder(),
-        textStyle: GoogleFonts.archivo(fontWeight: FontWeight.w700, fontSize: 15),
+        backgroundColor: kAccent,
+        foregroundColor: kOnAccent,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
       ),
     ),
-
-    floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: kTertiary,
-      foregroundColor: kOnPrimary,
-      elevation: 0,
-      shape: const RoundedRectangleBorder(),
-      extendedTextStyle: GoogleFonts.archivo(fontWeight: FontWeight.w700),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: kText,
+        side: const BorderSide(color: kHairline),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
+      ),
     ),
-
-    scaffoldBackgroundColor: kNeutral,
-
-    dividerTheme: const DividerThemeData(
-      color: kSecondary,
-      thickness: 1,
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: kTextSecondary,
+        textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+      ),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: kAccent,
+      foregroundColor: kOnAccent,
+      elevation: 0,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(14)),
+      ),
+      extendedTextStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
+    ),
+    dialogTheme: const DialogThemeData(
+      backgroundColor: kSurfaceRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(18)),
+        side: BorderSide(color: kHairline),
+      ),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: kSurfaceRaised,
+      modalBackgroundColor: kSurfaceRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+    ),
+    dividerTheme: const DividerThemeData(color: kHairline, thickness: 1),
+    checkboxTheme: CheckboxThemeData(
+      side: const BorderSide(color: kTextFaint, width: 1.5),
+      fillColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected) ? kAccent : null,
+      ),
+      checkColor: const WidgetStatePropertyAll(kOnAccent),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: kAccent,
+      linearTrackColor: kHairline,
+      circularTrackColor: kHairline,
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: kSurfaceRaised,
+      contentTextStyle: GoogleFonts.inter(color: kText, fontSize: 13),
+      behavior: SnackBarBehavior.floating,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        side: BorderSide(color: kHairline),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: kBg,
+      hintStyle: GoogleFonts.inter(color: kTextFaint),
+      helperStyle: GoogleFonts.inter(color: kTextFaint, fontSize: 11),
+      enabledBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide(color: kHairline),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide(color: kAccent),
+      ),
     ),
   );
 }

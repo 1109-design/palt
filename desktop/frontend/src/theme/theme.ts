@@ -1,84 +1,108 @@
 import { createTheme, alpha } from '@mui/material/styles';
 
-// Concrete Lemon design tokens
-const PRIMARY   = '#1A1A1A';
-const SECONDARY = '#6B6B6B';
-const TERTIARY  = '#D4E157';
-const NEUTRAL   = '#D9D6D0';
-const SURFACE   = '#F0EDE6';
+/**
+ * Beacon design tokens — see /design.md.
+ * Deep-ink night surfaces, signal-amber accent, mono data readouts.
+ */
+export const beacon = {
+  bg:            '#0C1220',
+  surface:       '#131B2C',
+  surfaceRaised: '#1A2438',
+  hairline:      '#263450',
+  text:          '#EAF0FB',
+  textSecondary: '#8FA0BC',
+  textFaint:     '#55637F',
+  accent:        '#FFB454',
+  accentHover:   '#FFC474',
+  accentPressed: '#E69A38',
+  onAccent:      '#201503',
+  ok:            '#53D993',
+  danger:        '#FF7B72',
+} as const;
 
-export const THEME_TERTIARY = TERTIARY;
+export const fonts = {
+  display: '"Bricolage Grotesque", "Inter", sans-serif',
+  body:    '"Inter", sans-serif',
+  mono:    '"JetBrains Mono", monospace',
+} as const;
+
+/** @deprecated Concrete Lemon relic — use beacon.accent. */
+export const THEME_TERTIARY = beacon.accent;
 
 const theme = createTheme({
   palette: {
-    mode: 'light',
+    mode: 'dark',
 
     primary: {
-      main: PRIMARY,
-      contrastText: '#FFFFFF',
+      main: beacon.accent,
+      dark: beacon.accentPressed,
+      light: beacon.accentHover,
+      contrastText: beacon.onAccent,
     },
 
     secondary: {
-      main: SECONDARY,
-      contrastText: '#FFFFFF',
+      main: beacon.textSecondary,
+      contrastText: beacon.bg,
     },
 
     background: {
-      default: NEUTRAL,
-      paper: SURFACE,
+      default: beacon.bg,
+      paper: beacon.surface,
     },
 
     text: {
-      primary: PRIMARY,
-      secondary: SECONDARY,
+      primary: beacon.text,
+      secondary: beacon.textSecondary,
+      disabled: beacon.textFaint,
     },
 
-    divider: alpha(PRIMARY, 0.12),
+    divider: beacon.hairline,
 
-    error:   { main: '#D32F2F' },
-    success: { main: '#2E7D32' },
+    error:   { main: beacon.danger },
+    success: { main: beacon.ok },
+    warning: { main: beacon.accent },
+    info:    { main: beacon.textSecondary },
   },
 
   typography: {
-    fontFamily: '"Archivo", sans-serif',
+    fontFamily: fonts.body,
 
-    h1: { fontSize: '2.5rem',   fontWeight: 800 },
-    h2: { fontSize: '1.75rem',  fontWeight: 800 },
-    h3: { fontSize: '1.5rem',   fontWeight: 700 },
-    h4: { fontSize: '1.25rem',  fontWeight: 700 },
-    h5: { fontSize: '1.125rem', fontWeight: 600 },
-    h6: { fontSize: '1rem',     fontWeight: 600 },
+    h1: { fontFamily: fonts.display, fontSize: '2.5rem',   fontWeight: 800, letterSpacing: '-0.03em' },
+    h2: { fontFamily: fonts.display, fontSize: '1.9rem',   fontWeight: 800, letterSpacing: '-0.03em' },
+    h3: { fontFamily: fonts.display, fontSize: '1.5rem',   fontWeight: 700, letterSpacing: '-0.02em' },
+    h4: { fontFamily: fonts.display, fontSize: '1.25rem',  fontWeight: 700, letterSpacing: '-0.02em' },
+    h5: { fontFamily: fonts.display, fontSize: '1.1rem',   fontWeight: 700, letterSpacing: '-0.01em' },
+    h6: { fontFamily: fonts.display, fontSize: '1rem',     fontWeight: 700, letterSpacing: '-0.01em' },
 
-    body1: { fontSize: '0.95rem', lineHeight: 1.5 },
-    body2: { fontSize: '0.875rem', lineHeight: 1.5 },
+    body1: { fontSize: '0.9rem',   lineHeight: 1.55 },
+    body2: { fontSize: '0.83rem',  lineHeight: 1.55 },
 
-    button: { fontWeight: 700, textTransform: 'none' },
+    button: { fontWeight: 600, textTransform: 'none', letterSpacing: 0 },
 
-    caption:  { fontFamily: '"Archivo Narrow", sans-serif', fontSize: '0.72rem', letterSpacing: '0.1em' },
-    overline: { fontFamily: '"Archivo Narrow", sans-serif', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase' },
+    caption:  { fontSize: '0.74rem', color: beacon.textSecondary },
+    overline: {
+      fontSize: '0.68rem',
+      fontWeight: 600,
+      letterSpacing: '0.14em',
+      textTransform: 'uppercase',
+      color: beacon.textFaint,
+    },
   },
 
   shape: {
-    borderRadius: 0,
+    borderRadius: 12,
   },
 
   components: {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: NEUTRAL,
+          backgroundColor: beacon.bg,
           backgroundImage: 'none',
         },
-      },
-    },
-
-    MuiAppBar: {
-      styleOverrides: {
-        root: {
-          backgroundColor: PRIMARY,
-          color: '#FFFFFF',
-          boxShadow: 'none',
-          borderBottom: `1px solid ${alpha(PRIMARY, 0.2)}`,
+        '*:focus-visible': {
+          outline: `2px solid ${beacon.accent}`,
+          outlineOffset: 2,
         },
       },
     },
@@ -87,17 +111,27 @@ const theme = createTheme({
       defaultProps: { disableElevation: true },
       styleOverrides: {
         root: {
-          borderRadius: 0,
-          padding: '12px 20px',
-          fontWeight: 700,
+          borderRadius: 8,
+          padding: '9px 18px',
+          fontWeight: 600,
         },
         containedPrimary: {
-          backgroundColor: TERTIARY,
-          color: PRIMARY,
+          backgroundColor: beacon.accent,
+          color: beacon.onAccent,
+          '&:hover':  { backgroundColor: beacon.accentHover },
+          '&:active': { backgroundColor: beacon.accentPressed },
+        },
+        outlined: {
+          borderColor: beacon.hairline,
+          color: beacon.text,
           '&:hover': {
-            backgroundColor: TERTIARY,
-            filter: 'brightness(0.93)',
+            borderColor: beacon.textSecondary,
+            backgroundColor: alpha(beacon.text, 0.04),
           },
+        },
+        text: {
+          color: beacon.textSecondary,
+          '&:hover': { color: beacon.text, backgroundColor: alpha(beacon.text, 0.05) },
         },
       },
     },
@@ -106,10 +140,10 @@ const theme = createTheme({
       defaultProps: { elevation: 0 },
       styleOverrides: {
         root: {
-          backgroundColor: SURFACE,
-          color: PRIMARY,
-          border: `1px solid ${alpha(SECONDARY, 0.3)}`,
-          borderRadius: 2,
+          backgroundColor: beacon.surface,
+          backgroundImage: 'none',
+          border: `1px solid ${beacon.hairline}`,
+          borderRadius: 12,
         },
       },
     },
@@ -117,10 +151,20 @@ const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
+          backgroundColor: beacon.surface,
           backgroundImage: 'none',
-          borderRadius: 0,
         },
-        rounded: { borderRadius: 2 },
+        rounded: { borderRadius: 12 },
+      },
+    },
+
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: beacon.surfaceRaised,
+          border: `1px solid ${beacon.hairline}`,
+          borderRadius: 16,
+        },
       },
     },
 
@@ -128,26 +172,59 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 0,
-            backgroundColor: 'transparent',
-            '& fieldset': { borderColor: SECONDARY },
-            '&:hover fieldset': { borderColor: PRIMARY },
-            '&.Mui-focused fieldset': { borderColor: PRIMARY },
+            borderRadius: 8,
+            backgroundColor: beacon.bg,
+            '& fieldset': { borderColor: beacon.hairline },
+            '&:hover fieldset': { borderColor: beacon.textFaint },
+            '&.Mui-focused fieldset': { borderColor: beacon.accent, borderWidth: 1 },
           },
         },
       },
     },
 
-    MuiDialog: {
+    MuiChip: {
       styleOverrides: {
-        paper: { borderRadius: 2 },
+        root: {
+          borderRadius: 999,
+          fontWeight: 500,
+        },
+      },
+    },
+
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          backgroundColor: beacon.surfaceRaised,
+          border: `1px solid ${beacon.hairline}`,
+          color: beacon.text,
+          fontSize: '0.72rem',
+          fontWeight: 500,
+        },
       },
     },
 
     MuiLinearProgress: {
       styleOverrides: {
-        root: { borderRadius: 0 },
-        bar:  { borderRadius: 0 },
+        root: {
+          borderRadius: 999,
+          backgroundColor: beacon.hairline,
+        },
+        bar: { borderRadius: 999 },
+      },
+    },
+
+    MuiCheckbox: {
+      styleOverrides: {
+        root: {
+          color: beacon.textFaint,
+          '&.Mui-checked': { color: beacon.accent },
+        },
+      },
+    },
+
+    MuiSnackbar: {
+      styleOverrides: {
+        root: { zIndex: 1500 },
       },
     },
   },

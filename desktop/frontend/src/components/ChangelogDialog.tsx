@@ -1,26 +1,21 @@
 /**
- * ChangelogDialog.tsx
+ * ChangelogDialog.tsx (Beacon)
  *
  * Shown once per version on the first boot after an upgrade.
  * App.tsx compares GetAppVersion() with GetLastSeenVersion(); if they
  * differ it renders this dialog with the release notes from GitHub.
- *
- * On dismiss, App.tsx calls SaveLastSeenVersion() so the dialog won't
- * be shown again until the next upgrade.
  */
 import React from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
   Typography,
   Box,
-  Chip,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { alpha } from '@mui/material/styles';
+import { beacon, fonts } from '../theme/theme';
 
 interface ChangelogDialogProps {
   open: boolean;
@@ -36,80 +31,74 @@ const ChangelogDialog: React.FC<ChangelogDialogProps> = ({
   onDismiss,
 }) => {
   return (
-    <Dialog
-      open={open}
-      onClose={onDismiss}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: '2px', overflow: 'hidden' },
-      }}
-    >
-      {/* Gradient header */}
-      <Box
-        sx={{
-          backgroundColor: '#D4E157',
-          px: 3,
-          py: 2.5,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-        }}
-      >
-        <AutoAwesomeIcon sx={{ color: '#1A1A1A', fontSize: 28 }} />
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#1A1A1A', lineHeight: 1.2 }}>
-              What's New
+    <Dialog open={open} onClose={onDismiss} maxWidth="sm" fullWidth>
+      <DialogContent sx={{ pt: 3.5, pb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>
+              You're up to date
             </Typography>
-            <Chip
-              label={version}
-              size="small"
+            <Typography
               sx={{
-                height: 20,
-                fontSize: '0.65rem',
+                fontFamily: fonts.display,
                 fontWeight: 700,
-                backgroundColor: alpha('#1A1A1A', 0.15),
-                color: '#1A1A1A',
-                '& .MuiChip-label': { px: 1 },
+                fontSize: '1.3rem',
+                letterSpacing: '-0.02em',
+                color: beacon.text,
               }}
-            />
+            >
+              What's new
+            </Typography>
           </Box>
-          <Typography variant="caption" sx={{ color: alpha('#1A1A1A', 0.7) }}>
-            You're on the latest version of PALT
-          </Typography>
+          <Box sx={{ flex: 1 }} />
+          <Box
+            sx={{
+              px: 1.25,
+              py: 0.5,
+              borderRadius: '6px',
+              border: `1px solid ${alpha(beacon.accent, 0.5)}`,
+              backgroundColor: alpha(beacon.accent, 0.1),
+            }}
+          >
+            <Typography
+              sx={{
+                fontFamily: fonts.mono,
+                fontSize: '0.76rem',
+                fontWeight: 600,
+                color: beacon.accent,
+              }}
+            >
+              {version}
+            </Typography>
+          </Box>
         </Box>
-      </Box>
 
-      <DialogContent sx={{ pt: 2.5 }}>
         <Box
           sx={{
-            maxHeight: 320,
+            maxHeight: 300,
             overflowY: 'auto',
-            backgroundColor: 'action.hover',
-            borderRadius: 2,
+            backgroundColor: beacon.bg,
+            border: `1px solid ${beacon.hairline}`,
+            borderRadius: '10px',
             p: 2,
           }}
         >
           <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.75 }}
+            sx={{
+              fontSize: '0.82rem',
+              color: beacon.textSecondary,
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.7,
+            }}
           >
             {releaseNotes || 'Bug fixes and performance improvements.'}
           </Typography>
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, pt: 0 }}>
-        <Button
-          id="btn-changelog-dismiss"
-          onClick={onDismiss}
-          variant="contained"
-          sx={{ fontWeight: 700, borderRadius: 6 }}
-          fullWidth
-        >
-          Got it!
+      <DialogActions sx={{ p: 2.5, pt: 2 }}>
+        <Button id="btn-changelog-dismiss" onClick={onDismiss} variant="contained" fullWidth>
+          Got it
         </Button>
       </DialogActions>
     </Dialog>

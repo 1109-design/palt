@@ -1,3 +1,11 @@
+/// home_screen.dart — PALT mobile root screen (Beacon).
+///
+/// Layout: pinned app bar (lamp + wordmark) → update banner → local beacon
+/// card → nearby devices list → footer. Incoming offers surface as a modal
+/// bottom sheet; live transfers dock as a card above the bottom edge.
+/// Pull down anywhere to rescan the network.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
@@ -11,13 +19,13 @@ import '../../providers/update_provider.dart';
 import '../../services/transfer_service.dart';
 import '../../utils/version.dart';
 import '../widgets/changelog_dialog.dart';
+import '../widgets/beacon_pulse.dart';
 import '../widgets/local_device_card.dart';
 import '../widgets/peer_card.dart';
 import '../widgets/update_banner.dart';
 import '../../providers/update_visibility_provider.dart';
 import '../../models/peer.dart';
 import '../../theme/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'history_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -49,6 +57,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> _rescan() async {
+    ref.invalidate(discoveryServiceProvider);
+    // Give mDNS a beat to re-browse so the refresh feels real.
+    await Future.delayed(const Duration(milliseconds: 900));
+  }
+
+  // ── Incoming offer bottom sheet ────────────────────────────────────────────
+
+  void _showOfferSheet(OfferData offer) {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      builder: (context) => _OfferSheet(
+        offer: offer,
+        onReject: () {
+          ref.read(activeOfferProvider.notifier).reject();
+          Navigator.pop(context);
+        },
+        onAccept: (alwaysTrust) {
+          if (alwaysTrust) {
+            ref.read(trustProvider.notifier).trust(offer.senderName);
+          }
+          ref.read(activeOfferProvider.notifier).accept();
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(transferServiceProvider);
@@ -59,138 +98,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final updateInfo = updateAsync.valueOrNull;
 
     ref.listen<OfferData?>(activeOfferProvider, (previous, next) {
-      if (next != null) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) {
-            bool alwaysTrust = false;
-            bool showDetails = false;
-
-            return StatefulBuilder(
-              builder: (context, setState) {
-                final isMultiple = next.files.length > 1;
-                final fileCount = next.files.length;
-                final sizeStr = _formatBytes(next.totalSize);
-
-                return AlertDialog(
-                  title: Text('Incoming ${isMultiple ? 'Files' : 'File'}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${next.senderName} wants to send you ${isMultiple ? '$fileCount files' : 'a file'}:'),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          color: kNeutral,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      isMultiple ? '$fileCount items' : next.files[0].name,
-                                      style: const TextStyle(fontWeight: FontWeight.w600),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (isMultiple)
-                                    TextButton(
-                                      onPressed: () => setState(() => showDetails = !showDetails),
-                                      style: TextButton.styleFrom(
-                                        padding: EdgeInsets.zero,
-                                        minimumSize: const Size(50, 20),
-                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      child: Text(showDetails ? 'Hide' : 'Details', style: const TextStyle(fontSize: 12)),
-                                    ),
-                                ],
-                              ),
-                              Text(sizeStr, style: const TextStyle(color: kSecondary, fontSize: 12)),
-
-                              if (isMultiple && showDetails) ...[
-                                const Divider(height: 16),
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxHeight: 180),
-                                  child: ListView.separated(
-                                    shrinkWrap: true,
-                                    itemCount: next.files.length,
-                                    separatorBuilder: (context, index) => const SizedBox(height: 4),
-                                    itemBuilder: (context, index) {
-                                      final file = next.files[index];
-                                      return Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              file.name,
-                                              style: const TextStyle(fontSize: 11),
-                                              overflow: TextOverflow.ellipsis,
-                                              maxLines: 1,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            _formatBytes(file.size),
-                                            style: const TextStyle(color: kSecondary, fontSize: 10),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        CheckboxListTile(
-                          value: alwaysTrust,
-                          onChanged: (val) => setState(() => alwaysTrust = val ?? false),
-                          title: const Text('Always trust this sender', style: TextStyle(fontSize: 14)),
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        ref.read(activeOfferProvider.notifier).reject();
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Decline'),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        if (alwaysTrust) {
-                          ref.read(trustProvider.notifier).trust(next.senderName);
-                        }
-                        ref.read(activeOfferProvider.notifier).accept();
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Accept'),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      }
+      if (next != null) _showOfferSheet(next);
     });
 
     return Scaffold(
       body: Stack(
         children: [
-          _buildBody(context, ref, peersAsync, updateInfo, progress),
+          RefreshIndicator(
+            onRefresh: _rescan,
+            color: kAccent,
+            backgroundColor: kSurfaceRaised,
+            child: _buildBody(context, ref, peersAsync, updateInfo),
+          ),
           if (progress != null)
             Positioned(
               left: 16,
@@ -202,46 +121,73 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       floatingActionButton: progress == null
           ? FloatingActionButton.extended(
-              onPressed: () => ref.invalidate(discoveryServiceProvider),
-              icon: const Icon(Icons.refresh_rounded),
+              onPressed: _rescan,
+              icon: const Icon(Icons.radar_rounded),
               label: const Text('Scan'),
             )
           : null,
     );
   }
 
-  Widget _buildBody(BuildContext context, WidgetRef ref, AsyncValue<List<Peer>> peersAsync, dynamic updateInfo, TransferProgress? progress) {
+  Widget _buildBody(BuildContext context, WidgetRef ref,
+      AsyncValue<List<Peer>> peersAsync, dynamic updateInfo) {
     final bannerVisible = ref.watch(updateBannerVisibleProvider);
 
     return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
+      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       slivers: [
         SliverAppBar(
-          expandedHeight: 140.0,
-          floating: false,
           pinned: true,
-          backgroundColor: kPrimary,
-          foregroundColor: Colors.white,
-          flexibleSpace: FlexibleSpaceBar(
-            title: Text('PALT',
-              style: GoogleFonts.archivo(
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1.2,
-                color: Colors.white,
+          toolbarHeight: 64,
+          backgroundColor: kBg,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // The transmit lamp
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: kSurface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: kHairline),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: kAccent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: kAccent.withValues(alpha: 0.5),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-            centerTitle: false,
-            titlePadding: const EdgeInsetsDirectional.only(start: 20, bottom: 16),
-            background: Container(color: kPrimary),
+              const SizedBox(width: 12),
+              Text('PALT',
+                  style: display(fontSize: 20, fontWeight: FontWeight.w800)),
+            ],
           ),
           actions: [
-            if (updateInfo?.isNewer == true && !bannerVisible)
+            if (updateInfo?.isNewer == true &&
+                !ref.watch(updateBannerVisibleProvider))
               IconButton(
-                icon: const Icon(Icons.new_releases, color: kTertiary),
-                onPressed: () => ref.read(updateBannerVisibleProvider.notifier).state = true,
+                icon: const Icon(Icons.arrow_circle_up_rounded, color: kAccent),
+                tooltip: 'Update available',
+                onPressed: () => ref
+                    .read(updateBannerVisibleProvider.notifier)
+                    .state = true,
               ),
             IconButton(
-              icon: const Icon(Icons.history_rounded),
+              icon: const Icon(Icons.history_rounded, color: kTextSecondary),
+              tooltip: 'History',
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const HistoryScreen()),
@@ -254,44 +200,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (bannerVisible && updateInfo != null)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: 4),
               child: UpdateBanner(info: updateInfo),
             ),
           ),
 
-        const SliverToBoxAdapter(
-          child: LocalDeviceCard(),
-        ),
+        const SliverToBoxAdapter(child: LocalDeviceCard()),
 
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.only(left: 20, top: 32, bottom: 12),
+            padding: const EdgeInsets.fromLTRB(20, 32, 20, 10),
             child: Row(
               children: [
-                const Text(
-                  'NEARBY DEVICES',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                    color: kSecondary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(width: 4, height: 4, color: kSecondary),
-                const SizedBox(width: 8),
+                Text('NEARBY DEVICES', style: overline(color: kTextSecondary)),
+                const SizedBox(width: 10),
                 peersAsync.when(
-                  data: (peers) => Text(
-                    '${peers.length} FOUND',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: kSecondary,
-                    ),
+                  data: (peers) => Text('${peers.length}',
+                      style: mono(color: kAccent, fontWeight: FontWeight.w600)),
+                  error: (_, __) => Text('offline', style: mono(color: kDanger)),
+                  loading: () => const SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  error: (_, __) => const Text('OFFLINE'),
-                  loading: () => const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 2)),
                 ),
+                const SizedBox(width: 12),
+                const Expanded(child: Divider(color: kHairline, height: 1)),
               ],
             ),
           ),
@@ -299,20 +233,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         peersAsync.when(
           data: (peers) => peers.isEmpty
-              ? const SliverFillRemaining(
+              ? SliverFillRemaining(
                   hasScrollBody: false,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.radar, size: 48, color: kSecondary),
-                        SizedBox(height: 16),
-                        Text('Discovery active...', style: TextStyle(color: kSecondary, fontWeight: FontWeight.w600)),
-                        SizedBox(height: 4),
-                        Text('Wait for a device to appear', style: TextStyle(color: kSecondary, fontSize: 12)),
-                      ],
-                    ),
-                  ),
+                  child: _buildEmptyState(),
                 )
               : SliverPadding(
                   padding: const EdgeInsets.only(bottom: 20),
@@ -325,7 +248,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
           error: (err, _) => SliverFillRemaining(
             hasScrollBody: false,
-            child: Center(child: Text('Error: $err')),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Discovery hit a problem: $err\nPull down to try again.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: kTextSecondary, fontSize: 13),
+                ),
+              ),
+            ),
           ),
           loading: () => const SliverFillRemaining(
             hasScrollBody: false,
@@ -343,155 +275,181 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildProgress(BuildContext context, WidgetRef ref, TransferProgress progress) {
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          BeaconPulse(
+            active: true,
+            size: 84,
+            child: Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: kSurface,
+                shape: BoxShape.circle,
+                border: Border.all(color: kHairline),
+              ),
+              child: const Icon(Icons.wifi_tethering_rounded,
+                  size: 34, color: kAccent),
+            ),
+          ),
+          const SizedBox(height: 26),
+          Text('Listening for devices', style: display(fontSize: 19)),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              'Open PALT on another device on this Wi‑Fi — it appears here the moment it announces itself.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: kTextSecondary, fontSize: 13, height: 1.5),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text('broadcasting on _palt._tcp.local',
+              style: mono(fontSize: 11, color: kTextFaint)),
+        ],
+      ),
+    );
+  }
+
+  // ── Live transfer card ─────────────────────────────────────────────────────
+
+  Widget _buildProgress(
+      BuildContext context, WidgetRef ref, TransferProgress progress) {
     final isCompleted = progress.status == TransferStatus.completed;
     final isError = progress.status == TransferStatus.error;
     final isWaiting = progress.status == TransferStatus.waiting;
-
-    if (isCompleted) {
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Card(
-          elevation: 0,
-          color: kSurface,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(2)),
-            side: BorderSide(color: Colors.green),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.green),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'All files transferred successfully!',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                if (progress.filePath != null)
-                  TextButton.icon(
-                    onPressed: () {
-                      OpenFilex.open(progress.filePath!);
-                      ref.read(transferProgressProvider.notifier).state = null;
-                    },
-                    icon: const Icon(Icons.folder_open, size: 18),
-                    label: const Text('View'),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 20),
-                  onPressed: () => ref.read(transferProgressProvider.notifier).state = null,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    final stateColor = isError ? kDanger : (isCompleted ? kOk : kAccent);
 
     final percent = progress.total > 0 ? progress.written / progress.total : 0.0;
-    final speedStr = progress.speed != null ? '${_formatBytes(progress.speed!.toInt())}/s' : '--';
+    final speedStr = progress.speed != null
+        ? '${_formatBytes(progress.speed!.toInt())}/s'
+        : '—';
 
-    return Card(
-      elevation: 0,
-      color: kSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.all(Radius.circular(2)),
-        side: BorderSide(color: kSecondary.withValues(alpha: 0.3)),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: kSurfaceRaised,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: stateColor.withValues(alpha: 0.4)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  color: isError
-                      ? Colors.red.withValues(alpha: 0.1)
-                      : (isWaiting ? kNeutral : kTertiary.withValues(alpha: 0.3)),
-                  child: Icon(
-                    isError ? Icons.error_outline_rounded : (isWaiting ? Icons.hourglass_empty_rounded : Icons.sync_rounded),
-                    size: 20,
-                    color: isError ? Colors.red : kPrimary,
-                  ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: stateColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isError ? 'Transfer Failed' : (isWaiting ? 'Waiting for Peer...' : progress.currentFileName ?? 'Transferring...'),
-                        style: GoogleFonts.archivo(fontWeight: FontWeight.w700, fontSize: 16),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                child: Icon(
+                  isError
+                      ? Icons.error_outline_rounded
+                      : isCompleted
+                          ? Icons.check_circle_outline_rounded
+                          : isWaiting
+                              ? Icons.hourglass_empty_rounded
+                              : Icons.swap_vert_rounded,
+                  size: 19,
+                  color: stateColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isError
+                          ? 'Transfer failed'
+                          : isCompleted
+                              ? 'Transfer complete'
+                              : isWaiting
+                                  ? 'Waiting for the other device…'
+                                  : (progress.currentFileName ?? 'Transferring…'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: kText,
                       ),
-                      if (!isError && !isWaiting)
-                        Text(
-                          '${progress.sentItems ?? 0} of ${progress.totalItems ?? 0} files • $speedStr',
-                          style: const TextStyle(fontSize: 12, color: kSecondary, fontWeight: FontWeight.w500),
-                        ),
-                    ],
-                  ),
-                ),
-                if (!isError && !isWaiting)
-                  Text(
-                    '${(percent * 100).toInt()}%',
-                    style: GoogleFonts.archivo(
-                      fontWeight: FontWeight.w900,
-                      color: kPrimary,
-                      fontSize: 18,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
+                    if (!isError && !isWaiting && !isCompleted)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'file ${progress.sentItems ?? 1} of ${progress.totalItems ?? 1}',
+                          style: const TextStyle(
+                              fontSize: 12, color: kTextSecondary),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (isCompleted && progress.filePath != null)
+                TextButton.icon(
+                  onPressed: () {
+                    OpenFilex.open(progress.filePath!);
+                    ref.read(transferProgressProvider.notifier).state = null;
+                  },
+                  icon: const Icon(Icons.folder_open_rounded, size: 17),
+                  style: TextButton.styleFrom(foregroundColor: kOk),
+                  label: const Text('Open'),
+                ),
+              if (isCompleted || isError)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded,
+                      size: 19, color: kTextFaint),
+                  onPressed: () =>
+                      ref.read(transferProgressProvider.notifier).state = null,
+                ),
+            ],
+          ),
+          if (isError) ...[
+            const SizedBox(height: 10),
+            Text(
+              progress.error ?? 'Unknown error',
+              style: const TextStyle(
+                  color: kDanger, fontSize: 12.5, fontWeight: FontWeight.w500),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: isWaiting ? null : (isCompleted ? 1.0 : percent),
+                minHeight: 5,
+                backgroundColor: kHairline,
+                valueColor: AlwaysStoppedAnimation<Color>(stateColor),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${_formatBytes(progress.written)} / ${_formatBytes(progress.total)}',
+                  style: mono(fontSize: 10.5, color: kTextFaint),
+                ),
+                Text(
+                  isCompleted
+                      ? 'done'
+                      : isWaiting
+                          ? 'waiting'
+                          : '$speedStr · ${(percent * 100).toInt()}%',
+                  style: mono(fontSize: 10.5),
+                ),
               ],
             ),
-
-            if (isError) ...[
-              const SizedBox(height: 12),
-              Text(
-                progress.error ?? 'Unknown error',
-                style: TextStyle(color: Colors.red[700], fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonal(
-                  onPressed: () => ref.read(transferProgressProvider.notifier).state = null,
-                  child: const Text('Dismiss'),
-                ),
-              ),
-            ] else if (isWaiting) ...[
-              const SizedBox(height: 16),
-              const LinearProgressIndicator(
-                minHeight: 2,
-                backgroundColor: kNeutral,
-                valueColor: AlwaysStoppedAnimation<Color>(kTertiary),
-              ),
-            ] else ...[
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${_formatBytes(progress.written)} of ${_formatBytes(progress.total)}',
-                    style: const TextStyle(fontSize: 11, color: kSecondary, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              LinearProgressIndicator(
-                value: percent,
-                minHeight: 4,
-                backgroundColor: kNeutral,
-                valueColor: const AlwaysStoppedAnimation<Color>(kTertiary),
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
@@ -507,10 +465,190 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
+      child: const Text(
         'made with ❤️ by uriel • $kAppVersion',
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 11, color: kSecondary),
+        style: TextStyle(fontSize: 11, color: kTextFaint),
+      ),
+    );
+  }
+}
+
+// ── Offer bottom sheet ────────────────────────────────────────────────────────
+
+class _OfferSheet extends StatefulWidget {
+  final OfferData offer;
+  final VoidCallback onReject;
+  final void Function(bool alwaysTrust) onAccept;
+
+  const _OfferSheet({
+    required this.offer,
+    required this.onReject,
+    required this.onAccept,
+  });
+
+  @override
+  State<_OfferSheet> createState() => _OfferSheetState();
+}
+
+class _OfferSheetState extends State<_OfferSheet> {
+  bool _alwaysTrust = false;
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return "0 B";
+    const suffixes = ["B", "KB", "MB", "GB", "TB"];
+    var i = (log(bytes) / log(1024)).floor();
+    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offer = widget.offer;
+    final fileCount = offer.files.length;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 12, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Grab handle
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: kHairline,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: kOk.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.south_west_rounded,
+                      color: kOk, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('INCOMING TRANSFER', style: overline()),
+                      const SizedBox(height: 2),
+                      Text(
+                        offer.senderName,
+                        style: display(fontSize: 19),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // File manifest
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: kBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kHairline),
+              ),
+              child: Column(
+                children: [
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 170),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: offer.files.length,
+                      itemBuilder: (context, index) {
+                        final file = offer.files[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  file.name,
+                                  style: const TextStyle(
+                                      fontSize: 13, color: kText),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(_formatBytes(file.size),
+                                  style: mono(
+                                      fontSize: 11, color: kTextFaint)),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '$fileCount file${fileCount != 1 ? 's' : ''}',
+                        style: const TextStyle(
+                            fontSize: 12, color: kTextSecondary),
+                      ),
+                      Text(_formatBytes(offer.totalSize),
+                          style: mono(
+                              color: kText, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            CheckboxListTile(
+              value: _alwaysTrust,
+              onChanged: (val) =>
+                  setState(() => _alwaysTrust = val ?? false),
+              title: Text(
+                'Always accept from ${offer.senderName}',
+                style:
+                    const TextStyle(fontSize: 13.5, color: kTextSecondary),
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: widget.onReject,
+                    child: const Text('Decline'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => widget.onAccept(_alwaysTrust),
+                    child: const Text('Accept'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

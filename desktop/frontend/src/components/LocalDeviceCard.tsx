@@ -1,23 +1,24 @@
+/**
+ * LocalDeviceCard.tsx — "This device" identity strip (Beacon)
+ *
+ * Your machine drawn as a beacon: OS tile wrapped in pulsing rings while
+ * discovery broadcasts, name in display type, address as a mono readout.
+ */
 import React from 'react';
-import {
-  Box,
-  Typography,
-  Chip,
-  Avatar,
-} from '@mui/material';
+import { Box, Typography, Tooltip } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import type { Peer } from '../types/peer';
 import { getOsInfo } from '../utils/osHelpers';
-
-const TERTIARY  = '#D4E157';
-const ON_CARD   = '#1A1A1A';
+import BeaconPulse from './BeaconPulse';
+import { beacon, fonts } from '../theme/theme';
 
 interface LocalDeviceCardProps {
   device: Peer | null;
+  /** True while discovery is actively broadcasting/scanning. */
+  broadcasting?: boolean;
 }
 
-const LocalDeviceCard: React.FC<LocalDeviceCardProps> = ({ device }) => {
+const LocalDeviceCard: React.FC<LocalDeviceCardProps> = ({ device, broadcasting = true }) => {
   if (!device) return null;
 
   const osInfo = getOsInfo(device.os);
@@ -26,82 +27,121 @@ const LocalDeviceCard: React.FC<LocalDeviceCardProps> = ({ device }) => {
   return (
     <Box
       sx={{
-        backgroundColor: TERTIARY,
-        borderRadius: '2px',
-        p: 4,
+        backgroundColor: beacon.surface,
+        border: `1px solid ${beacon.hairline}`,
+        borderRadius: '16px',
+        px: 4,
+        py: 3.5,
         mb: 4,
         display: 'flex',
         alignItems: 'center',
-        gap: 3,
+        gap: 3.5,
+        overflow: 'hidden',
+        position: 'relative',
       }}
     >
-      {/* OS Avatar */}
-      <Avatar
-        sx={{
-          width: 72,
-          height: 72,
-          backgroundColor: alpha(ON_CARD, 0.08),
-          color: ON_CARD,
-          borderRadius: 0,
-          flexShrink: 0,
-        }}
-      >
-        <OsIcon sx={{ fontSize: 38 }} />
-      </Avatar>
-
-      {/* Device info */}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          variant="overline"
+      {/* OS tile inside the beacon rings */}
+      <BeaconPulse active={broadcasting} size={64}>
+        <Box
           sx={{
-            color: alpha(ON_CARD, 0.5),
-            fontWeight: 700,
-            lineHeight: 1.2,
-            display: 'block',
+            width: 64,
+            height: 64,
+            borderRadius: '50%',
+            backgroundColor: beacon.surfaceRaised,
+            border: `1px solid ${beacon.hairline}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: beacon.accent,
           }}
         >
-          THIS DEVICE
+          <OsIcon sx={{ fontSize: 30 }} />
+        </Box>
+      </BeaconPulse>
+
+      {/* Identity */}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>
+          This device
         </Typography>
         <Typography
-          variant="h3"
-          sx={{ fontWeight: 900, color: ON_CARD, lineHeight: 1.1, mt: 0.5 }}
           noWrap
+          sx={{
+            fontFamily: fonts.display,
+            fontWeight: 800,
+            fontSize: '1.75rem',
+            letterSpacing: '-0.02em',
+            color: beacon.text,
+            lineHeight: 1.15,
+            mt: 0.25,
+          }}
         >
           {device.deviceName}
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1.5 }}>
-          <Box sx={{ backgroundColor: alpha(ON_CARD, 0.08), px: 1.5, py: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1.25 }}>
+          <Box
+            sx={{
+              px: 1.25,
+              py: 0.5,
+              borderRadius: '6px',
+              backgroundColor: beacon.bg,
+              border: `1px solid ${beacon.hairline}`,
+            }}
+          >
             <Typography
-              variant="body2"
-              sx={{ color: ON_CARD, fontFamily: '"Ubuntu Mono", monospace', fontSize: '0.85rem', fontWeight: 600 }}
+              sx={{
+                fontFamily: fonts.mono,
+                fontSize: '0.78rem',
+                color: beacon.textSecondary,
+                lineHeight: 1.4,
+              }}
             >
               {device.ipAddress}:{device.port}
             </Typography>
           </Box>
-          <Box sx={{ width: 4, height: 4, bgcolor: alpha(ON_CARD, 0.3) }} />
-          <Typography variant="body2" sx={{ color: alpha(ON_CARD, 0.7), fontWeight: 700, fontSize: '0.9rem' }}>
+          <Typography sx={{ fontSize: '0.82rem', fontWeight: 500, color: beacon.textFaint }}>
             {osInfo.label}
           </Typography>
         </Box>
       </Box>
 
-      {/* Status chip */}
-      <Chip
-        id="chip-local-status"
-        icon={<CheckCircleIcon />}
-        label="Online"
-        sx={{
-          backgroundColor: alpha(ON_CARD, 0.1),
-          color: ON_CARD,
-          fontWeight: 700,
-          borderRadius: 0,
-          '& .MuiChip-icon': { color: ON_CARD, fontSize: 16 },
-          alignSelf: 'center',
-          px: 1,
-          height: 36,
-          fontSize: '0.85rem',
-        }}
-      />
+      {/* Broadcast status */}
+      <Tooltip title="Announcing on _palt._tcp.local">
+        <Box
+          id="chip-local-status"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            px: 1.75,
+            height: 34,
+            borderRadius: 999,
+            border: `1px solid ${alpha(beacon.accent, 0.35)}`,
+            backgroundColor: alpha(beacon.accent, 0.08),
+            flexShrink: 0,
+          }}
+        >
+          <Box
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              backgroundColor: beacon.accent,
+              boxShadow: `0 0 8px 1px ${alpha(beacon.accent, 0.5)}`,
+            }}
+          />
+          <Typography
+            sx={{
+              fontSize: '0.76rem',
+              fontWeight: 600,
+              color: beacon.accent,
+              letterSpacing: '0.04em',
+            }}
+          >
+            Broadcasting
+          </Typography>
+        </Box>
+      </Tooltip>
     </Box>
   );
 };

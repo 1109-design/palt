@@ -1,7 +1,19 @@
+/**
+ * ProgressSnack.tsx — transfer shelf (Beacon)
+ *
+ * A card docked bottom-right while a transfer runs: current file, amber
+ * progress bar, and a mono readout of speed / bytes / percent. Turns green
+ * on completion with an "Open folder" action.
+ */
 import React from 'react';
-import { Snackbar, Alert, LinearProgress, Box, Typography, Button, Paper } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
-import { FolderOpen as FolderIcon } from '@mui/icons-material';
+import { Snackbar, Box, Typography, Button, IconButton, LinearProgress } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import CloseIcon from '@mui/icons-material/Close';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import SwapVertIcon from '@mui/icons-material/SwapVert';
+import { beacon, fonts } from '../theme/theme';
 
 export interface TransferProgress {
   transferId: string;
@@ -26,172 +38,149 @@ const formatBytes = (bytes: number) => {
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
-export const ProgressSnack: React.FC<ProgressSnackProps> = ({ progress, error, onOpenFolder, onClose }) => {
-  const theme = useTheme();
+export const ProgressSnack: React.FC<ProgressSnackProps> = ({
+  progress,
+  error,
+  onOpenFolder,
+  onClose,
+}) => {
+  if (!progress && !error) return null;
 
-  if (error) {
-    return (
-      <Snackbar 
-        open={true} 
-        onClose={onClose} 
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{ bottom: { xs: 40, sm: 60 } }}
-      >
-        <Alert 
-          severity="error" 
-          variant="filled" 
-          onClose={onClose} 
-          sx={{ 
-            width: '100%', 
-            borderRadius: 4, 
-            boxShadow: '0 8px 32px rgba(234, 67, 53, 0.2)',
-            bgcolor: '#EA4335',
-            fontWeight: 600
-          }}
-        >
-          {error}
-        </Alert>
-      </Snackbar>
-    );
-  }
+  const isError = !!error;
+  const isCompleted = !isError && progress?.status === 'completed';
+  const percent =
+    progress && progress.total > 0 ? (progress.written / progress.total) * 100 : 0;
+  const speedStr = progress?.speed ? `${formatBytes(Math.round(progress.speed))}/s` : '—';
+  const stateColor = isError ? beacon.danger : isCompleted ? beacon.ok : beacon.accent;
 
-  if (!progress) return null;
-
-  const isCompleted = progress.status === 'completed';
-  const percent = progress.total > 0 ? (progress.written / progress.total) * 100 : 0;
-  const speedStr = progress.speed ? `${formatBytes(Math.round(progress.speed))}/s` : '--';
-  
   return (
-    <Snackbar 
-      open={true} 
-      autoHideDuration={isCompleted ? 8000 : null} 
-      onClose={onClose} 
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      sx={{ bottom: { xs: 40, sm: 60 } }}
+    <Snackbar
+      open
+      autoHideDuration={isCompleted ? 8000 : null}
+      onClose={(_, reason) => {
+        if (reason !== 'clickaway') onClose();
+      }}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      sx={{ bottom: { xs: 46 }, right: { xs: 16 } }}
     >
-      <Paper 
-        elevation={0}
-        sx={{ 
-          minWidth: 460, 
-          borderRadius: 5, 
+      <Box
+        sx={{
+          width: 400,
+          borderRadius: '14px',
           overflow: 'hidden',
-          background: theme.palette.background.paper,
-          border: '1px solid',
-          borderColor: isCompleted ? alpha(theme.palette.success.main, 0.5) : alpha(theme.palette.text.secondary!, 0.3),
-          position: 'relative',
-          transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            bottom: 0,
-            width: `${percent}%`,
-            background: isCompleted 
-              ? alpha(theme.palette.success.main, 0.1)
-              : alpha(theme.palette.primary.main, 0.1),
-            transition: 'width 0.5s cubic-bezier(0.1, 0.7, 1.0, 0.1)',
-            zIndex: 0
-          }
+          backgroundColor: beacon.surfaceRaised,
+          border: `1px solid ${alpha(stateColor, 0.4)}`,
         }}
       >
-        <Box sx={{ p: 2.5, position: 'relative', zIndex: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              width: 44, 
-              height: 44, 
-              borderRadius: 3, 
-              bgcolor: isCompleted ? alpha(theme.palette.success.main, 0.15) : alpha(theme.palette.primary.main, 0.1),
-              color: isCompleted ? theme.palette.success.main : theme.palette.primary.main,
-              mr: 2.5,
-              boxShadow: isCompleted ? 'none' : `0 0 12px ${alpha(theme.palette.primary.main, 0.2)}`
-            }}>
-              {isCompleted ? (
-                <FolderIcon fontSize="medium" />
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {/* State glyph */}
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: '10px',
+                backgroundColor: alpha(stateColor, 0.1),
+                color: stateColor,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {isError ? (
+                <ErrorOutlineIcon sx={{ fontSize: 19 }} />
+              ) : isCompleted ? (
+                <CheckCircleOutlineIcon sx={{ fontSize: 19 }} />
               ) : (
-                <Box sx={{ 
-                  animation: 'pulse 2s infinite ease-in-out',
-                  '@keyframes pulse': {
-                    '0%': { transform: 'scale(0.95)', opacity: 0.8 },
-                    '50%': { transform: 'scale(1.05)', opacity: 1 },
-                    '100%': { transform: 'scale(0.95)', opacity: 0.8 },
-                  }
-                }}>
-                  <FolderIcon />
-                </Box>
-              )}
-            </Box>
-            
-            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-              <Typography variant="body1" sx={{ fontWeight: 800, lineHeight: 1.2, mb: 0.5, letterSpacing: '-0.3px' }}>
-                {isCompleted ? 'Transmission Successful' : (progress.currentFile || 'Transferring...')}
-              </Typography>
-              {!isCompleted && (
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, opacity: 0.8 }}>
-                  Preparing {progress.sentItems} of {progress.totalItems} files • {speedStr}
-                </Typography>
-              )}
-              {isCompleted && (
-                <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>
-                  Batch of {progress.totalItems} files received
-                </Typography>
+                <SwapVertIcon
+                  sx={{
+                    fontSize: 19,
+                    animation: 'shelf-pulse 1.6s ease-in-out infinite',
+                    '@keyframes shelf-pulse': {
+                      '0%, 100%': { opacity: 1 },
+                      '50%': { opacity: 0.45 },
+                    },
+                    '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+                  }}
+                />
               )}
             </Box>
 
-            {!isCompleted && (
-              <Typography variant="h5" sx={{ fontWeight: 900, color: 'primary.main', ml: 2 }}>
-                {Math.round(percent)}%
-              </Typography>
-            )}
-          </Box>
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, px: 0.5 }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, opacity: 0.6 }}>
-              {formatBytes(progress.written)} / {formatBytes(progress.total)}
-            </Typography>
-            {isCompleted && (
-              <Button 
-                size="small" 
-                variant="contained" 
-                color="success"
-                onClick={onOpenFolder}
-                startIcon={<FolderIcon />}
-                sx={{ 
-                  borderRadius: 2, 
-                  textTransform: 'none', 
-                  py: 0.5,
-                  px: 2,
-                  fontWeight: 800,
-                  fontSize: '0.75rem',
-                }}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                noWrap
+                sx={{ fontSize: '0.86rem', fontWeight: 600, color: beacon.text }}
               >
-                View in Folder
+                {isError
+                  ? 'Transfer failed'
+                  : isCompleted
+                  ? 'Transfer complete'
+                  : progress?.currentFile || 'Transferring…'}
+              </Typography>
+              <Typography
+                noWrap
+                sx={{ fontSize: '0.74rem', color: beacon.textSecondary, mt: 0.25 }}
+              >
+                {isError
+                  ? error
+                  : isCompleted
+                  ? `${progress?.totalItems ?? ''} file${(progress?.totalItems ?? 0) !== 1 ? 's' : ''} transferred`
+                  : `file ${progress?.sentItems ?? 1} of ${progress?.totalItems ?? 1}`}
+              </Typography>
+            </Box>
+
+            {isCompleted && (
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<FolderOpenIcon sx={{ fontSize: 15 }} />}
+                onClick={onOpenFolder}
+                sx={{ flexShrink: 0, fontSize: '0.74rem', py: 0.5 }}
+              >
+                Open folder
               </Button>
             )}
+            <IconButton
+              size="small"
+              aria-label="dismiss"
+              onClick={onClose}
+              sx={{ color: beacon.textFaint, '&:hover': { color: beacon.text }, flexShrink: 0 }}
+            >
+              <CloseIcon sx={{ fontSize: 16 }} />
+            </IconButton>
           </Box>
-          
-          <LinearProgress 
-            variant="determinate" 
-            value={percent} 
-            sx={{ 
-              height: 8, 
-              borderRadius: 4, 
-              bgcolor: alpha('#000', 0.1),
-              '& .MuiLinearProgress-bar': {
-                bgcolor: isCompleted ? 'success.main' : 'primary.main',
-                borderRadius: 4,
-                boxShadow: isCompleted ? 'none' : `0 0 8px ${alpha(theme.palette.primary.main, 0.5)}`
-              }
-            }} 
-          />
+
+          {!isError && (
+            <>
+              <LinearProgress
+                variant="determinate"
+                value={isCompleted ? 100 : percent}
+                sx={{
+                  mt: 1.75,
+                  height: 5,
+                  '& .MuiLinearProgress-bar': { backgroundColor: stateColor },
+                }}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
+                <Typography
+                  sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: beacon.textFaint }}
+                >
+                  {formatBytes(progress?.written ?? 0)} / {formatBytes(progress?.total ?? 0)}
+                </Typography>
+                <Typography
+                  sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: beacon.textSecondary }}
+                >
+                  {isCompleted ? 'done' : `${speedStr} · ${Math.round(percent)}%`}
+                </Typography>
+              </Box>
+            </>
+          )}
         </Box>
-      </Paper>
+      </Box>
     </Snackbar>
   );
 };

@@ -1,26 +1,22 @@
 /**
- * UpdateDialog.tsx
+ * UpdateDialog.tsx (Beacon)
  *
- * Shown when the user clicks the UpdateBanner chip.
- * Displays the version diff, release notes, and a direct download button
- * for the new .deb package.
+ * Shown when the user clicks the update chip. Version diff as a mono
+ * readout, release notes, and a direct .deb download.
  */
 import React from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   Button,
   Typography,
   Box,
-  Chip,
-  Divider,
 } from '@mui/material';
-import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { alpha } from '@mui/material/styles';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { beacon, fonts } from '../theme/theme';
 
 export interface UpdateDialogProps {
   open: boolean;
@@ -32,122 +28,104 @@ export interface UpdateDialogProps {
   onClose: () => void;
 }
 
+const VersionTag: React.FC<{ version: string; highlight?: boolean }> = ({
+  version,
+  highlight,
+}) => (
+  <Box
+    sx={{
+      px: 1.25,
+      py: 0.5,
+      borderRadius: '6px',
+      border: `1px solid ${highlight ? alpha(beacon.accent, 0.5) : beacon.hairline}`,
+      backgroundColor: highlight ? alpha(beacon.accent, 0.1) : beacon.bg,
+    }}
+  >
+    <Typography
+      sx={{
+        fontFamily: fonts.mono,
+        fontSize: '0.78rem',
+        fontWeight: 600,
+        color: highlight ? beacon.accent : beacon.textSecondary,
+      }}
+    >
+      {version}
+    </Typography>
+  </Box>
+);
+
 const UpdateDialog: React.FC<UpdateDialogProps> = ({
   open,
   currentVersion,
   latestVersion,
   releaseNotes,
-  downloadUrl,
   onDownload,
   onClose,
 }) => {
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: { borderRadius: '2px', overflow: 'hidden' },
-      }}
-    >
-      {/* Amber accent header strip */}
-      <Box
-        sx={{
-          backgroundColor: '#D4E157',
-          px: 3,
-          py: 2,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-        }}
-      >
-        <SystemUpdateAltIcon sx={{ color: '#1A1A1A', fontSize: 28 }} />
-        <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ color: '#1A1A1A', lineHeight: 1.2 }}>
-            Update Available
-          </Typography>
-          <Typography variant="caption" sx={{ color: alpha('#1A1A1A', 0.6) }}>
-            A new version of PALT is ready to install
-          </Typography>
-        </Box>
-      </Box>
-
-      <DialogContent sx={{ pt: 3 }}>
-        {/* Version comparison row */}
-        <Box
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogContent sx={{ pt: 3.5, pb: 1 }}>
+        <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>
+          Update available
+        </Typography>
+        <Typography
           sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            mb: 3,
-            p: 2,
-            borderRadius: 2,
-            backgroundColor: 'action.hover',
+            fontFamily: fonts.display,
+            fontWeight: 700,
+            fontSize: '1.3rem',
+            letterSpacing: '-0.02em',
+            color: beacon.text,
+            mb: 2,
           }}
         >
-          <Chip
-            label={currentVersion}
-            size="small"
-            sx={{ fontWeight: 600, backgroundColor: 'action.selected' }}
-          />
-          <ArrowForwardIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-          <Chip
-            label={latestVersion}
-            size="small"
-            sx={{
-              fontWeight: 700,
-              backgroundColor: '#fef3c7',
-              color: '#78350f',
-              border: '1px solid #f59e0b',
-            }}
-          />
+          A newer PALT is out
+        </Typography>
+
+        {/* Version diff */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2.5 }}>
+          <VersionTag version={currentVersion} />
+          <ArrowForwardIcon sx={{ color: beacon.textFaint, fontSize: 16 }} />
+          <VersionTag version={latestVersion} highlight />
         </Box>
 
-        <Divider sx={{ mb: 2 }} />
-
         {/* Release notes */}
-        <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-          What's New
+        <Typography variant="overline" sx={{ display: 'block', mb: 1 }}>
+          What changed
         </Typography>
         <Box
           sx={{
-            maxHeight: 260,
+            maxHeight: 240,
             overflowY: 'auto',
-            backgroundColor: 'action.hover',
-            borderRadius: 2,
+            backgroundColor: beacon.bg,
+            border: `1px solid ${beacon.hairline}`,
+            borderRadius: '10px',
             p: 2,
-            fontFamily: 'monospace',
           }}
         >
           <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}
+            sx={{
+              fontSize: '0.82rem',
+              color: beacon.textSecondary,
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.7,
+            }}
           >
             {releaseNotes || 'No release notes available.'}
           </Typography>
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, pt: 0, gap: 1 }}>
-        <Button onClick={onClose} color="inherit" sx={{ fontWeight: 600 }}>
+      <DialogActions sx={{ p: 2.5, pt: 2, gap: 1 }}>
+        <Button onClick={onClose} variant="text">
           Remind me later
         </Button>
         <Button
           id="btn-download-update"
           onClick={onDownload}
           variant="contained"
-          startIcon={<OpenInNewIcon />}
-          sx={{
-            fontWeight: 700,
-            borderRadius: 6,
-            backgroundColor: '#f59e0b',
-            color: '#78350f',
-            '&:hover': { backgroundColor: '#d97706' },
-          }}
+          startIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
         >
-          Download {latestVersion} (.deb)
+          Download {latestVersion}
         </Button>
       </DialogActions>
     </Dialog>

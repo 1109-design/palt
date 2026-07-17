@@ -150,9 +150,49 @@ jobs:
           name: palt-linux-deb
           path: desktop/palt-*-linux-amd64.deb
 
+  build-windows:
+    name: Build Windows Desktop (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+          cache-dependency-path: desktop/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build Wails Binary
+        working-directory: desktop
+        shell: bash
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          wails build -platform windows/amd64
+
+      - name: Rename EXE
+        shell: bash
+        run: |
+          mv desktop/build/bin/palt.exe "desktop/build/bin/palt-${GITHUB_REF_NAME}-windows-amd64.exe"
+
+      - name: Upload EXE Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: palt-windows-exe
+          path: desktop/build/bin/palt-*-windows-amd64.exe
+
   release:
     name: Publish Release
-    needs: [build-mobile, build-desktop]
+    needs: [build-mobile, build-desktop, build-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download Artifacts
@@ -166,4 +206,5 @@ jobs:
           files: |
             release-artifacts/palt-android-apk/palt-*.apk
             release-artifacts/palt-linux-deb/palt-*-linux-amd64.deb
+            release-artifacts/palt-windows-exe/palt-*-windows-amd64.exe
           generate_release_notes: true

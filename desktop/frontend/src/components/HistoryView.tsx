@@ -1,54 +1,67 @@
-import React from 'react';
-import {
-  Box,
-  Typography,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Chip,
-  IconButton,
-  Tooltip,
-  Divider,
-  Button,
-} from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
-import {
-  FileDownload as DownloadIcon,
-  FileUpload as UploadIcon,
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
-  DeleteOutline as DeleteIcon,
-  History as HistoryIcon,
-} from '@mui/icons-material';
+/**
+ * HistoryView.tsx — transfer log (Beacon)
+ *
+ * Entries grouped by day. Direction is encoded consistently with the rest of
+ * the app: outgoing ↑ amber, incoming ↓ green. All wire-derived values
+ * (sizes, durations, times) are set in mono.
+ */
+import React, { useMemo } from 'react';
+import { Box, Typography, Tooltip, Button } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import NorthEastIcon from '@mui/icons-material/NorthEast';
+import SouthWestIcon from '@mui/icons-material/SouthWest';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import HistoryIcon from '@mui/icons-material/History';
 import { HistoryEntry } from '../types/history';
+import { beacon, fonts } from '../theme/theme';
 
 interface HistoryViewProps {
   history: HistoryEntry[];
   onClear: () => void;
 }
 
+const formatSize = (bytes: number) => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+const formatDuration = (ms: number) => {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+};
+
+const formatTime = (timestamp: string) =>
+  new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/** "Today" / "Yesterday" / "Mon, 14 Jul" */
+const dayLabel = (timestamp: string) => {
+  const d = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+  if (sameDay(d, today)) return 'Today';
+  if (sameDay(d, yesterday)) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
 const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
-  const theme = useTheme();
-  
-  const formatDate = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString([], { 
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
-    });
-  };
-
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  };
+  const groups = useMemo(() => {
+    const map = new Map<string, HistoryEntry[]>();
+    for (const entry of history) {
+      const label = dayLabel(entry.timestamp);
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(entry);
+    }
+    return Array.from(map.entries());
+  }, [history]);
 
   if (history.length === 0) {
     return (
@@ -59,112 +72,145 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
           alignItems: 'center',
           justifyContent: 'center',
           py: 12,
-          opacity: 0.3,
+          gap: 1,
         }}
       >
-        <HistoryIcon sx={{ fontSize: 80, mb: 2 }} />
-        <Typography variant="h5" fontWeight={800} letterSpacing="-0.5px">No history</Typography>
-        <Typography variant="body2" fontWeight={600}>Completed transfers appear here</Typography>
+        <HistoryIcon sx={{ fontSize: 56, color: beacon.textFaint, mb: 1 }} />
+        <Typography
+          sx={{
+            fontFamily: fonts.display,
+            fontWeight: 700,
+            fontSize: '1.2rem',
+            color: beacon.text,
+          }}
+        >
+          No transfers yet
+        </Typography>
+        <Typography sx={{ fontSize: '0.85rem', color: beacon.textSecondary }}>
+          Every file you send or receive is logged here.
+        </Typography>
       </Box>
     );
   }
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: '-0.8px' }}>
-          Transfer Log
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
         <Button
-          startIcon={<DeleteIcon />}
-          color="inherit"
-          variant="text"
+          startIcon={<DeleteOutlineIcon sx={{ fontSize: 17 }} />}
           onClick={onClear}
-          sx={{ 
-            opacity: 0.5, 
-            borderRadius: 2,
-            fontWeight: 800,
-            fontSize: '0.75rem',
-            '&:hover': { opacity: 1, bgcolor: alpha('#fff', 0.05) } 
+          sx={{
+            fontSize: '0.78rem',
+            color: beacon.textFaint,
+            '&:hover': { color: beacon.danger, backgroundColor: alpha(beacon.danger, 0.06) },
           }}
         >
-          Wipe History
+          Clear history
         </Button>
       </Box>
 
-      <List sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, p: 0 }}>
-        {history.map((entry) => (
-          <ListItem
-            key={entry.id}
-            sx={{
-              p: 2.5,
-              borderRadius: 4,
-              backgroundColor: alpha(theme.palette.background.paper, 0.4),
-              border: '1px solid',
-              borderColor: alpha('#fff', 0.04),
-              transition: 'all 0.2s',
-              '&:hover': { 
-                backgroundColor: alpha(theme.palette.background.paper, 0.6),
-                borderColor: alpha(theme.palette.primary.main, 0.2),
-                transform: 'translateX(4px)'
-              },
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 56 }}>
-              <Box sx={{ 
-                width: 44, 
-                height: 44, 
-                borderRadius: 3, 
-                bgcolor: (entry.direction === 'incoming' ? theme.palette.secondary.main : theme.palette.primary.main) + '15',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: entry.direction === 'incoming' ? theme.palette.secondary.main : theme.palette.primary.main
-              }}>
-                {entry.direction === 'incoming' ? <DownloadIcon /> : <UploadIcon />}
-              </Box>
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 800, letterSpacing: '-0.2px' }}>
-                    {entry.files.length === 1 ? entry.files[0].name : `${entry.files.length} items`}
-                  </Typography>
-                  {entry.status === 'completed' ? (
-                    <SuccessIcon sx={{ fontSize: 18, color: 'success.main', opacity: 0.8 }} />
-                  ) : (
-                    <Tooltip title={entry.errorMessage || 'Unknown error'}>
-                      <ErrorIcon sx={{ fontSize: 18, color: 'error.main', opacity: 0.8 }} />
+      {groups.map(([label, entries]) => (
+        <Box key={label} sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.25 }}>
+            <Typography variant="overline">{label}</Typography>
+            <Box sx={{ flex: 1, height: '1px', backgroundColor: beacon.hairline }} />
+          </Box>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {entries.map((entry) => {
+              const outgoing = entry.direction === 'outgoing';
+              const failed = entry.status !== 'completed';
+              const dirColor = outgoing ? beacon.accent : beacon.ok;
+              return (
+                <Box
+                  key={entry.id}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    px: 2,
+                    py: 1.5,
+                    borderRadius: '10px',
+                    backgroundColor: beacon.surface,
+                    border: `1px solid ${beacon.hairline}`,
+                    transition: 'border-color 150ms',
+                    '&:hover': { borderColor: beacon.textFaint },
+                  }}
+                >
+                  {/* Direction glyph */}
+                  <Box
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: '50%',
+                      backgroundColor: alpha(failed ? beacon.danger : dirColor, 0.1),
+                      color: failed ? beacon.danger : dirColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {failed ? (
+                      <ErrorOutlineIcon sx={{ fontSize: 17 }} />
+                    ) : outgoing ? (
+                      <NorthEastIcon sx={{ fontSize: 16 }} />
+                    ) : (
+                      <SouthWestIcon sx={{ fontSize: 16 }} />
+                    )}
+                  </Box>
+
+                  {/* File + partner */}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Tooltip
+                      title={
+                        entry.files.length > 1
+                          ? entry.files.map((f) => f.name).join(', ')
+                          : failed
+                          ? entry.errorMessage || 'Transfer failed'
+                          : ''
+                      }
+                    >
+                      <Typography
+                        noWrap
+                        sx={{ fontSize: '0.88rem', fontWeight: 600, color: beacon.text }}
+                      >
+                        {entry.files.length === 1
+                          ? entry.files[0].name
+                          : `${entry.files.length} files`}
+                      </Typography>
                     </Tooltip>
-                  )}
+                    <Typography sx={{ fontSize: '0.76rem', color: beacon.textSecondary, mt: 0.25 }}>
+                      {outgoing ? 'to' : 'from'}{' '}
+                      <Box component="span" sx={{ color: beacon.text, fontWeight: 500 }}>
+                        {entry.partnerName}
+                      </Box>
+                      {failed && (
+                        <Box component="span" sx={{ color: beacon.danger }}>
+                          {' '}
+                          — failed
+                        </Box>
+                      )}
+                    </Typography>
+                  </Box>
+
+                  {/* Mono readout */}
+                  <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                    <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.76rem', color: beacon.text }}>
+                      {formatSize(entry.totalSize)}
+                    </Typography>
+                    <Typography
+                      sx={{ fontFamily: fonts.mono, fontSize: '0.7rem', color: beacon.textFaint, mt: 0.25 }}
+                    >
+                      {formatDuration(entry.durationMillis)} · {formatTime(entry.timestamp)}
+                    </Typography>
+                  </Box>
                 </Box>
-              }
-              secondary={
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, opacity: 0.7, mt: 0.5, display: 'block' }}>
-                  {entry.direction === 'incoming' ? 'From' : 'To'} <span style={{ color: theme.palette.text.primary }}>{entry.partnerName}</span> •{' '}
-                  {formatSize(entry.totalSize)} • {formatDuration(entry.durationMillis)} •{' '}
-                  {formatDate(entry.timestamp)}
-                </Typography>
-              }
-            />
-            <Box>
-              <Chip
-                label={entry.status === 'completed' ? 'SUCCESS' : 'FAILED'}
-                size="small"
-                sx={{ 
-                  borderRadius: 1.5,
-                  fontWeight: 900,
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.5px',
-                  bgcolor: (entry.status === 'completed' ? theme.palette.success.main : theme.palette.error.main) + '15',
-                  color: entry.status === 'completed' ? 'success.main' : 'error.main',
-                  border: 'none'
-                }}
-              />
-            </Box>
-          </ListItem>
-        ))}
-      </List>
+              );
+            })}
+          </Box>
+        </Box>
+      ))}
     </Box>
   );
 };
