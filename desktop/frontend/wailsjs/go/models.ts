@@ -1,5 +1,21 @@
 export namespace main {
 	
+	export class MediaPreview {
+	    url: string;
+	    video: boolean;
+	    duration: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MediaPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.video = source["video"];
+	        this.duration = source["duration"];
+	    }
+	}
 	export class RelayStatus {
 	    configured: boolean;
 	    status: string;

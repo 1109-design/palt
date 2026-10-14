@@ -47,7 +47,17 @@ export const AddTrustedDevice = (name: string): Promise<void> => {
   if (!mockTrusted.includes(name)) mockTrusted = [...mockTrusted, name];
   return Promise.resolve();
 };
-export const GetHistory = (): Promise<any[]> => Promise.resolve([]);
+const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+const MOCK_HISTORY = [
+  { id: 'h5', partnerName: 'Pixel 8', direction: 'incoming', kind: 'files', status: 'completed', durationMillis: 900, totalSize: 3_500_000, timestamp: ago(2), route: 'relay',
+    files: [{ name: 'beach.jpg', size: 3_500_000 }] },
+  { id: 'h4', partnerName: 'Pixel 8', direction: 'outgoing', kind: 'files', status: 'completed', durationMillis: 4000, totalSize: 38_400_000, timestamp: ago(5), route: 'direct',
+    files: [{ name: 'clip.mp4', size: 38_400_000, path: '/tmp/clip.mp4' }] },
+  { id: 'h3', partnerName: 'Pixel 8', direction: 'outgoing', kind: 'files', status: 'completed', durationMillis: 400, totalSize: 52_000, timestamp: ago(9), route: 'direct',
+    files: [{ name: 'notes.pdf', size: 52_000, path: '/tmp/notes.pdf' }] },
+  { id: 'h2', partnerName: 'Pixel 8', direction: 'incoming', kind: 'text', text: 'sending the pics now', status: 'completed', durationMillis: 0, totalSize: 20, timestamp: ago(12), files: [], route: 'relay' },
+];
+export const GetHistory = (): Promise<any[]> => Promise.resolve(MOCK_HISTORY);
 export const ClearHistory = (): Promise<void> => Promise.resolve();
 export const GetTrustedDevices = (): Promise<string[]> => Promise.resolve(mockTrusted);
 export const GetAutoCopyDevices = (): Promise<string[]> => Promise.resolve(mockAutoCopy);
@@ -80,6 +90,13 @@ export const GenerateRelayCode = (addr: string): Promise<string> => {
   mockRelayCode = `palt1:${addr.includes(':') ? addr : addr + ':9877'}:bW9ja21vY2ttb2NrbW9ja21vY2ttb2NrbW9ja21vY2s`;
   return Promise.resolve(mockRelayCode);
 };
+export const GetMediaPreview = (path: string, name: string) => {
+  const video = /\.(mp4|mov|m4v|webm|mkv|avi|3gp)$/i.test(name);
+  return /\.(jpe?g|png|gif|webp)$/i.test(name) || video
+    ? Promise.resolve({ url: `https://picsum.photos/seed/${encodeURIComponent(name)}/480/320`, video, duration: video ? 83 : 0 })
+    : Promise.reject('not previewable');
+};
+export const DeleteHistoryEntry = (id: string, direction: string): Promise<void> => Promise.resolve();
 export const SendText = (ip: string, port: number, name: string, text: string): Promise<void> =>
   new Promise((r) => setTimeout(r, 250));
 

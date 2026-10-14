@@ -18,6 +18,10 @@ export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function DeleteHistoryEntry(arg1, arg2) {
+  return window['go']['main']['App']['DeleteHistoryEntry'](arg1, arg2);
+}
+
 export function GenerateRelayCode(arg1) {
   return window['go']['main']['App']['GenerateRelayCode'](arg1);
 }
@@ -44,6 +48,10 @@ export function GetLastSeenVersion() {
 
 export function GetLocalDevice() {
   return window['go']['main']['App']['GetLocalDevice']();
+}
+
+export function GetMediaPreview(arg1, arg2) {
+  return window['go']['main']['App']['GetMediaPreview'](arg1, arg2);
 }
 
 export function GetPeers() {

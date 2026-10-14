@@ -13,6 +13,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Typography, IconButton, Tooltip, Button, InputBase, CircularProgress, Switch,
   Dialog, DialogTitle, DialogContent, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText,
+  Skeleton,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -27,6 +28,8 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import ContentPasteGoIcon from '@mui/icons-material/ContentPasteGo';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FolderOpenIcon from '@mui/icons-material/FolderOpenOutlined';
+import DeleteIcon from '@mui/icons-material/DeleteOutline';
+import PlayArrowIcon from '@mui/icons-material/PlayArrowRounded';
 import type { Peer } from '../types/peer';
 import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
@@ -56,11 +59,174 @@ interface DevicePageProps {
   onToggleAutoCopy: (peer: Peer, enabled: boolean, trustFirst: boolean) => void;
   readClipboard: () => Promise<string>;
   onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
+  /** Resolves a picture to a small preview (data: URL); rejects when unavailable. */
+  loadPreview: (path: string, name: string) => Promise<MediaPreview>;
+  /** Removes one message/transfer from local history (files stay on disk). */
+  onDeleteEntry: (entry: HistoryEntry) => void;
 }
 
 /** Received files fall back to the download folder by name; sent files need a recorded path. */
 const canLocate = (entry: HistoryEntry, file: HistoryFile) =>
   !!file.path || entry.direction === 'incoming';
+
+const MEDIA_EXT = /\.(jpe?g|png|gif|webp|mp4|mov|m4v|webm|mkv|avi|3gp)$/i;
+
+export interface MediaPreview {
+  url: string;
+  video: boolean;
+  /** Seconds; 0 when unknown. */
+  duration: number;
+}
+
+/** Previews already loaded (or known unavailable) this session, keyed by path|name. */
+const previewCache = new Map<string, MediaPreview | null>();
+
+/** Pictures/videos that can be shown inline: completed, locatable, previewable type. */
+const isInlineImage = (entry: HistoryEntry, file: HistoryFile) =>
+  entry.status === 'completed' && canLocate(entry, file) && MEDIA_EXT.test(file.name);
+
+const formatDuration = (secs: number) => {
+  const s = Math.round(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+};
+
+/**
+ * ImageTile — a picture shown in the thread, WhatsApp-style. Falls back to the
+ * plain file row when the preview can't be made (file moved, unsupported, …).
+ */
+const ImageTile: React.FC<{
+  entry: HistoryEntry;
+  file: HistoryFile;
+  tint: string;
+  onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
+  loadPreview: (path: string, name: string) => Promise<MediaPreview>;
+}> = ({ entry, file, tint, onFileAction, loadPreview }) => {
+  const key = `${file.path || ''}|${file.name}`;
+  const [preview, setPreview] = useState<MediaPreview | null | undefined>(previewCache.get(key));
+
+  useEffect(() => {
+    if (previewCache.has(key)) return;
+    let alive = true;
+    loadPreview(file.path || '', file.name)
+      .then((p) => {
+        previewCache.set(key, p);
+        if (alive) setPreview(p);
+      })
+      .catch(() => {
+        previewCache.set(key, null);
+        if (alive) setPreview(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [key, file.path, file.name, loadPreview]);
+
+  if (preview === null) {
+    return <FileRow entry={entry} file={file} tint={tint} onFileAction={onFileAction} />;
+  }
+  const src = preview?.url;
+
+  return (
+    <Box sx={{ position: 'relative', '&:hover .img-reveal': { opacity: 1 } }}>
+      {src ? (
+        <Box
+          component="img"
+          src={src}
+          alt={file.name}
+          title={`${file.name} · ${formatSize(file.size)}`}
+          onClick={() => onFileAction(file, 'open')}
+          sx={{
+            display: 'block',
+            maxWidth: '100%',
+            width: 'auto',
+            maxHeight: 320,
+            minWidth: 120,
+            borderRadius: '8px',
+            cursor: 'pointer',
+            objectFit: 'cover',
+            backgroundColor: beacon.bg,
+          }}
+        />
+      ) : (
+        <Skeleton
+          variant="rounded"
+          width={240}
+          height={160}
+          animation="wave"
+          sx={{ borderRadius: '8px', backgroundColor: alpha(tint, 0.08), transform: 'none' }}
+        />
+      )}
+      {preview?.video && (
+        <>
+          <Box
+            onClick={() => onFileAction(file, 'open')}
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              backgroundColor: alpha(beacon.bg, 0.65),
+              border: `1px solid ${alpha(beacon.text, 0.25)}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <PlayArrowIcon sx={{ fontSize: 28, color: beacon.text }} />
+          </Box>
+          {preview.duration > 0 && (
+            <Typography
+              sx={{
+                position: 'absolute',
+                left: 8,
+                bottom: 8,
+                px: 0.75,
+                borderRadius: '4px',
+                backgroundColor: alpha(beacon.bg, 0.7),
+                fontFamily: fonts.mono,
+                fontSize: '0.7rem',
+                color: beacon.text,
+                pointerEvents: 'none',
+              }}
+            >
+              {formatDuration(preview.duration)}
+            </Typography>
+          )}
+        </>
+      )}
+      {src && (
+        <Tooltip title="Show in folder">
+          <IconButton
+            className="img-reveal"
+            size="small"
+            aria-label={`show ${file.name} in folder`}
+            onClick={() => onFileAction(file, 'reveal')}
+            sx={{
+              position: 'absolute',
+              top: 6,
+              right: 6,
+              opacity: 0,
+              transition: 'opacity 150ms',
+              color: beacon.text,
+              backgroundColor: alpha(beacon.bg, 0.7),
+              '&:hover': { backgroundColor: alpha(beacon.bg, 0.9) },
+              '&:focus-visible': { opacity: 1 },
+            }}
+          >
+            <FolderOpenIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
+  );
+};
 
 const FileRow: React.FC<{
   entry: HistoryEntry;
@@ -81,7 +247,10 @@ const FileRow: React.FC<{
         alignItems: 'center',
         gap: 1.25,
         minWidth: 0,
-        width: '100%',
+        // The negative margin gives the hover highlight room; widen by the same
+        // amount so the row's own size isn't 8px short (which truncated names).
+        width: 'calc(100% + 8px)',
+        boxSizing: 'border-box',
         border: 'none',
         background: 'none',
         font: 'inherit',
@@ -147,12 +316,19 @@ const FileRow: React.FC<{
 const Bubble: React.FC<{
   entry: HistoryEntry;
   onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
-}> = ({ entry, onFileAction }) => {
+  loadPreview: (path: string, name: string) => Promise<MediaPreview>;
+  onDelete: (entry: HistoryEntry) => void;
+}> = ({ entry, onFileAction, loadPreview, onDelete }) => {
   const outgoing = entry.direction === 'outgoing';
   const failed = entry.status !== 'completed';
   const isText = entry.kind === 'text';
   const tint = failed ? beacon.danger : outgoing ? beacon.accent : beacon.ok;
+  // Picture-only bubbles hug the image, like a chat app.
+  const picturesOnly = !isText && entry.files.length > 0 && entry.files.every((f) => isInlineImage(entry, f));
   const [copied, setCopied] = useState(false);
+  // Right-click (or long-press on a touchscreen) opens the message menu.
+  const [menuAt, setMenuAt] = useState<{ top: number; left: number } | null>(null);
+  const singleFile = !isText && entry.files.length === 1 && entry.status === 'completed' && canLocate(entry, entry.files[0]);
 
   const copy = () => {
     navigator.clipboard.writeText(entry.text || '');
@@ -160,8 +336,25 @@ const Bubble: React.FC<{
     setTimeout(() => setCopied(false), 1400);
   };
 
+  const menuItem = (label: string, icon: React.ReactNode, action: () => void, danger = false) => (
+    <MenuItem
+      onClick={() => {
+        setMenuAt(null);
+        action();
+      }}
+      sx={danger ? { color: beacon.danger } : undefined}
+    >
+      <ListItemIcon sx={danger ? { color: beacon.danger } : undefined}>{icon}</ListItemIcon>
+      <ListItemText primaryTypographyProps={{ fontSize: '0.86rem' }}>{label}</ListItemText>
+    </MenuItem>
+  );
+
   return (
     <Box
+      onContextMenu={(e: React.MouseEvent) => {
+        e.preventDefault();
+        setMenuAt({ top: e.clientY, left: e.clientX });
+      }}
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -172,8 +365,8 @@ const Bubble: React.FC<{
       <Box
         sx={{
           maxWidth: '72%',
-          px: 1.75,
-          py: 1.25,
+          px: picturesOnly ? 0.5 : 1.75,
+          py: picturesOnly ? 0.5 : 1.25,
           borderRadius: '12px',
           borderTopRightRadius: outgoing ? '4px' : '12px',
           borderTopLeftRadius: outgoing ? '12px' : '4px',
@@ -196,7 +389,11 @@ const Bubble: React.FC<{
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
             {entry.files.map((f, i) => (
-              <FileRow key={i} entry={entry} file={f} tint={tint} onFileAction={onFileAction} />
+              isInlineImage(entry, f) ? (
+                <ImageTile key={i} entry={entry} file={f} tint={tint} onFileAction={onFileAction} loadPreview={loadPreview} />
+              ) : (
+                <FileRow key={i} entry={entry} file={f} tint={tint} onFileAction={onFileAction} />
+              )
             ))}
           </Box>
         )}
@@ -248,6 +445,19 @@ const Bubble: React.FC<{
           </Tooltip>
         )}
       </Box>
+
+      <Menu
+        open={!!menuAt}
+        onClose={() => setMenuAt(null)}
+        anchorReference="anchorPosition"
+        anchorPosition={menuAt ?? undefined}
+        slotProps={{ paper: { sx: { backgroundColor: beacon.surfaceRaised, border: `1px solid ${beacon.hairline}` } } }}
+      >
+        {isText && menuItem('Copy', <ContentCopyIcon sx={{ fontSize: 18 }} />, copy)}
+        {singleFile && menuItem('Open', <OpenInNewIcon sx={{ fontSize: 18 }} />, () => onFileAction(entry.files[0], 'open'))}
+        {singleFile && menuItem('Show in folder', <FolderOpenIcon sx={{ fontSize: 18 }} />, () => onFileAction(entry.files[0], 'reveal'))}
+        {menuItem('Delete', <DeleteIcon sx={{ fontSize: 18 }} />, () => onDelete(entry), true)}
+      </Menu>
     </Box>
   );
 };
@@ -266,6 +476,8 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onToggleAutoCopy,
   readClipboard,
   onFileAction,
+  loadPreview,
+  onDeleteEntry,
 }) => {
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
@@ -499,7 +711,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
                     <Box sx={{ flex: 1, height: '1px', backgroundColor: beacon.hairline }} />
                   </Box>
                   {entries.map((entry) => (
-                    <Bubble key={entry.id} entry={entry} onFileAction={onFileAction} />
+                    <Bubble key={entry.id} entry={entry} onFileAction={onFileAction} loadPreview={loadPreview} onDelete={onDeleteEntry} />
                   ))}
                 </React.Fragment>
               ))}

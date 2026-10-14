@@ -7,6 +7,8 @@ require (
 	github.com/grandcat/zeroconf v1.0.0
 	// Wails v2 – desktop app framework, matched to existing workspace version.
 	github.com/wailsapp/wails/v2 v2.11.0
+	// x/image – WebP decoding and scaling for inline picture previews.
+	golang.org/x/image v0.24.0
 )
 
 require (

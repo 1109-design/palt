@@ -17,6 +17,7 @@ import '../providers/peer_provider.dart';
 import '../providers/relay_provider.dart';
 import 'discovery_service.dart';
 import 'palt_conn.dart';
+import '../utils/media.dart';
 
 /// Must match MaxOfferSize / MaxTextBytes in desktop/internal/transfer/protocol.go
 const kMaxOfferBytes = 64 * 1024;
@@ -296,7 +297,9 @@ class TransferService {
 
       for (int i = 0; i < totalFiles; i++) {
         final fileMeta = offer.files[i];
-        final savePath = '$dirPath/${safeFileName(fileMeta.name)}';
+        // Never overwrite an earlier file with the same name.
+        final savePath = uniqueFilePath(dirPath, safeFileName(fileMeta.name));
+        hFiles[i] = HistoryFile(name: fileMeta.name, size: fileMeta.size, path: savePath);
         final fileSink = File(savePath).openWrite();
         int fileWritten = 0;
 
@@ -688,6 +691,17 @@ class TransferService {
       stopwatch.stop();
 
       print('[TransferClient] Transfer complete!');
+
+      // Keep previews of sent pictures/videos so the thread can show them.
+      for (var i = 0; i < hFiles.length; i++) {
+        final f = hFiles[i];
+        hFiles[i] = HistoryFile(
+          name: f.name,
+          size: f.size,
+          path: files[i].path,
+          preview: isMediaName(f.name) ? await makeSentPreview(files[i], '${transferId}_$i') : null,
+        );
+      }
 
       for (var hFile in hFiles) {
         final entry = HistoryEntry(

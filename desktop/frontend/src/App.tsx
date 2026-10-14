@@ -73,6 +73,8 @@ const GetRelayStatus       = isWails ? (WailsApp as any).GetRelayStatus       : 
 const SetRelayCode         = isWails ? (WailsApp as any).SetRelayCode         : MockApp.SetRelayCode;
 const GenerateRelayCode    = isWails ? (WailsApp as any).GenerateRelayCode    : MockApp.GenerateRelayCode;
 const RescanPeers          = isWails ? (WailsApp as any).RescanPeers          : () => Promise.resolve();
+const GetMediaPreview      = isWails ? (WailsApp as any).GetMediaPreview      : MockApp.GetMediaPreview;
+const DeleteHistoryEntry   = isWails ? (WailsApp as any).DeleteHistoryEntry   : MockApp.DeleteHistoryEntry;
 const SetAlias             = isWails ? (WailsApp as any).SetAlias             : (name: string, alias: string) => { console.log(`Mock: Set ${name} alias to ${alias}`); return Promise.resolve(); };
 
 /** How often (ms) to auto-refresh the peer list */
@@ -432,6 +434,17 @@ const App: React.FC = () => {
     fetchDeviceSettings();
   }, [fetchDeviceSettings]);
 
+  const handleDeleteEntry = useCallback(async (entry: HistoryEntry) => {
+    // Optimistic: drop it now; history_updated confirms.
+    setHistory((h) => h.filter((e) => !(e.id === entry.id && e.direction === entry.direction)));
+    try {
+      await DeleteHistoryEntry(entry.id, entry.direction);
+    } catch (e: any) {
+      setErrorMsg(`Could not delete: ${e?.message || e}`);
+      fetchHistory();
+    }
+  }, [fetchHistory]);
+
   const handleFileAction = useCallback(async (file: HistoryFile, action: 'open' | 'reveal') => {
     try {
       await (action === 'open' ? OpenHistoryFile : RevealHistoryFile)(file.path || '', file.name);
@@ -579,6 +592,8 @@ const App: React.FC = () => {
           onToggleAutoCopy={handleToggleAutoCopy}
           readClipboard={ReadClipboard}
           onFileAction={handleFileAction}
+          loadPreview={GetMediaPreview}
+          onDeleteEntry={handleDeleteEntry}
         />
       ) : (
       /* ── Main content (offset for AppBar + StatusBar) ───────────────────── */

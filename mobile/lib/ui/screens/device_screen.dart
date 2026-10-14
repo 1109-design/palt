@@ -9,6 +9,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +25,7 @@ import '../../providers/peer_provider.dart';
 import '../../providers/trust_provider.dart';
 import '../../services/transfer_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/media.dart';
 import '../../utils/os_icons.dart';
 import '../widgets/peer_card.dart';
 import '../widgets/route_badge.dart';
@@ -355,16 +357,30 @@ List<HistoryEntry> _groupTransfers(List<HistoryEntry> entries) {
   return out;
 }
 
-Future<void> _openReceivedFile(BuildContext context, String name) async {
+/// Where a thread file can be opened from, if anywhere. Received files fall
+/// back to Downloads/PALT by name (older entries didn't record a path); sent
+/// files fall back to the preview kept for pictures.
+List<String> _fileCandidates(HistoryFile f, bool outgoing) => [
+      if (f.path != null) f.path!,
+      if (!outgoing && f.path == null) '$kPaltDownloadDir/${safeFileName(f.name)}',
+      if (outgoing && f.preview != null) f.preview!,
+    ];
+
+bool _canOpen(HistoryFile f, bool outgoing) => _fileCandidates(f, outgoing).isNotEmpty;
+
+Future<void> _openFile(BuildContext context, HistoryFile f, bool outgoing) async {
   final messenger = ScaffoldMessenger.of(context);
-  final result = await OpenFilex.open('$kPaltDownloadDir/${safeFileName(name)}');
-  if (result.type != ResultType.done) {
-    messenger.showSnackBar(SnackBar(
-      content: Text(result.type == ResultType.fileNotFound
-          ? '$name is no longer in Downloads/PALT'
-          : 'Could not open $name: ${result.message}'),
-    ));
+  OpenResult? last;
+  for (final path in _fileCandidates(f, outgoing)) {
+    last = await OpenFilex.open(path);
+    if (last.type == ResultType.done) return;
+    if (last.type != ResultType.fileNotFound) break;
   }
+  messenger.showSnackBar(SnackBar(
+    content: Text(last == null || last.type == ResultType.fileNotFound
+        ? '${f.name} is no longer on this phone'
+        : 'Could not open ${f.name}: ${last.message}'),
+  ));
 }
 
 /// "Today" / "Yesterday" / "Mon, 14 Jul"
@@ -422,17 +438,203 @@ class _DayDivider extends StatelessWidget {
   }
 }
 
-class _Bubble extends StatelessWidget {
-  final HistoryEntry entry;
-  const _Bubble({required this.entry});
+/// A picture or video frame shown inline in the thread, WhatsApp-style.
+/// Falls back to the plain file row when it can't be loaded.
+class _ImageTile extends StatelessWidget {
+  final HistoryFile file;
+  final bool outgoing;
+  final Widget fallback;
+  final VoidCallback onTap;
+  const _ImageTile(
+      {required this.file, required this.outgoing, required this.fallback, required this.onTap});
+
+  Widget _frame(BuildContext context, String src, {Widget? overlay}) {
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320, minWidth: 120),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Image.file(
+                File(src),
+                cacheWidth: (260 * dpr).round(),
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => fallback,
+              ),
+              if (overlay != null) Positioned.fill(child: overlay),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _videoOverlay(Duration? duration) => Stack(
+        children: [
+          Center(
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: kBg.withValues(alpha: 0.65),
+                shape: BoxShape.circle,
+                border: Border.all(color: kText.withValues(alpha: 0.25)),
+              ),
+              child: const Icon(Icons.play_arrow_rounded, color: kText, size: 28),
+            ),
+          ),
+          if (duration != null && duration > Duration.zero)
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: kBg.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(formatDuration(duration), style: mono(fontSize: 10.5, color: kText)),
+              ),
+            ),
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {
+    if (isVideoName(file.name)) {
+      final video = outgoing
+          ? file.path
+          : (file.path ?? '$kPaltDownloadDir/${safeFileName(file.name)}');
+      return FutureBuilder<VideoThumb?>(
+        future: video == null ? Future.value(null) : videoThumb(video),
+        builder: (context, snap) {
+          final thumb = snap.data;
+          if (thumb != null) {
+            return _frame(context, thumb.path, overlay: _videoOverlay(thumb.duration));
+          }
+          // Sent video whose temporary copy is gone: the frame kept at send time.
+          if (snap.connectionState == ConnectionState.done && outgoing && file.preview != null) {
+            return _frame(context, file.preview!, overlay: _videoOverlay(null));
+          }
+          if (snap.connectionState == ConnectionState.done) return fallback;
+          return Container(
+            width: 220,
+            height: 140,
+            decoration: BoxDecoration(
+              color: kSurfaceRaised,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          );
+        },
+      );
+    }
+
+    // Sent pictures: the kept preview outlives the picker's temporary copy.
+    final src = outgoing
+        ? (file.preview ?? file.path)
+        : (file.path ?? '$kPaltDownloadDir/${safeFileName(file.name)}');
+    if (src == null) return fallback;
+    return _frame(context, src);
+  }
+}
+
+class _Bubble extends ConsumerWidget {
+  final HistoryEntry entry;
+  const _Bubble({required this.entry});
+
+  bool _isPicture(HistoryFile f) => isMediaName(f.name) && entry.status == 'completed';
+
+  Widget _fileRow(BuildContext context, HistoryFile f, Color tint, bool outgoing, bool failed) {
+    final canOpen = !failed && _canOpen(f, outgoing);
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: canOpen ? () => _openFile(context, f, outgoing) : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.insert_drive_file_outlined, size: 17, color: tint),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                f.name,
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: kText),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(_formatSize(f.size), style: mono(fontSize: 11)),
+            if (canOpen) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded, size: 16, color: kTextFaint),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showActions(BuildContext context, WidgetRef ref) {
+    final outgoing = entry.direction == 'outgoing';
+    showModalBottomSheet(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (entry.isText)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Copy'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  Clipboard.setData(ClipboardData(text: entry.text ?? ''));
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('Copied')));
+                },
+              ),
+            if (!entry.isText && entry.files.length == 1 && _canOpen(entry.files.first, outgoing))
+              ListTile(
+                leading: const Icon(Icons.open_in_new_rounded),
+                title: const Text('Open'),
+                onTap: () {
+                  Navigator.pop(sheet);
+                  _openFile(context, entry.files.first, outgoing);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: kDanger),
+              title: const Text('Delete', style: TextStyle(color: kDanger)),
+              subtitle: entry.isText
+                  ? null
+                  : const Text('Removes it from this chat. Files stay on the phone.',
+                      style: TextStyle(fontSize: 12, color: kTextFaint)),
+              onTap: () {
+                Navigator.pop(sheet);
+                ref.read(historyProvider.notifier).removeEntry(entry);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final outgoing = entry.direction == 'outgoing';
     final failed = entry.status != 'completed';
     final tint = failed ? kDanger : (outgoing ? kAccent : kOk);
     final maxWidth = MediaQuery.of(context).size.width * 0.78;
-    final canOpen = !outgoing && !failed;
+    final picturesOnly =
+        !entry.isText && entry.files.isNotEmpty && entry.files.every(_isPicture);
 
     final body = entry.isText
         ? SelectableText(
@@ -444,37 +646,18 @@ class _Bubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final f in entry.files)
-                InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  // Received files live in Downloads/PALT; sent ones were
-                  // picked from a temporary copy, so only these can open.
-                  onTap: canOpen ? () => _openReceivedFile(context, f.name) : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.insert_drive_file_outlined, size: 17, color: tint),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            f.name,
-                            style: const TextStyle(
-                                fontSize: 13.5, fontWeight: FontWeight.w600, color: kText),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(_formatSize(f.size), style: mono(fontSize: 11)),
-                        if (canOpen) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.chevron_right_rounded, size: 16, color: kTextFaint),
-                        ],
-                      ],
+                if (_isPicture(f))
+                  Padding(
+                    padding: EdgeInsets.only(bottom: f == entry.files.last ? 0 : 4),
+                    child: _ImageTile(
+                      file: f,
+                      outgoing: outgoing,
+                      onTap: () => _openFile(context, f, outgoing),
+                      fallback: _fileRow(context, f, tint, outgoing, failed),
                     ),
-                  ),
-                ),
+                  )
+                else
+                  _fileRow(context, f, tint, outgoing, failed),
             ],
           );
 
@@ -485,17 +668,12 @@ class _Bubble extends StatelessWidget {
             outgoing ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onLongPress: entry.isText
-                ? () {
-                    Clipboard.setData(ClipboardData(text: entry.text ?? ''));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Copied')),
-                    );
-                  }
-                : null,
+            onLongPress: () => _showActions(context, ref),
             child: Container(
               constraints: BoxConstraints(maxWidth: maxWidth),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: picturesOnly
+                  ? const EdgeInsets.all(4)
+                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: tint.withValues(alpha: 0.08),
                 border: Border.all(color: tint.withValues(alpha: 0.28)),

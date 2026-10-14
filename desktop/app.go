@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,12 +34,13 @@ import (
 	"palt/internal/discovery"
 	"palt/internal/models"
 	"palt/internal/relay"
+	"palt/internal/thumbs"
 	"palt/internal/transfer"
 )
 
 // AppVersion is the canonical version string for this build.
 // Bump this manually to match the git tag when cutting a release.
-const AppVersion = "v1.4.1"
+const AppVersion = "v1.5.0"
 
 // UpdateInfo is returned by CheckForUpdate and passed to the React frontend.
 type UpdateInfo struct {
@@ -887,6 +889,47 @@ func (a *App) OpenHistoryFile(path, name string) error {
 	return cmd.Start()
 }
 
+// MediaPreview is an inline preview for a picture or video in a thread.
+type MediaPreview struct {
+	URL      string  `json:"url"`      // data: URL of a small JPEG
+	Video    bool    `json:"video"`    // draw a play badge
+	Duration float64 `json:"duration"` // seconds, videos only (0 = unknown)
+}
+
+// GetMediaPreview returns a small preview of a transferred picture or video
+// so the thread can show it inline. It fails for other files, files no longer
+// on disk, and videos when ffmpeg isn't installed; the UI then shows a plain
+// file row.
+func (a *App) GetMediaPreview(path, name string) (MediaPreview, error) {
+	isVideo := thumbs.IsVideo(name)
+	if !isVideo && !thumbs.IsImage(name) {
+		return MediaPreview{}, thumbs.ErrNotImage
+	}
+	p, err := resolveHistoryFile(path, name)
+	if err != nil {
+		return MediaPreview{}, err
+	}
+	cacheDir := ""
+	if dir, err := os.UserCacheDir(); err == nil {
+		cacheDir = filepath.Join(dir, "palt", "thumbs")
+	}
+	var jpg []byte
+	var secs float64
+	if isVideo {
+		jpg, secs, err = thumbs.Video(p, cacheDir)
+	} else {
+		jpg, err = thumbs.Get(p, cacheDir)
+	}
+	if err != nil {
+		return MediaPreview{}, err
+	}
+	return MediaPreview{
+		URL:      "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(jpg),
+		Video:    isVideo,
+		Duration: secs,
+	}, nil
+}
+
 // RevealHistoryFile opens the file manager with the file selected where the
 // platform supports it, otherwise at its folder.
 func (a *App) RevealHistoryFile(path, name string) error {
@@ -925,6 +968,27 @@ func (a *App) GetHistory() []models.HistoryEntry {
 	var history []models.HistoryEntry
 	_ = json.Unmarshal(data, &history)
 	return history
+}
+
+// DeleteHistoryEntry removes one item from the local transfer log. Files on
+// disk are left alone.
+func (a *App) DeleteHistoryEntry(id, direction string) {
+	file := a.historyFile()
+	if file == "" {
+		return
+	}
+	history := a.GetHistory()
+	kept := []models.HistoryEntry{}
+	for _, e := range history {
+		if e.ID == id && e.Direction == direction {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	if data, err := json.MarshalIndent(kept, "", "  "); err == nil {
+		_ = os.WriteFile(file, data, 0o644)
+	}
+	wailsruntime.EventsEmit(a.ctx, "history_updated", kept)
 }
 
 // ClearHistory wipes the local transfer log.

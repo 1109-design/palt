@@ -11,6 +11,8 @@ export function CheckForUpdate():Promise<main.UpdateInfo>;
 
 export function ClearHistory():Promise<void>;
 
+export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
+
 export function GenerateRelayCode(arg1:string):Promise<string>;
 
 export function GetAliases():Promise<Record<string, string>>;
@@ -24,6 +26,8 @@ export function GetHistory():Promise<Array<models.HistoryEntry>>;
 export function GetLastSeenVersion():Promise<string>;
 
 export function GetLocalDevice():Promise<models.Peer>;
+
+export function GetMediaPreview(arg1:string,arg2:string):Promise<main.MediaPreview>;
 
 export function GetPeers():Promise<Array<models.Peer>>;
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/history_entry.dart';
@@ -38,6 +39,35 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
     }
     
     await _saveHistory();
+  }
+
+  /// Removes one thread item. [entry] may be a grouped batch from the device
+  /// page (id "direction:transferId"), which covers several stored entries.
+  /// Files on disk are kept; previews made for sent pictures are deleted.
+  Future<void> removeEntry(HistoryEntry entry) async {
+    bool matches(HistoryEntry e) {
+      final colon = entry.id.indexOf(':');
+      if (colon > 0 && !entry.isText) {
+        final dir = entry.id.substring(0, colon);
+        final tid = entry.id.substring(colon + 1);
+        return e.direction == dir && e.id.startsWith('${tid}_');
+      }
+      return e.id == entry.id && e.direction == entry.direction;
+    }
+
+    final removed = state.where(matches).toList();
+    if (removed.isEmpty) return;
+    state = state.where((e) => !matches(e)).toList();
+    await _saveHistory();
+    for (final e in removed) {
+      for (final f in e.files) {
+        if (f.preview != null) {
+          try {
+            await File(f.preview!).delete();
+          } catch (_) {}
+        }
+      }
+    }
   }
 
   Future<void> clearHistory() async {

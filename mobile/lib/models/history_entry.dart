@@ -2,16 +2,27 @@ class HistoryFile {
   final String name;
   final int size;
 
-  HistoryFile({required this.name, required this.size});
+  /// Where the file lives on this device; null on older entries.
+  final String? path;
+
+  /// Small preview kept in app storage for pictures we sent (the picked
+  /// original is a temporary copy that may be cleared).
+  final String? preview;
+
+  HistoryFile({required this.name, required this.size, this.path, this.preview});
 
   factory HistoryFile.fromJson(Map<String, dynamic> json) => HistoryFile(
         name: json['name'],
         size: json['size'],
+        path: json['path'],
+        preview: json['preview'],
       );
 
   Map<String, dynamic> toJson() => {
         'name': name,
         'size': size,
+        if (path != null) 'path': path,
+        if (preview != null) 'preview': preview,
       };
 }
 
