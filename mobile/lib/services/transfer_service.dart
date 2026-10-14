@@ -19,6 +19,16 @@ import 'discovery_service.dart';
 const kMaxOfferBytes = 64 * 1024;
 const kMaxTextBytes = 16 * 1024;
 
+/// Where received files are saved.
+const kPaltDownloadDir = '/storage/emulated/0/Download/PALT';
+
+/// Reduces a peer-supplied name to a bare file name so it can't escape the
+/// download directory (e.g. "../../x" or "/etc/passwd").
+String safeFileName(String name) {
+  final base = name.replaceAll('\\', '/').split('/').last;
+  return (base.isEmpty || base == '.' || base == '..') ? 'file' : base;
+}
+
 final transferServiceProvider = Provider<TransferService>((ref) {
   final service = TransferService(ref);
   service.startServer();
@@ -250,7 +260,7 @@ class TransferService {
       }
 
       // 2. Setup download directory
-      final publicDir = Directory('/storage/emulated/0/Download/PALT');
+      final publicDir = Directory(kPaltDownloadDir);
       if (!await publicDir.exists()) {
         try {
           await publicDir.create(recursive: true);
@@ -272,7 +282,7 @@ class TransferService {
 
       for (int i = 0; i < totalFiles; i++) {
         final fileMeta = offer.files[i];
-        final savePath = '$dirPath/${fileMeta.name}';
+        final savePath = '$dirPath/${safeFileName(fileMeta.name)}';
         final fileSink = File(savePath).openWrite();
         int fileWritten = 0;
 

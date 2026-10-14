@@ -10,7 +10,10 @@
  * but sending is disabled until it comes back.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Typography, IconButton, Tooltip, Button, InputBase, CircularProgress, Switch } from '@mui/material';
+import {
+  Box, Typography, IconButton, Tooltip, Button, InputBase, CircularProgress, Switch,
+  Dialog, DialogTitle, DialogContent, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText,
+} from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
@@ -22,8 +25,10 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import ContentPasteGoIcon from '@mui/icons-material/ContentPasteGo';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import FolderOpenIcon from '@mui/icons-material/FolderOpenOutlined';
 import type { Peer } from '../types/peer';
-import type { HistoryEntry } from '../types/history';
+import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
@@ -46,11 +51,102 @@ interface DevicePageProps {
   trusted: boolean;
   /** Incoming texts from this device go straight to the clipboard. */
   autoCopy: boolean;
-  onToggleAutoCopy: (peer: Peer, enabled: boolean) => void;
+  /** trustFirst: add the device to "Always accept" before enabling. */
+  onToggleAutoCopy: (peer: Peer, enabled: boolean, trustFirst: boolean) => void;
   readClipboard: () => Promise<string>;
+  onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
 }
 
-const Bubble: React.FC<{ entry: HistoryEntry }> = ({ entry }) => {
+/** Received files fall back to the download folder by name; sent files need a recorded path. */
+const canLocate = (entry: HistoryEntry, file: HistoryFile) =>
+  !!file.path || entry.direction === 'incoming';
+
+const FileRow: React.FC<{
+  entry: HistoryEntry;
+  file: HistoryFile;
+  tint: string;
+  onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
+}> = ({ entry, file, tint, onFileAction }) => {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const actionable = canLocate(entry, file) && entry.status === 'completed';
+
+  const row = (
+    <Box
+      component={actionable ? 'button' : 'div'}
+      onClick={actionable ? (e: React.MouseEvent<HTMLElement>) => setAnchor(e.currentTarget) : undefined}
+      aria-haspopup={actionable ? 'menu' : undefined}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.25,
+        minWidth: 0,
+        width: '100%',
+        border: 'none',
+        background: 'none',
+        font: 'inherit',
+        textAlign: 'left',
+        p: 0.5,
+        m: -0.5,
+        borderRadius: '6px',
+        cursor: actionable ? 'pointer' : 'default',
+        ...(actionable && {
+          '&:hover': { backgroundColor: alpha(tint, 0.1) },
+          '&:hover .file-name': { textDecoration: 'underline' },
+          '&:focus-visible': { outline: `1px solid ${tint}` },
+        }),
+      }}
+    >
+      <InsertDriveFileIcon sx={{ fontSize: 18, color: tint, flexShrink: 0 }} />
+      <Typography className="file-name" noWrap sx={{ fontSize: '0.86rem', fontWeight: 600, color: beacon.text, minWidth: 0 }}>
+        {file.name}
+      </Typography>
+      <Typography
+        sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary, flexShrink: 0, ml: 'auto', pl: 1 }}
+      >
+        {formatSize(file.size)}
+      </Typography>
+    </Box>
+  );
+
+  return (
+    <>
+      <Tooltip title={actionable ? '' : 'Location not recorded for this file'} placement="top">
+        {row}
+      </Tooltip>
+      <Menu
+        anchorEl={anchor}
+        open={!!anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        slotProps={{ paper: { sx: { backgroundColor: beacon.surfaceRaised, border: `1px solid ${beacon.hairline}` } } }}
+      >
+        <MenuItem
+          onClick={() => {
+            setAnchor(null);
+            onFileAction(file, 'open');
+          }}
+        >
+          <ListItemIcon><OpenInNewIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+          <ListItemText primaryTypographyProps={{ fontSize: '0.86rem' }}>Open</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setAnchor(null);
+            onFileAction(file, 'reveal');
+          }}
+        >
+          <ListItemIcon><FolderOpenIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+          <ListItemText primaryTypographyProps={{ fontSize: '0.86rem' }}>Show in folder</ListItemText>
+        </MenuItem>
+      </Menu>
+    </>
+  );
+};
+
+const Bubble: React.FC<{
+  entry: HistoryEntry;
+  onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
+}> = ({ entry, onFileAction }) => {
   const outgoing = entry.direction === 'outgoing';
   const failed = entry.status !== 'completed';
   const isText = entry.kind === 'text';
@@ -99,17 +195,7 @@ const Bubble: React.FC<{ entry: HistoryEntry }> = ({ entry }) => {
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
             {entry.files.map((f, i) => (
-              <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-                <InsertDriveFileIcon sx={{ fontSize: 18, color: tint, flexShrink: 0 }} />
-                <Typography noWrap sx={{ fontSize: '0.86rem', fontWeight: 600, color: beacon.text, minWidth: 0 }}>
-                  {f.name}
-                </Typography>
-                <Typography
-                  sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary, flexShrink: 0, ml: 'auto', pl: 1 }}
-                >
-                  {formatSize(f.size)}
-                </Typography>
-              </Box>
+              <FileRow key={i} entry={entry} file={f} tint={tint} onFileAction={onFileAction} />
             ))}
           </Box>
         )}
@@ -171,6 +257,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
   autoCopy,
   onToggleAutoCopy,
   readClipboard,
+  onFileAction,
 }) => {
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
@@ -179,6 +266,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [confirmTrust, setConfirmTrust] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -333,7 +421,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
             title={
               trusted
                 ? 'Copy messages from this device to the clipboard as they arrive'
-                : 'Only for trusted devices: accept a transfer from it with "Always accept" first'
+                : 'Auto-copy requires trusting this device'
             }
           >
             <Box
@@ -347,9 +435,8 @@ const DevicePage: React.FC<DevicePageProps> = ({
                 height: 38,
                 borderRadius: '8px',
                 border: `1px solid ${beacon.hairline}`,
-                cursor: trusted ? 'pointer' : 'default',
+                cursor: 'pointer',
                 flexShrink: 0,
-                opacity: trusted ? 1 : 0.55,
               }}
             >
               <ContentPasteIcon sx={{ fontSize: 16, color: autoCopy ? beacon.accent : beacon.textSecondary }} />
@@ -359,8 +446,10 @@ const DevicePage: React.FC<DevicePageProps> = ({
               <Switch
                 size="small"
                 checked={autoCopy}
-                disabled={!trusted && !autoCopy}
-                onChange={(e) => onToggleAutoCopy(peer, e.target.checked)}
+                onChange={(e) => {
+                  if (e.target.checked && !trusted) setConfirmTrust(true);
+                  else onToggleAutoCopy(peer, e.target.checked, false);
+                }}
                 inputProps={{ 'aria-label': 'auto-copy messages from this device' }}
               />
             </Box>
@@ -401,7 +490,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
                     <Box sx={{ flex: 1, height: '1px', backgroundColor: beacon.hairline }} />
                   </Box>
                   {entries.map((entry) => (
-                    <Bubble key={entry.id} entry={entry} />
+                    <Bubble key={entry.id} entry={entry} onFileAction={onFileAction} />
                   ))}
                 </React.Fragment>
               ))}
@@ -429,6 +518,30 @@ const DevicePage: React.FC<DevicePageProps> = ({
           </Box>
         )}
       </Box>
+
+      <Dialog open={confirmTrust} onClose={() => setConfirmTrust(false)} maxWidth="xs">
+        <DialogTitle sx={{ fontFamily: fonts.display, fontWeight: 700 }}>Trust {displayName}?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: '0.88rem', color: beacon.textSecondary, lineHeight: 1.6 }}>
+            Auto-copy only works for trusted devices. Trusting {displayName} also means files it
+            sends are accepted without asking. Only do this for your own devices.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmTrust(false)} sx={{ color: beacon.textSecondary }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setConfirmTrust(false);
+              onToggleAutoCopy(peer, true, true);
+            }}
+          >
+            Trust &amp; turn on
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* ── Composer ─────────────────────────────────────────────────────── */}
       <Box sx={{ borderTop: `1px solid ${beacon.hairline}` }}>

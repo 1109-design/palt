@@ -36,14 +36,18 @@ const MOCK_PEERS: Peer[] = [
   },
 ];
 
+let mockTrusted: string[] = ['Pixel 8'];
+let mockAutoCopy: string[] = [];
+
 /** Returns the list of discovered peers. */
 export const RejectOffer = (transferId: string): Promise<void> => Promise.resolve();
 export const AcceptOffer = (transferId: string): Promise<void> => Promise.resolve();
-export const AddTrustedDevice = (name: string): Promise<void> => Promise.resolve();
+export const AddTrustedDevice = (name: string): Promise<void> => {
+  if (!mockTrusted.includes(name)) mockTrusted = [...mockTrusted, name];
+  return Promise.resolve();
+};
 export const GetHistory = (): Promise<any[]> => Promise.resolve([]);
 export const ClearHistory = (): Promise<void> => Promise.resolve();
-let mockTrusted: string[] = ['Pixel 8'];
-let mockAutoCopy: string[] = [];
 export const GetTrustedDevices = (): Promise<string[]> => Promise.resolve(mockTrusted);
 export const GetAutoCopyDevices = (): Promise<string[]> => Promise.resolve(mockAutoCopy);
 export const SetAutoCopy = (name: string, enabled: boolean): Promise<void> => {
@@ -51,6 +55,12 @@ export const SetAutoCopy = (name: string, enabled: boolean): Promise<void> => {
   mockAutoCopy = enabled ? [...mockAutoCopy.filter((n) => n !== name), name] : mockAutoCopy.filter((n) => n !== name);
   return Promise.resolve();
 };
+export const OpenHistoryFile = (path: string, name: string): Promise<void> => {
+  console.log('Mock: open', path || name);
+  return Promise.resolve();
+};
+export const RevealHistoryFile = (path: string, name: string): Promise<void> =>
+  Promise.reject(`${name} is no longer at ~/Downloads/PALT`);
 export const SendText = (ip: string, port: number, name: string, text: string): Promise<void> =>
   new Promise((r) => setTimeout(r, 250));
 

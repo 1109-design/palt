@@ -5,6 +5,7 @@ import "time"
 type HistoryFile struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
+	Path string `json:"path,omitempty"` // where the file lives on this machine
 }
 
 type HistoryEntry struct {

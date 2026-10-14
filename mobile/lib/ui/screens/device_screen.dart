@@ -13,6 +13,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:open_filex/open_filex.dart';
 
 import '../../models/history_entry.dart';
 import '../../models/peer.dart';
@@ -98,13 +99,31 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     await _send(peer, text, clearDraft: false);
   }
 
-  void _toggleAutoCopy(String name, bool trusted, bool enabled) {
+  Future<void> _toggleAutoCopy(
+      String name, String displayName, bool trusted, bool enabled) async {
     if (!enabled && !trusted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Auto-copy is only for trusted devices. Accept a transfer from it with "Always accept" first.'),
-      ));
-      return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Trust $displayName?', style: display(fontSize: 19)),
+          content: Text(
+            'Auto-copy only works for trusted devices. Trusting $displayName also means files it sends are accepted without asking. Only do this for your own devices.',
+            style: const TextStyle(color: kTextSecondary, fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Trust & turn on'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      ref.read(trustProvider.notifier).trust(name);
     }
     ref.read(autoCopyProvider.notifier).set(name, !enabled);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -144,10 +163,10 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     final autoCopy = ref.watch(autoCopyProvider).contains(peer.deviceName);
 
     // History is newest-first, which is exactly what a reversed list wants.
-    final thread = ref
+    final thread = _groupTransfers(ref
         .watch(historyProvider)
         .where((e) => e.partnerName == peer.deviceName)
-        .toList();
+        .toList());
 
     final progress = ref.watch(transferProgressProvider);
 
@@ -170,9 +189,10 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
             tooltip: autoCopy ? 'Auto-copy on' : 'Auto-copy off',
             icon: Icon(
               autoCopy ? Icons.content_paste_rounded : Icons.content_paste_off_rounded,
-              color: autoCopy ? kAccent : (trusted ? kTextSecondary : kTextFaint),
+              color: autoCopy ? kAccent : kTextSecondary,
             ),
-            onPressed: () => _toggleAutoCopy(peer.deviceName, trusted, autoCopy),
+            onPressed: () =>
+                _toggleAutoCopy(peer.deviceName, displayName, trusted, autoCopy),
           ),
           const SizedBox(width: 4),
         ],
@@ -246,6 +266,8 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                         final showDay = older == null ||
                             _dayLabel(older.timestamp) != _dayLabel(entry.timestamp);
                         return Column(
+                          // Stretch so each bubble can align left/right.
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (showDay) _DayDivider(label: _dayLabel(entry.timestamp)),
                             _Bubble(entry: entry),
@@ -280,6 +302,58 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         ),
       ),
     );
+  }
+}
+
+/// History stores one entry per file (id "<transferId>_<name>"); merge
+/// adjacent entries from the same transfer back into one bubble.
+List<HistoryEntry> _groupTransfers(List<HistoryEntry> entries) {
+  String? key(HistoryEntry e) {
+    if (e.isText) return null;
+    final i = e.id.indexOf('_');
+    return i > 0 ? '${e.direction}:${e.id.substring(0, i)}' : null;
+  }
+
+  final out = <HistoryEntry>[];
+  var i = 0;
+  while (i < entries.length) {
+    final k = key(entries[i]);
+    var j = i + 1;
+    while (k != null && j < entries.length && key(entries[j]) == k) {
+      j++;
+    }
+    if (j - i == 1) {
+      out.add(entries[i]);
+    } else {
+      // Newest-first storage reverses file order within a batch; undo that.
+      final group = entries.sublist(i, j).reversed.toList();
+      final failed = group.where((e) => e.status != 'completed').toList();
+      out.add(HistoryEntry(
+        id: k!,
+        partnerName: group.first.partnerName,
+        files: [for (final e in group) ...e.files],
+        totalSize: group.fold(0, (sum, e) => sum + e.totalSize),
+        direction: group.first.direction,
+        timestamp: entries[i].timestamp,
+        status: failed.isEmpty ? 'completed' : 'error',
+        errorMessage: failed.isEmpty ? null : failed.first.errorMessage,
+        durationMillis: group.first.durationMillis,
+      ));
+    }
+    i = j;
+  }
+  return out;
+}
+
+Future<void> _openReceivedFile(BuildContext context, String name) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final result = await OpenFilex.open('$kPaltDownloadDir/${safeFileName(name)}');
+  if (result.type != ResultType.done) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(result.type == ResultType.fileNotFound
+          ? '$name is no longer in Downloads/PALT'
+          : 'Could not open $name: ${result.message}'),
+    ));
   }
 }
 
@@ -348,6 +422,7 @@ class _Bubble extends StatelessWidget {
     final failed = entry.status != 'completed';
     final tint = failed ? kDanger : (outgoing ? kAccent : kOk);
     final maxWidth = MediaQuery.of(context).size.width * 0.78;
+    final canOpen = !outgoing && !failed;
 
     final body = entry.isText
         ? SelectableText(
@@ -359,25 +434,35 @@ class _Bubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final f in entry.files)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.insert_drive_file_outlined, size: 17, color: tint),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          f.name,
-                          style: const TextStyle(
-                              fontSize: 13.5, fontWeight: FontWeight.w600, color: kText),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  // Received files live in Downloads/PALT; sent ones were
+                  // picked from a temporary copy, so only these can open.
+                  onTap: canOpen ? () => _openReceivedFile(context, f.name) : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.insert_drive_file_outlined, size: 17, color: tint),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            f.name,
+                            style: const TextStyle(
+                                fontSize: 13.5, fontWeight: FontWeight.w600, color: kText),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(_formatSize(f.size), style: mono(fontSize: 11)),
-                    ],
+                        const SizedBox(width: 10),
+                        Text(_formatSize(f.size), style: mono(fontSize: 11)),
+                        if (canOpen) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.chevron_right_rounded, size: 16, color: kTextFaint),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
             ],
@@ -411,7 +496,7 @@ class _Bubble extends StatelessWidget {
                   bottomRight: const Radius.circular(14),
                 ),
               ),
-              child: body,
+              child: Material(type: MaterialType.transparency, child: body),
             ),
           ),
           const SizedBox(height: 4),

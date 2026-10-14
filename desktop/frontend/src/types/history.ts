@@ -1,6 +1,8 @@
 export interface HistoryFile {
   name: string;
   size: number;
+  /** Where the file lives on this machine; absent on older entries. */
+  path?: string;
 }
 
 export interface HistoryEntry {

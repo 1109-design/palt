@@ -33,7 +33,7 @@ import DevicePage from './components/DevicePage';
 import { beacon, fonts } from './theme/theme';
 
 import type { Peer } from './types/peer';
-import type { HistoryEntry } from './types/history';
+import type { HistoryEntry, HistoryFile } from './types/history';
 
 // ── Wails bindings ────────────────────────────────────────────────────────────
 // When running under `wails dev` or as a built binary, the Wails runtime
@@ -60,10 +60,13 @@ const GetAliases           = isWails ? (WailsApp as any).GetAliases           : 
 const SendText             = isWails ? (WailsApp as any).SendText             : MockApp.SendText;
 const GetTrustedDevices    = isWails ? (WailsApp as any).GetTrustedDevices    : MockApp.GetTrustedDevices;
 const GetAutoCopyDevices   = isWails ? (WailsApp as any).GetAutoCopyDevices   : MockApp.GetAutoCopyDevices;
+const AddTrustedDevice     = isWails ? (WailsApp as any).AddTrustedDevice     : MockApp.AddTrustedDevice;
 const SetAutoCopy          = isWails ? (WailsApp as any).SetAutoCopy          : MockApp.SetAutoCopy;
 const ReadClipboard        = isWails
   ? () => (window as any).runtime.ClipboardGetText() as Promise<string>
   : () => navigator.clipboard.readText();
+const OpenHistoryFile      = isWails ? (WailsApp as any).OpenHistoryFile      : MockApp.OpenHistoryFile;
+const RevealHistoryFile    = isWails ? (WailsApp as any).RevealHistoryFile    : MockApp.RevealHistoryFile;
 const SetAlias             = isWails ? (WailsApp as any).SetAlias             : (name: string, alias: string) => { console.log(`Mock: Set ${name} alias to ${alias}`); return Promise.resolve(); };
 
 /** How often (ms) to auto-refresh the peer list */
@@ -381,14 +384,23 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleToggleAutoCopy = useCallback(async (peer: Peer, enabled: boolean) => {
+  const handleToggleAutoCopy = useCallback(async (peer: Peer, enabled: boolean, trustFirst: boolean) => {
     try {
+      if (trustFirst) await AddTrustedDevice(peer.deviceName);
       await SetAutoCopy(peer.deviceName, enabled);
     } catch (e: any) {
       setErrorMsg(String(e?.message || e));
     }
     fetchDeviceSettings();
   }, [fetchDeviceSettings]);
+
+  const handleFileAction = useCallback(async (file: HistoryFile, action: 'open' | 'reveal') => {
+    try {
+      await (action === 'open' ? OpenHistoryFile : RevealHistoryFile)(file.path || '', file.name);
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+  }, []);
 
   const acceptOffer = useCallback(async (transferId: string, alwaysTrust: boolean) => {
     if (alwaysTrust && offer) {
@@ -518,6 +530,7 @@ const App: React.FC = () => {
           autoCopy={autoCopy.includes(openPeer.deviceName)}
           onToggleAutoCopy={handleToggleAutoCopy}
           readClipboard={ReadClipboard}
+          onFileAction={handleFileAction}
         />
       ) : (
       /* ── Main content (offset for AppBar + StatusBar) ───────────────────── */

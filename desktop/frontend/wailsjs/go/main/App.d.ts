@@ -29,9 +29,13 @@ export function GetTrustedDevices():Promise<Array<string>>;
 
 export function OpenDownloadFolder():Promise<void>;
 
+export function OpenHistoryFile(arg1:string,arg2:string):Promise<void>;
+
 export function OpenURL(arg1:string):Promise<void>;
 
 export function RejectOffer(arg1:string):Promise<void>;
+
+export function RevealHistoryFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveLastSeenVersion(arg1:string):Promise<void>;
 

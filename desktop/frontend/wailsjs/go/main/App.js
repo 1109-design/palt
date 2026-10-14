@@ -54,12 +54,20 @@ export function OpenDownloadFolder() {
   return window['go']['main']['App']['OpenDownloadFolder']();
 }
 
+export function OpenHistoryFile(arg1, arg2) {
+  return window['go']['main']['App']['OpenHistoryFile'](arg1, arg2);
+}
+
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
 export function RejectOffer(arg1) {
   return window['go']['main']['App']['RejectOffer'](arg1);
+}
+
+export function RevealHistoryFile(arg1, arg2) {
+  return window['go']['main']['App']['RevealHistoryFile'](arg1, arg2);
 }
 
 export function SaveLastSeenVersion(arg1) {

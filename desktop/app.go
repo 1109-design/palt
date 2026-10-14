@@ -18,6 +18,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +36,7 @@ import (
 
 // AppVersion is the canonical version string for this build.
 // Bump this manually to match the git tag when cutting a release.
-const AppVersion = "v1.3.0"
+const AppVersion = "v1.3.1"
 
 // UpdateInfo is returned by CheckForUpdate and passed to the React frontend.
 type UpdateInfo struct {
@@ -127,7 +128,7 @@ func (a *App) startup(ctx context.Context) {
 		return res.Accept
 	}
 
-	a.transferServer.OnComplete = func(meta transfer.Metadata) {
+	a.transferServer.OnComplete = func(meta transfer.Metadata, savedPaths []string) {
 		a.offersMu.Lock()
 		start, ok := a.startTime[meta.TransferID]
 		delete(a.startTime, meta.TransferID)
@@ -146,11 +147,11 @@ func (a *App) startup(ctx context.Context) {
 			Timestamp:      time.Now(),
 			Status:         "completed",
 			DurationMillis: duration.Milliseconds(),
-			Files:          a.toHistoryFiles(meta.Files),
+			Files:          a.toHistoryFiles(meta.Files, savedPaths),
 		})
 	}
 
-	a.transferServer.OnError = func(meta transfer.Metadata, err error) {
+	a.transferServer.OnError = func(meta transfer.Metadata, savedPaths []string, err error) {
 		a.offersMu.Lock()
 		start, ok := a.startTime[meta.TransferID]
 		delete(a.startTime, meta.TransferID)
@@ -170,7 +171,7 @@ func (a *App) startup(ctx context.Context) {
 			Status:         "error",
 			ErrorMessage:   err.Error(),
 			DurationMillis: duration.Milliseconds(),
-			Files:          a.toHistoryFiles(meta.Files),
+			Files:          a.toHistoryFiles(meta.Files, savedPaths),
 		})
 	}
 
@@ -714,7 +715,7 @@ func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths 
 		for _, p := range filePaths {
 			s, _ := os.Stat(p)
 			if s != nil && !s.IsDir() {
-				hFiles = append(hFiles, models.HistoryFile{Name: filepath.Base(p), Size: s.Size()})
+				hFiles = append(hFiles, models.HistoryFile{Name: filepath.Base(p), Size: s.Size(), Path: p})
 				totalSize += s.Size()
 			}
 		}
@@ -802,12 +803,74 @@ func (a *App) logHistory(entry models.HistoryEntry) {
 	wailsruntime.EventsEmit(a.ctx, "history_updated", history)
 }
 
-func (a *App) toHistoryFiles(files []transfer.FileMeta) []models.HistoryFile {
+func (a *App) toHistoryFiles(files []transfer.FileMeta, savedPaths []string) []models.HistoryFile {
 	hFiles := make([]models.HistoryFile, len(files))
 	for i, f := range files {
 		hFiles[i] = models.HistoryFile{Name: f.Name, Size: f.Size}
+		if i < len(savedPaths) {
+			hFiles[i].Path = savedPaths[i]
+		}
 	}
 	return hFiles
+}
+
+// resolveHistoryFile finds a file referenced by history. Entries written
+// before paths were recorded fall back to ~/Downloads/PALT/<name>.
+func resolveHistoryFile(path, name string) (string, error) {
+	if path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(home, "Downloads", "PALT", filepath.Base(name))
+	}
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("%s is no longer at %s", filepath.Base(path), filepath.Dir(path))
+	}
+	return path, nil
+}
+
+// OpenHistoryFile opens a transferred file with the system default app.
+func (a *App) OpenHistoryFile(path, name string) error {
+	p, err := resolveHistoryFile(path, name)
+	if err != nil {
+		return err
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", p)
+	case "darwin":
+		cmd = exec.Command("open", p)
+	default:
+		cmd = exec.Command("xdg-open", p)
+	}
+	return cmd.Start()
+}
+
+// RevealHistoryFile opens the file manager with the file selected where the
+// platform supports it, otherwise at its folder.
+func (a *App) RevealHistoryFile(path, name string) error {
+	p, err := resolveHistoryFile(path, name)
+	if err != nil {
+		return err
+	}
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("explorer", "/select,", p).Start()
+	case "darwin":
+		return exec.Command("open", "-R", p).Start()
+	default:
+		// FileManager1 selects the file in Nautilus, Dolphin, Nemo, etc.
+		uri := (&url.URL{Scheme: "file", Path: p}).String()
+		err := exec.Command("dbus-send", "--session", "--print-reply",
+			"--dest=org.freedesktop.FileManager1", "/org/freedesktop/FileManager1",
+			"org.freedesktop.FileManager1.ShowItems", "array:string:"+uri, "string:").Run()
+		if err == nil {
+			return nil
+		}
+		return exec.Command("xdg-open", filepath.Dir(p)).Start()
+	}
 }
 
 // GetHistory returns the persistent transfer log.

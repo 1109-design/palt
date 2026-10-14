@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Server handles incoming PALT TCP connections and file downloads.
@@ -26,10 +27,12 @@ type Server struct {
 	OnText func(meta Metadata)
 
 	// OnComplete is called when a transfer finishes successfully.
-	OnComplete func(meta Metadata)
+	// savedPaths[i] is where meta.Files[i] was written.
+	OnComplete func(meta Metadata, savedPaths []string)
 
-	// OnError is called when a transfer fails.
-	OnError func(meta Metadata, err error)
+	// OnError is called when a transfer fails. savedPaths covers the files
+	// opened before the failure (the last one may be partial).
+	OnError func(meta Metadata, savedPaths []string, err error)
 }
 
 // NewServer initializes a TCP receiver.
@@ -141,9 +144,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// 6. IO Chunk Copy Loop
 	var totalWritten int64 = 0
 	totalFiles := len(meta.Files)
+	savedPaths := make([]string, 0, totalFiles)
 
 	for i, f := range meta.Files {
-		savePath := resolveUniqueFilePath(downloadDir, f.Name)
+		savePath := resolveUniqueFilePath(downloadDir, safeFileName(f.Name))
+		savedPaths = append(savedPaths, savePath)
 		file, err := os.Create(savePath)
 		if err != nil {
 			log.Printf("[TransferServer] Failed to create output file %s: %v\n", savePath, err)
@@ -175,7 +180,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if err != nil && err != io.EOF {
 			log.Printf("[TransferServer] Interrupted mid-transfer on file %s: only read %d/%d bytes: %v\n", f.Name, copied, f.Size, err)
 			if s.OnError != nil {
-				s.OnError(*meta, err)
+				s.OnError(*meta, savedPaths, err)
 			}
 			return
 		}
@@ -185,8 +190,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 	
 	log.Printf("[TransferServer] Transfer %s completely finished across %d files.\n", meta.TransferID, totalFiles)
 	if s.OnComplete != nil {
-		s.OnComplete(*meta)
+		s.OnComplete(*meta, savedPaths)
 	}
+}
+
+// safeFileName reduces a peer-supplied name to a bare file name so it can't
+// escape the download directory (e.g. "../../.bashrc" or "/etc/passwd").
+func safeFileName(name string) string {
+	name = strings.ReplaceAll(name, "\\", "/")
+	name = filepath.Base(name)
+	if name == "." || name == ".." || name == "/" || name == "" {
+		return "file"
+	}
+	return name
 }
 
 // resolveUniqueFilePath generates a non-colliding filename by appending (1), (2), etc.

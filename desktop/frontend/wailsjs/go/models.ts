@@ -26,6 +26,7 @@ export namespace models {
 	export class HistoryFile {
 	    name: string;
 	    size: number;
+	    path?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new HistoryFile(source);
@@ -35,6 +36,7 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.size = source["size"];
+	        this.path = source["path"];
 	    }
 	}
 	export class HistoryEntry {
