@@ -72,6 +72,7 @@ const RevealHistoryFile    = isWails ? (WailsApp as any).RevealHistoryFile    : 
 const GetRelayStatus       = isWails ? (WailsApp as any).GetRelayStatus       : MockApp.GetRelayStatus;
 const SetRelayCode         = isWails ? (WailsApp as any).SetRelayCode         : MockApp.SetRelayCode;
 const GenerateRelayCode    = isWails ? (WailsApp as any).GenerateRelayCode    : MockApp.GenerateRelayCode;
+const RescanPeers          = isWails ? (WailsApp as any).RescanPeers          : () => Promise.resolve();
 const SetAlias             = isWails ? (WailsApp as any).SetAlias             : (name: string, alias: string) => { console.log(`Mock: Set ${name} alias to ${alias}`); return Promise.resolve(); };
 
 /** How often (ms) to auto-refresh the peer list */
@@ -374,6 +375,7 @@ const App: React.FC = () => {
 
   const handleRefresh = useCallback(() => {
     setLoading(true);
+    RescanPeers();
     fetchPeers();
     // Restart poll timer
     if (pollRef.current) clearInterval(pollRef.current);

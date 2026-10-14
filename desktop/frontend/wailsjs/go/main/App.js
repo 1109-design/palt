@@ -74,6 +74,10 @@ export function RejectOffer(arg1) {
   return window['go']['main']['App']['RejectOffer'](arg1);
 }
 
+export function RescanPeers() {
+  return window['go']['main']['App']['RescanPeers']();
+}
+
 export function RevealHistoryFile(arg1, arg2) {
   return window['go']['main']['App']['RevealHistoryFile'](arg1, arg2);
 }

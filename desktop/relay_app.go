@@ -33,6 +33,15 @@ const relayPeerIP = "relay"
 
 const directDialTimeout = 4 * time.Second
 
+// LAN liveness probing for peers seen both on the LAN and on the relay.
+// A phone that drops off Wi-Fi sends no mDNS goodbye, so without probing the
+// stale LAN entry would hide its relay entry until the mDNS TTL runs out.
+const (
+	probeInterval = 4 * time.Second
+	probeTimeout  = 1500 * time.Millisecond
+	probeFailures = 2 // consecutive failed dials before the LAN entry is dropped
+)
+
 type relayConfig struct {
 	Code     string `json:"code"`
 	DeviceID string `json:"deviceId"`
@@ -117,7 +126,15 @@ func (a *App) startRelay() {
 
 	hostname, _ := os.Hostname()
 	c := relay.NewClient(code, id, hostname, runtime.GOOS)
-	c.OnPeers = func([]relay.Peer) { a.emitPeers() }
+	c.OnPeers = func([]relay.Peer) {
+		a.emitPeers()
+		// A relay (re)registration usually means a device changed networks:
+		// look for it on the LAN now and re-check the LAN entries we have.
+		if a.discovery != nil {
+			a.discovery.Rescan()
+		}
+		a.kickProbe()
+	}
 	c.OnStatus = func(string, string) { a.emitRelayStatus() }
 	c.OnIncoming = func(conn net.Conn, from relay.Peer) {
 		log.Printf("[relay] Incoming transfer from %s", from.Name)
@@ -274,4 +291,69 @@ func (a *App) GenerateRelayCode(addr string) (string, error) {
 		return "", err
 	}
 	return code.String(), nil
+}
+
+// ─── LAN liveness probe ──────────────────────────────────────────────────────
+
+// runLANProbe periodically dials LAN peers that are also on the relay and
+// drops the LAN entry once it stops answering, so the UI switches to RELAY
+// within seconds. Runs until ctx is done.
+func (a *App) runLANProbe() {
+	failures := map[string]int{}
+	t := time.NewTicker(probeInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-t.C:
+		case <-a.probeKick:
+		}
+		rc := a.relayClient()
+		if rc == nil || a.discovery == nil {
+			continue
+		}
+		onRelay := map[string]bool{}
+		for _, p := range rc.Peers() {
+			onRelay[p.Name] = true
+		}
+		seen := map[string]bool{}
+		for _, p := range a.discovery.GetPeers() {
+			if !onRelay[p.DeviceName] {
+				continue
+			}
+			seen[p.IPAddress] = true
+			conn, err := transfer.DirectDialer(p.IPAddress, p.Port, probeTimeout)()
+			if err == nil {
+				conn.Close()
+				delete(failures, p.IPAddress)
+				continue
+			}
+			failures[p.IPAddress]++
+			if failures[p.IPAddress] >= probeFailures {
+				delete(failures, p.IPAddress)
+				a.discovery.Evict(p.IPAddress)
+			}
+		}
+		for ip := range failures {
+			if !seen[ip] {
+				delete(failures, ip)
+			}
+		}
+	}
+}
+
+func (a *App) kickProbe() {
+	select {
+	case a.probeKick <- struct{}{}:
+	default:
+	}
+}
+
+// RescanPeers re-queries the LAN and re-checks LAN entries (refresh button).
+func (a *App) RescanPeers() {
+	if a.discovery != nil {
+		a.discovery.Rescan()
+	}
+	a.kickProbe()
 }

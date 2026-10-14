@@ -35,14 +35,18 @@ const (
 	// domain is the standard mDNS local domain.
 	domain = "local."
 
-	// browseInterval is how often the browser re-scans the network.
-	// Zeroconf is event-driven, so this is just a watchdog restart interval.
-	browseInterval = 30 * time.Second
+	// browseInterval is how long one browse session runs before a fresh one
+	// starts. Each new session sends a new query, so live peers answer and
+	// refresh their lastSeen at least this often.
+	browseInterval = 15 * time.Second
 
 	// peerTTL controls how long a peer is kept in the registry after its last
-	// seen announcement. If no refresh arrives within this window the peer is
-	// considered gone. Slightly longer than browseInterval to avoid flapping.
-	peerTTL = 90 * time.Second
+	// seen announcement. Devices that drop off Wi-Fi send no goodbye, so this
+	// bounds how long a vanished peer lingers (~3 missed sessions).
+	peerTTL = 45 * time.Second
+
+	// reapInterval is how often stale peers are swept.
+	reapInterval = 5 * time.Second
 )
 
 // Service manages both the mDNS advertisement and peer discovery.
@@ -74,6 +78,9 @@ type Service struct {
 
 	// onChange is called whenever the peer set changes.
 	onChange func()
+
+	// rescan asks the browse loop to start a fresh session right away.
+	rescan chan struct{}
 }
 
 // trackedPeer wraps a Peer with metadata used for TTL expiry.
@@ -109,6 +116,7 @@ func NewService(parentCtx context.Context, deviceName string, port int, hostOS s
 		ctx:        ctx,
 		cancel:     cancel,
 		onChange:   onChange,
+		rescan:     make(chan struct{}, 1),
 	}
 
 	// Start advertising our own presence.
@@ -192,12 +200,37 @@ func (s *Service) browseLoop() {
 	for {
 		s.runBrowseSession()
 
+		// Start the next session straight away so there is no blind gap;
+		// the short pause only avoids spinning if the resolver keeps failing.
 		select {
 		case <-s.ctx.Done():
 			return
-		case <-time.After(browseInterval):
-			// Restart browse to pick up any newly joined devices.
+		case <-time.After(500 * time.Millisecond):
 		}
+	}
+}
+
+// Rescan cuts the current browse session short and queries the network
+// again, e.g. when a device is known to have just changed networks.
+func (s *Service) Rescan() {
+	select {
+	case s.rescan <- struct{}{}:
+	default:
+	}
+}
+
+// Evict drops a peer that is known to be unreachable (keyed by IP) without
+// waiting for its TTL.
+func (s *Service) Evict(ip string) {
+	s.mu.Lock()
+	tp, ok := s.peers[ip]
+	if ok {
+		delete(s.peers, ip)
+	}
+	s.mu.Unlock()
+	if ok {
+		log.Printf("[discovery] Peer evicted (unreachable): %s", tp.peer.DeviceName)
+		s.notify()
 	}
 }
 
@@ -229,6 +262,9 @@ func (s *Service) runBrowseSession() {
 			s.handleEntry(entry)
 
 		case <-browseCtx.Done():
+			return
+
+		case <-s.rescan:
 			return
 		}
 	}
@@ -295,7 +331,7 @@ func (s *Service) handleEntry(entry *zeroconf.ServiceEntry) {
 func (s *Service) reaperLoop() {
 	defer s.wg.Done()
 
-	ticker := time.NewTicker(peerTTL / 2)
+	ticker := time.NewTicker(reapInterval)
 	defer ticker.Stop()
 
 	for {

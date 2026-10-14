@@ -38,7 +38,7 @@ import (
 
 // AppVersion is the canonical version string for this build.
 // Bump this manually to match the git tag when cutting a release.
-const AppVersion = "v1.4.0"
+const AppVersion = "v1.4.1"
 
 // UpdateInfo is returned by CheckForUpdate and passed to the React frontend.
 type UpdateInfo struct {
@@ -65,6 +65,7 @@ type App struct {
 	transferServer *transfer.Server
 	relay          *relay.Client
 	relayMu        sync.Mutex
+	probeKick      chan struct{}
 	pendingOffers  map[string]chan OfferResolution
 	startTime      map[string]time.Time
 	offersMu       sync.Mutex
@@ -75,6 +76,7 @@ func NewApp() *App {
 	return &App{
 		pendingOffers: make(map[string]chan OfferResolution),
 		startTime:     make(map[string]time.Time),
+		probeKick:     make(chan struct{}, 1),
 	}
 }
 
@@ -245,6 +247,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.startRelay()
+	go a.runLANProbe()
 
 	log.Println("[app] PALT started successfully.")
 }

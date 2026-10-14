@@ -609,10 +609,20 @@ class _ProgressStrip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(fontSize: 12.5, color: isError ? kDanger : kText),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
+          Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    style: TextStyle(fontSize: 12.5, color: isError ? kDanger : kText),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              if (progress.route != null && !isError) ...[
+                const SizedBox(width: 8),
+                RouteBadge(route: progress.route),
+              ],
+            ],
+          ),
           if (!isError) ...[
             const SizedBox(height: 8),
             ClipRRect(
@@ -624,6 +634,24 @@ class _ProgressStrip extends StatelessWidget {
                 valueColor: AlwaysStoppedAnimation<Color>(color),
               ),
             ),
+            if (!isWaiting) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    '${_formatSize(isDone ? progress.total : progress.written)} / ${_formatSize(progress.total)}',
+                    style: mono(fontSize: 10.5, color: kTextFaint),
+                  ),
+                  const Spacer(),
+                  Text(
+                    isDone
+                        ? 'done'
+                        : '${progress.speed != null ? '${_formatSize(progress.speed!.round())}/s' : '—'} · ${(value * 100).round()}%',
+                    style: mono(fontSize: 10.5),
+                  ),
+                ],
+              ),
+            ],
           ],
         ],
       ),

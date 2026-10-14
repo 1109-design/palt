@@ -39,6 +39,8 @@ export function OpenURL(arg1:string):Promise<void>;
 
 export function RejectOffer(arg1:string):Promise<void>;
 
+export function RescanPeers():Promise<void>;
+
 export function RevealHistoryFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveLastSeenVersion(arg1:string):Promise<void>;

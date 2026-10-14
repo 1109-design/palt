@@ -88,7 +88,10 @@ func (s *Server) HandleConn(conn net.Conn, route string) {
 	// 1. Read the HTTP-like JSON Handshake Frame
 	meta, err := ReadOffer(conn)
 	if err != nil {
-		log.Printf("[TransferServer] Failed to read offer protocol: %v\n", err)
+		// A bare connect-and-close is a peer checking we're reachable.
+		if err != io.EOF {
+			log.Printf("[TransferServer] Failed to read offer protocol: %v\n", err)
+		}
 		return
 	}
 	meta.Route = route
