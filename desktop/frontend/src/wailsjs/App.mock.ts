@@ -30,9 +30,10 @@ const MOCK_PEERS: Peer[] = [
   {
     id: 'home-server',
     deviceName: 'Home Server',
-    ipAddress: '192.168.1.10',
-    port: 9876,
+    ipAddress: 'relay',
+    port: 0,
     os: 'linux',
+    via: 'relay',
   },
 ];
 
@@ -61,6 +62,24 @@ export const OpenHistoryFile = (path: string, name: string): Promise<void> => {
 };
 export const RevealHistoryFile = (path: string, name: string): Promise<void> =>
   Promise.reject(`${name} is no longer at ~/Downloads/PALT`);
+let mockRelayCode = '';
+const mockRelayStatus = () => ({
+  configured: !!mockRelayCode,
+  status: mockRelayCode ? 'online' : 'off',
+  detail: '',
+  server: mockRelayCode ? mockRelayCode.split(':').slice(1, 3).join(':') : '',
+  code: mockRelayCode,
+  peers: mockRelayCode ? 1 : 0,
+});
+export const GetRelayStatus = () => Promise.resolve(mockRelayStatus());
+export const SetRelayCode = (code: string): Promise<void> => {
+  mockRelayCode = code;
+  return Promise.resolve();
+};
+export const GenerateRelayCode = (addr: string): Promise<string> => {
+  mockRelayCode = `palt1:${addr.includes(':') ? addr : addr + ':9877'}:bW9ja21vY2ttb2NrbW9ja21vY2ttb2NrbW9ja21vY2s`;
+  return Promise.resolve(mockRelayCode);
+};
 export const SendText = (ip: string, port: number, name: string, text: string): Promise<void> =>
   new Promise((r) => setTimeout(r, 250));
 

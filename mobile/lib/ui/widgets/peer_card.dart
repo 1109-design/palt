@@ -17,6 +17,7 @@ import '../../theme/app_theme.dart';
 
 import '../../providers/alias_provider.dart';
 import '../screens/device_screen.dart';
+import 'route_badge.dart';
 
 /// Opens the system file picker and streams the chosen files to [peer].
 Future<void> pickAndSendFiles(WidgetRef ref, Peer peer) async {
@@ -138,7 +139,16 @@ class PeerCard extends ConsumerWidget {
                       const SizedBox(height: 3),
                       Row(
                         children: [
-                          Text(peer.ipAddress, style: mono(fontSize: 11.5)),
+                          RouteBadge(route: peer.via),
+                          if (!peer.viaRelay) ...[
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(peer.ipAddress,
+                                  style: mono(fontSize: 11.5),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                          ],
                           const SizedBox(width: 8),
                           Container(
                             width: 3,

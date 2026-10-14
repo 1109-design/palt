@@ -14,4 +14,8 @@ export interface Peer {
   port: number;
   /** OS string: "linux" | "android" | "darwin" | "windows" | "unknown" */
   os: string;
+  /** How the peer is reachable: same LAN ("direct") or through the relay. */
+  via?: string;
 }
+
+export type Route = 'direct' | 'relay';

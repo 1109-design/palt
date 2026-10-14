@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/grandcat/zeroconf"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"palt/internal/models"
 )
@@ -72,11 +71,14 @@ type Service struct {
 
 	// wg lets Stop() wait for all goroutines to finish.
 	wg sync.WaitGroup
+
+	// onChange is called whenever the peer set changes.
+	onChange func()
 }
 
 // trackedPeer wraps a Peer with metadata used for TTL expiry.
 type trackedPeer struct {
-	peer    models.Peer
+	peer     models.Peer
 	lastSeen time.Time
 }
 
@@ -85,7 +87,8 @@ type trackedPeer struct {
 //   - deviceName: friendly name advertised on the network (defaults to hostname).
 //   - port:       TCP port to advertise (the PALT transfer server port).
 //   - hostOS:     OS string embedded in TXT records ("linux", "android", etc.).
-func NewService(parentCtx context.Context, deviceName string, port int, hostOS string) (*Service, error) {
+//   - onChange:   called whenever the peer set changes (may be nil).
+func NewService(parentCtx context.Context, deviceName string, port int, hostOS string, onChange func()) (*Service, error) {
 	// Fall back to the system hostname if no name was provided.
 	if deviceName == "" {
 		h, err := os.Hostname()
@@ -105,6 +108,7 @@ func NewService(parentCtx context.Context, deviceName string, port int, hostOS s
 		peers:      make(map[string]*trackedPeer),
 		ctx:        ctx,
 		cancel:     cancel,
+		onChange:   onChange,
 	}
 
 	// Start advertising our own presence.
@@ -283,7 +287,7 @@ func (s *Service) handleEntry(entry *zeroconf.ServiceEntry) {
 
 	if isNew {
 		log.Printf("[discovery] Peer updated/added: %s (%s:%d) os=%s", peer.DeviceName, peer.IPAddress, peer.Port, peer.OS)
-		wailsruntime.EventsEmit(s.ctx, "peers_changed", s.GetPeers())
+		s.notify()
 	}
 }
 
@@ -321,7 +325,13 @@ func (s *Service) evictStalePeers() {
 	s.mu.Unlock()
 
 	if changed {
-		wailsruntime.EventsEmit(s.ctx, "peers_changed", s.GetPeers())
+		s.notify()
+	}
+}
+
+func (s *Service) notify() {
+	if s.onChange != nil {
+		s.onChange()
 	}
 }
 

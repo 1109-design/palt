@@ -22,6 +22,8 @@ const kAccentPressed = Color(0xFFE69A38);
 const kOnAccent      = Color(0xFF201503);
 const kOk            = Color(0xFF53D993);
 const kDanger        = Color(0xFFFF7B72);
+/// Route tag for peers/transfers going through the relay server.
+const kRelay         = Color(0xFF7AA2FF);
 
 // ── Type helpers ─────────────────────────────────────────────────────────────
 

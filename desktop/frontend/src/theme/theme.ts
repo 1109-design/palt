@@ -18,6 +18,8 @@ export const beacon = {
   onAccent:      '#201503',
   ok:            '#53D993',
   danger:        '#FF7B72',
+  /** Route tag for transfers going through the relay server. */
+  relay:         '#7AA2FF',
 } as const;
 
 export const fonts = {

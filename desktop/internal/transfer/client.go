@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 )
 
@@ -23,7 +21,7 @@ var (
 // SendFiles connects to a peer network endpoint, handshakes the batch metadata,
 // and streams the chosen files sequentially from local disk.
 // OnProgress tracks chunks traversing the network.
-func SendFiles(peerIP string, peerPort int, filePaths []string, transferID string, senderName string, onProgress func(written int64, total int64, sentItems int, totalItems int, currentFile string)) error {
+func SendFiles(dial Dialer, filePaths []string, transferID string, senderName string, onProgress func(written int64, total int64, sentItems int, totalItems int, currentFile string)) error {
 	var totalSize int64 = 0
 	var metaFiles []FileMeta
 
@@ -36,7 +34,7 @@ func SendFiles(peerIP string, peerPort int, filePaths []string, transferID strin
 		if stat.IsDir() {
 			continue // Skip directories for simplicity right now
 		}
-		
+
 		size := stat.Size()
 		totalSize += size
 		metaFiles = append(metaFiles, FileMeta{
@@ -49,14 +47,13 @@ func SendFiles(peerIP string, peerPort int, filePaths []string, transferID strin
 		return errors.New("no valid files selected to send")
 	}
 
-	// 2. Dial TCP socket
-	addr := fmt.Sprintf("%s:%d", peerIP, peerPort)
-	log.Printf("[TransferClient] Dialing peer at %s", addr)
-	conn, err := net.Dial("tcp", addr)
+	// 2. Connect (direct TCP or an encrypted relay pipe)
+	conn, err := dial()
 	if err != nil {
-		return fmt.Errorf("failed to dial peer: %w", err)
+		return fmt.Errorf("failed to reach peer: %w", err)
 	}
 	defer conn.Close()
+	addr := conn.RemoteAddr().String()
 
 	// 3. Construct and write Handshake
 	meta := &Metadata{
@@ -96,7 +93,7 @@ func SendFiles(peerIP string, peerPort int, filePaths []string, transferID strin
 			log.Printf("[TransferClient] Failed to open local file %s mid-transfer: %v", path, err)
 			continue
 		}
-		
+
 		stat, _ := file.Stat()
 		if stat.IsDir() {
 			file.Close()
@@ -136,7 +133,7 @@ func SendFiles(peerIP string, peerPort int, filePaths []string, transferID strin
 
 // SendText delivers a single text message. The message rides inside the
 // handshake, so the exchange is one frame out and one verdict byte back.
-func SendText(peerIP string, peerPort int, transferID string, senderName string, text string) error {
+func SendText(dial Dialer, transferID string, senderName string, text string) error {
 	if len(text) == 0 {
 		return errors.New("message is empty")
 	}
@@ -144,10 +141,9 @@ func SendText(peerIP string, peerPort int, transferID string, senderName string,
 		return fmt.Errorf("message is too long (max %d KB)", MaxTextBytes/1024)
 	}
 
-	addr := net.JoinHostPort(peerIP, strconv.Itoa(peerPort))
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	conn, err := dial()
 	if err != nil {
-		return fmt.Errorf("failed to dial peer: %w", err)
+		return fmt.Errorf("failed to reach peer: %w", err)
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(10 * time.Second))

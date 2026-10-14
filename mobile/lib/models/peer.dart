@@ -20,12 +20,18 @@ class Peer {
   /// OS identifier: "linux" | "android" | "darwin" | "windows" | "unknown"
   final String os;
 
+  /// How the peer is reachable: 'direct' (same LAN) or 'relay'.
+  final String via;
+
+  bool get viaRelay => via == 'relay';
+
   const Peer({
     required this.id,
     required this.deviceName,
     required this.ipAddress,
     required this.port,
     required this.os,
+    this.via = 'direct',
   });
 
   factory Peer.fromJson(Map<String, dynamic> json) => Peer(
@@ -34,6 +40,7 @@ class Peer {
         ipAddress: json['ipAddress'] as String,
         port: json['port'] as int,
         os: json['os'] as String,
+        via: json['via'] as String? ?? 'direct',
       );
 
   Map<String, dynamic> toJson() => {
@@ -42,6 +49,7 @@ class Peer {
         'ipAddress': ipAddress,
         'port': port,
         'os': os,
+        'via': via,
       };
 
   @override

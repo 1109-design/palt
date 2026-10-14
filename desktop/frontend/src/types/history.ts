@@ -21,4 +21,6 @@ export interface HistoryEntry {
   text?: string;
   /** Incoming text was auto-copied to the clipboard. */
   copied?: boolean;
+  /** How it travelled; absent on older entries. */
+  route?: 'direct' | 'relay';
 }

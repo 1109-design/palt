@@ -13,7 +13,10 @@ import '../providers/auto_copy_provider.dart';
 import '../providers/trust_provider.dart';
 import '../providers/history_provider.dart';
 import '../models/peer.dart';
+import '../providers/peer_provider.dart';
+import '../providers/relay_provider.dart';
 import 'discovery_service.dart';
+import 'palt_conn.dart';
 
 /// Must match MaxOfferSize / MaxTextBytes in desktop/internal/transfer/protocol.go
 const kMaxOfferBytes = 64 * 1024;
@@ -64,6 +67,9 @@ class OfferData {
   final String senderName;
   final String? text;
 
+  /// How this offer reached us ('direct' or 'relay'). Local only.
+  final String route;
+
   OfferData({
     this.action = 'offer',
     required this.transferId,
@@ -71,11 +77,12 @@ class OfferData {
     required this.totalSize,
     required this.senderName,
     this.text,
+    this.route = Route.direct,
   });
 
   bool get isText => action == 'text';
 
-  factory OfferData.fromJson(Map<String, dynamic> json) => OfferData(
+  factory OfferData.fromJson(Map<String, dynamic> json, {String route = Route.direct}) => OfferData(
         action: json['action'] ?? 'offer',
         transferId: json['transferId'],
         files: ((json['files'] as List?) ?? [])
@@ -84,6 +91,7 @@ class OfferData {
         totalSize: json['totalSize'] ?? 0,
         senderName: json['senderName'],
         text: json['text'],
+        route: route,
       );
 
   Map<String, dynamic> toJson() => {
@@ -118,6 +126,9 @@ class TransferProgress {
   final String? error;
   final String? filePath;
 
+  /// 'direct' or 'relay'; null until the connection is up.
+  final String? route;
+
   const TransferProgress(
     this.transferId,
     this.written,
@@ -129,6 +140,7 @@ class TransferProgress {
     this.status = TransferStatus.transferring,
     this.error,
     this.filePath,
+    this.route,
   });
 }
 
@@ -176,7 +188,7 @@ class TransferService {
     try {
       _serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, 9876);
       print('[TransferService] Server listening on port 9876');
-      _serverSocket!.listen(_handleIncomingConnection);
+      _serverSocket!.listen((socket) => handleConnection(SocketConn(socket)));
     } catch (e) {
       print('[TransferService] Error starting server: $e');
     }
@@ -187,10 +199,12 @@ class TransferService {
   }
 
   // Parses length-prefixed JSON handshake and streams multiple files sequentially
-  Future<void> _handleIncomingConnection(Socket socket) async {
-    print('[TransferService] Got connection from ${socket.remoteAddress.address}');
-    
-    final iterator = StreamIterator(socket);
+  // [conn] is a LAN socket or an encrypted relay pipe.
+  Future<void> handleConnection(PaltConn socket) async {
+    print('[TransferService] Got connection from ${socket.remoteLabel}');
+    final route = socket.route;
+
+    final iterator = StreamIterator(socket.input);
     BytesBuilder buffer = BytesBuilder();
     int expectedLength = -1;
     OfferData? offer;
@@ -215,7 +229,7 @@ class TransferService {
           // We have the full JSON
           final jsonBytes = bytes.sublist(4, 4 + expectedLength);
           final jsonStr = utf8.decode(jsonBytes);
-          offer = OfferData.fromJson(jsonDecode(jsonStr));
+          offer = OfferData.fromJson(jsonDecode(jsonStr), route: route);
 
           // Text messages ride inside the handshake; ack and we're done.
           if (offer.isText) {
@@ -236,7 +250,7 @@ class TransferService {
 
           if (!accepted) {
             socket.add([0x00]); // Reject
-            socket.destroy();
+            await socket.close();
             return;
           }
 
@@ -333,7 +347,8 @@ class TransferService {
                 TransferProgress(offer.transferId, fileWritten, fileMeta.size, 
                                  currentFileName: fileMeta.name,
                                  speed: speed,
-                                 sentItems: i+1, totalItems: totalFiles);
+                                 sentItems: i+1, totalItems: totalFiles,
+                                 route: route);
           }
         }
 
@@ -356,6 +371,7 @@ class TransferService {
           timestamp: DateTime.now(),
           status: 'completed',
           durationMillis: stopwatch.elapsedMilliseconds,
+          route: route,
         );
         ref.read(historyProvider.notifier).addEntry(entry);
       }
@@ -363,7 +379,8 @@ class TransferService {
       ref.read(transferProgressProvider.notifier).state = 
           TransferProgress(offer.transferId, totalWritten, offer.totalSize, 
                            sentItems: totalFiles, totalItems: totalFiles,
-                           status: TransferStatus.completed, filePath: dirPath);
+                           status: TransferStatus.completed, filePath: dirPath,
+                           route: route);
 
       Future.delayed(const Duration(seconds: 5), () {
         final current = ref.read(transferProgressProvider);
@@ -387,6 +404,7 @@ class TransferService {
             status: 'error',
             errorMessage: e.toString(),
             durationMillis: 0,
+            route: route,
           );
           ref.read(historyProvider.notifier).addEntry(entry);
         }
@@ -399,7 +417,7 @@ class TransferService {
     }
   }
 
-  Future<void> _receiveText(Socket socket, OfferData offer) async {
+  Future<void> _receiveText(PaltConn socket, OfferData offer) async {
     final text = offer.text ?? '';
     final ok = text.isNotEmpty && utf8.encode(text).length <= kMaxTextBytes;
     socket.add([ok ? 0x01 : 0x00]);
@@ -432,9 +450,44 @@ class TransferService {
           kind: 'text',
           text: text,
           copied: copied,
+          route: offer.route,
         ));
     ref.read(incomingTextProvider.notifier).state =
         IncomingText(offer.senderName, text, copied: copied);
+  }
+
+  // ── Route choice ────────────────────────────────────────────────────────────
+
+  /// Connects to [peer], preferring the LAN; falls back to the relay when the
+  /// peer is connected there. Returns the connection (its route says which).
+  Future<PaltConn> _dial(Peer peer) async {
+    Object? directError;
+    if (!peer.viaRelay) {
+      try {
+        return SocketConn(await Socket.connect(peer.ipAddress, peer.port,
+            timeout: const Duration(seconds: 4)));
+      } catch (e) {
+        directError = e;
+      }
+    } else {
+      // It may have shown up on the LAN since the list was built.
+      final lan = ref.read(lanPeerListProvider).valueOrNull ?? const <Peer>[];
+      for (final p in lan.where((p) => p.deviceName == peer.deviceName)) {
+        try {
+          return SocketConn(await Socket.connect(p.ipAddress, p.port,
+              timeout: const Duration(seconds: 4)));
+        } catch (_) {}
+      }
+    }
+
+    final relay = await ref.read(relayClientProvider.future);
+    final rp = relay?.peerByName(peer.deviceName);
+    if (relay != null && rp != null) {
+      print('[TransferClient] Sending to ${peer.deviceName} via relay');
+      return relay.dial(rp.id);
+    }
+    if (directError != null) throw directError;
+    throw '${peer.deviceName} is not connected to the relay';
   }
 
   // ── Send Text ───────────────────────────────────────────────────────────────
@@ -445,6 +498,7 @@ class TransferService {
     final transferId = _uuid.v4();
     final bytes = utf8.encode(text).length;
     String? error;
+    String? route;
 
     try {
       if (text.trim().isEmpty) throw 'Message is empty';
@@ -452,8 +506,8 @@ class TransferService {
         throw 'Message is too long (max ${kMaxTextBytes ~/ 1024} KB)';
       }
 
-      final socket = await Socket.connect(peer.ipAddress, peer.port,
-          timeout: const Duration(seconds: 5));
+      final socket = await _dial(peer);
+      route = socket.route;
       try {
         final offer = OfferData(
           action: 'text',
@@ -471,7 +525,7 @@ class TransferService {
         await socket.flush();
 
         final verdict = Completer<int>();
-        socket.listen(
+        socket.input.listen(
           (data) {
             if (!verdict.isCompleted && data.isNotEmpty) verdict.complete(data[0]);
           },
@@ -512,6 +566,7 @@ class TransferService {
           durationMillis: 0,
           kind: 'text',
           text: text,
+          route: route,
         ));
 
     if (error != null) throw error;
@@ -540,10 +595,12 @@ class TransferService {
         TransferProgress(transferId, 0, totalSize, sentItems: 0, totalItems: totalFiles);
 
     List<HistoryFile> hFiles = metaFiles.map((m) => HistoryFile(name: m.name, size: m.size)).toList();
+    String? route;
 
     try {
-      final socket = await Socket.connect(peer.ipAddress, peer.port, timeout: const Duration(seconds: 5));
-      print('[TransferClient] Connected to ${peer.ipAddress}:${peer.port}');
+      final socket = await _dial(peer);
+      route = socket.route;
+      print('[TransferClient] Connected to ${socket.remoteLabel} ($route)');
       stopwatch.start();
 
       final offer = OfferData(
@@ -565,11 +622,12 @@ class TransferService {
         sentItems: 0,
         totalItems: totalFiles,
         status: TransferStatus.waiting,
+        route: route,
       );
 
       // Wait for 1-byte verdict
       final completer = Completer<bool>();
-      socket.listen(
+      socket.input.listen(
         (data) {
           if (!completer.isCompleted && data.isNotEmpty) {
             completer.complete(data[0] == 0x01);
@@ -588,7 +646,9 @@ class TransferService {
           totalSize,
           status: TransferStatus.error,
           error: 'Transfer rejected by peer',
+          route: route,
         );
+        socket.destroy();
         return;
       }
 
@@ -613,7 +673,8 @@ class TransferService {
                   TransferProgress(transferId, fileWritten, fileSize, 
                                    currentFileName: metaFiles[i].name,
                                    speed: speed,
-                                   sentItems: i+1, totalItems: totalFiles);
+                                   sentItems: i+1, totalItems: totalFiles,
+                                   route: route);
           }
           return chunk;
         });
@@ -638,6 +699,7 @@ class TransferService {
           timestamp: DateTime.now(),
           status: 'completed',
           durationMillis: stopwatch.elapsedMilliseconds,
+          route: route,
         );
         ref.read(historyProvider.notifier).addEntry(entry);
       }
@@ -645,7 +707,7 @@ class TransferService {
       ref.read(transferProgressProvider.notifier).state = 
           TransferProgress(transferId, totalSize, totalSize, 
                            sentItems: totalFiles, totalItems: totalFiles, 
-                           status: TransferStatus.completed);
+                           status: TransferStatus.completed, route: route);
           
       Future.delayed(const Duration(seconds: 5), () {
         final current = ref.read(transferProgressProvider);
@@ -669,6 +731,7 @@ class TransferService {
           status: 'error',
           errorMessage: e.toString(),
           durationMillis: stopwatch.elapsedMilliseconds,
+          route: route,
         );
         ref.read(historyProvider.notifier).addEntry(entry);
       }

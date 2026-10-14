@@ -18,6 +18,10 @@ export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function GenerateRelayCode(arg1) {
+  return window['go']['main']['App']['GenerateRelayCode'](arg1);
+}
+
 export function GetAliases() {
   return window['go']['main']['App']['GetAliases']();
 }
@@ -44,6 +48,10 @@ export function GetLocalDevice() {
 
 export function GetPeers() {
   return window['go']['main']['App']['GetPeers']();
+}
+
+export function GetRelayStatus() {
+  return window['go']['main']['App']['GetRelayStatus']();
 }
 
 export function GetTrustedDevices() {
@@ -92,4 +100,8 @@ export function SetAlias(arg1, arg2) {
 
 export function SetAutoCopy(arg1, arg2) {
   return window['go']['main']['App']['SetAutoCopy'](arg1, arg2);
+}
+
+export function SetRelayCode(arg1) {
+  return window['go']['main']['App']['SetRelayCode'](arg1);
 }

@@ -14,6 +14,8 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import { beacon, fonts } from '../theme/theme';
+import type { Route } from '../types/peer';
+import RouteBadge from './RouteBadge';
 
 export interface TransferProgress {
   transferId: string;
@@ -24,6 +26,8 @@ export interface TransferProgress {
   currentFile?: string;
   speed?: number;
   status?: 'transferring' | 'completed' | 'error';
+  /** How the bytes travel; unknown until the connection is up. */
+  route?: Route;
 }
 
 interface ProgressSnackProps {
@@ -133,6 +137,7 @@ export const ProgressSnack: React.FC<ProgressSnackProps> = ({
               </Typography>
             </Box>
 
+            {progress?.route && !isError && <RouteBadge route={progress.route} />}
             {isCompleted && (
               <Button
                 size="small"

@@ -44,6 +44,7 @@ Full spec in [`design.md`](design.md).
 - **Drag & Drop:** Drop files straight onto a device card on desktop to send them.
 - **Inbound Safety:** Manual accept/reject handshake on every incoming transfer.
 - **Native Downloads:** Received files land directly in the Android public `Downloads` directory.
+- **Remote via Relay (optional):** Not on the same network? Point PALT at your own [`palt-relay`](relay/) server. Transfers are end-to-end encrypted and never stored; same-network transfers still go direct. Each device and transfer is tagged **DIRECT** or **RELAY**.
 
 ---
 
@@ -53,6 +54,7 @@ Full spec in [`design.md`](design.md).
 palt/
 ├── .github/workflows/     # CI/CD — .apk and .deb release automation
 ├── assets/                # Shared assets (icon.svg source)
+├── relay/                 # palt-relay server (optional, for remote transfers)
 ├── desktop/               # Wails Linux app
 │   ├── main.go
 │   ├── app.go             # Wails bindings

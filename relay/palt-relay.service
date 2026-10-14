@@ -1,0 +1,20 @@
+[Unit]
+Description=PALT relay (blind encrypted byte pipe between PALT devices)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/palt-relay -addr :9877
+Restart=always
+RestartSec=2
+DynamicUser=yes
+# Nothing is ever written to disk; lock the filesystem down.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

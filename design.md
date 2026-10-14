@@ -16,6 +16,7 @@ colors:
   on-accent: "#201503"
   ok: "#53D993"
   danger: "#FF7B72"
+  relay: "#7AA2FF"
 typography:
   display:
     fontFamily: Bricolage Grotesque
@@ -77,6 +78,8 @@ Dark, hue-rich ink — never pure black. One interactive accent.
   per view.
 - **ok (`#53D993`):** Completed transfers and incoming direction only.
 - **danger (`#FF7B72`):** Failures and destructive actions only.
+- **relay (`#7AA2FF`):** Route tag for peers/transfers going through the relay
+  server. Direct (same network) routes use text-secondary — direct is the norm.
 
 ## Typography
 

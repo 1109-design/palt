@@ -20,7 +20,7 @@ type Server struct {
 	OnOffer func(meta Metadata) (accept bool)
 
 	// OnProgress provides real-time chunk progress back to the UI.
-	OnProgress func(transferID string, written int64, total int64, sentItems int, totalItems int, currentFile string)
+	OnProgress func(meta Metadata, written int64, total int64, sentItems int, totalItems int, currentFile string)
 
 	// OnText is called when a text message arrives. Messages are delivered
 	// without an accept prompt.
@@ -76,11 +76,13 @@ func (s *Server) acceptLoop() {
 			continue
 		}
 
-		go s.handleConnection(conn)
+		go s.HandleConn(conn, RouteDirect)
 	}
 }
 
-func (s *Server) handleConnection(conn net.Conn) {
+// HandleConn serves one PALT exchange on conn, which may be a LAN socket or
+// an encrypted relay pipe. route records which, for the UI and history.
+func (s *Server) HandleConn(conn net.Conn, route string) {
 	defer conn.Close()
 
 	// 1. Read the HTTP-like JSON Handshake Frame
@@ -89,6 +91,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		log.Printf("[TransferServer] Failed to read offer protocol: %v\n", err)
 		return
 	}
+	meta.Route = route
 
 	if meta.Action == ActionText {
 		if len(meta.Text) == 0 || len(meta.Text) > MaxTextBytes {
@@ -154,7 +157,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			log.Printf("[TransferServer] Failed to create output file %s: %v\n", savePath, err)
 			return
 		}
-		
+
 		tracker := &TrackingWriter{
 			Out:           file,
 			Total:         meta.TotalSize,
@@ -162,7 +165,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			BroadcastStep: meta.TotalSize / 100,
 			OnProgress: func(written int64, total int64) {
 				if s.OnProgress != nil {
-					s.OnProgress(meta.TransferID, written, total, i+1, totalFiles, f.Name)
+					s.OnProgress(*meta, written, total, i+1, totalFiles, f.Name)
 				}
 			},
 		}
@@ -187,7 +190,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		log.Printf("[TransferServer] Streamed %s completely (%d bytes).\n", f.Name, copied)
 	}
-	
+
 	log.Printf("[TransferServer] Transfer %s completely finished across %d files.\n", meta.TransferID, totalFiles)
 	if s.OnComplete != nil {
 		s.OnComplete(*meta, savedPaths)

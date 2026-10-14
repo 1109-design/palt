@@ -30,6 +30,8 @@ import ChangelogDialog from './components/ChangelogDialog';
 import HistoryView from './components/HistoryView';
 import RenameDialog from './components/RenameDialog';
 import DevicePage from './components/DevicePage';
+import RelayDialog from './components/RelayDialog';
+import type { RelayStatus } from './components/RelayDialog';
 import { beacon, fonts } from './theme/theme';
 
 import type { Peer } from './types/peer';
@@ -67,6 +69,9 @@ const ReadClipboard        = isWails
   : () => navigator.clipboard.readText();
 const OpenHistoryFile      = isWails ? (WailsApp as any).OpenHistoryFile      : MockApp.OpenHistoryFile;
 const RevealHistoryFile    = isWails ? (WailsApp as any).RevealHistoryFile    : MockApp.RevealHistoryFile;
+const GetRelayStatus       = isWails ? (WailsApp as any).GetRelayStatus       : MockApp.GetRelayStatus;
+const SetRelayCode         = isWails ? (WailsApp as any).SetRelayCode         : MockApp.SetRelayCode;
+const GenerateRelayCode    = isWails ? (WailsApp as any).GenerateRelayCode    : MockApp.GenerateRelayCode;
 const SetAlias             = isWails ? (WailsApp as any).SetAlias             : (name: string, alias: string) => { console.log(`Mock: Set ${name} alias to ${alias}`); return Promise.resolve(); };
 
 /** How often (ms) to auto-refresh the peer list */
@@ -102,6 +107,8 @@ const App: React.FC = () => {
   const [openPeer, setOpenPeer] = useState<Peer | null>(null);
   const [trusted, setTrusted] = useState<string[]>([]);
   const [autoCopy, setAutoCopy] = useState<string[]>([]);
+  const [relayStatus, setRelayStatus] = useState<RelayStatus | null>(null);
+  const [relayOpen, setRelayOpen] = useState(false);
 
   // ── Update state ───────────────────────────────────────────────────────────
   const [appVersion, setAppVersion] = useState('');
@@ -216,6 +223,29 @@ const App: React.FC = () => {
     fetchDeviceSettings();
   }, [fetchDeviceSettings]);
 
+  const fetchRelayStatus = useCallback(async () => {
+    try {
+      setRelayStatus(await GetRelayStatus());
+    } catch (err) {
+      console.error('[App] GetRelayStatus failed:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRelayStatus();
+  }, [fetchRelayStatus]);
+
+  const handleGenerateRelayCode = useCallback(async (addr: string) => {
+    const code = await GenerateRelayCode(addr);
+    await fetchRelayStatus();
+    return code;
+  }, [fetchRelayStatus]);
+
+  const handleSetRelayCode = useCallback(async (code: string) => {
+    await SetRelayCode(code);
+    await fetchRelayStatus();
+  }, [fetchRelayStatus]);
+
   // Initial load
   useEffect(() => {
     fetchLocalDevice();
@@ -250,11 +280,12 @@ const App: React.FC = () => {
     });
 
     win.runtime.EventsOn('transfer_started', (data: any) => {
-      setProgress({ transferId: data.transferId, written: 0, total: 100 });
+      setTransferError(null);
+      setProgress({ transferId: data.transferId, written: 0, total: 100, route: data.route || undefined });
     });
 
     win.runtime.EventsOn('transfer_progress', (data: TransferProgress) => {
-      setProgress(data);
+      setProgress(prev => ({ ...data, route: data.route || (prev?.transferId === data.transferId ? prev.route : undefined) }));
     });
 
     win.runtime.EventsOn('transfer_complete', () => {
@@ -267,6 +298,10 @@ const App: React.FC = () => {
     win.runtime.EventsOn('transfer_error', (data: any) => {
       setProgress(null);
       setTransferError(data.error);
+    });
+
+    win.runtime.EventsOn('relay_status', (data: RelayStatus) => {
+      setRelayStatus(data);
     });
 
     win.runtime.EventsOn('history_updated', (data: HistoryEntry[]) => {
@@ -289,6 +324,7 @@ const App: React.FC = () => {
       win.runtime.EventsOff('transfer_complete');
       win.runtime.EventsOff('transfer_error');
       win.runtime.EventsOff('text_received');
+      win.runtime.EventsOff('relay_status');
     };
   }, []);
 
@@ -514,6 +550,16 @@ const App: React.FC = () => {
         updateAvailable={!!updateInfo?.isNewer}
         latestVersion={updateInfo?.latestVersion}
         onUpdateClick={() => setUpdateDialogOpen(true)}
+        relayStatus={relayStatus}
+        onRelayClick={() => setRelayOpen(true)}
+      />
+
+      <RelayDialog
+        open={relayOpen}
+        status={relayStatus}
+        onClose={() => setRelayOpen(false)}
+        onGenerate={handleGenerateRelayCode}
+        onSetCode={handleSetRelayCode}
       />
 
       {openPeer ? (

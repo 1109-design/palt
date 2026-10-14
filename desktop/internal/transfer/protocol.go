@@ -3,6 +3,9 @@ package transfer
 import (
 	"encoding/json"
 	"io"
+	"net"
+	"strconv"
+	"time"
 )
 
 // Port defines the default TCP port for the PALT file transfer protocol.
@@ -41,6 +44,26 @@ type Metadata struct {
 	TotalSize  int64      `json:"totalSize"`
 	SenderName string     `json:"senderName"`
 	Text       string     `json:"text,omitempty"` // only set for ActionText
+
+	// Route is how this connection reached us ("direct" or "relay"). It is
+	// set locally by the receiver, never trusted from the wire.
+	Route string `json:"route,omitempty"`
+}
+
+// Routes a transfer can take.
+const (
+	RouteDirect = "direct"
+	RouteRelay  = "relay"
+)
+
+// Dialer opens a connection to the peer a transfer is going to.
+type Dialer func() (net.Conn, error)
+
+// DirectDialer dials a peer on the local network.
+func DirectDialer(ip string, port int, timeout time.Duration) Dialer {
+	return func() (net.Conn, error) {
+		return net.DialTimeout("tcp", net.JoinHostPort(ip, strconv.Itoa(port)), timeout)
+	}
 }
 
 // ReadOffer parses the exact 4-byte length header and subsequent JSON payload.

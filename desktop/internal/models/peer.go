@@ -18,4 +18,7 @@ type Peer struct {
 
 	// OS describes the operating system of the peer (e.g., "linux", "android", "windows").
 	OS string `json:"os"`
+
+	// Via is how this peer is reachable: "direct" (same LAN) or "relay".
+	Via string `json:"via"`
 }

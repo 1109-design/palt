@@ -18,6 +18,8 @@ import {
 import { alpha } from '@mui/material/styles';
 import SouthWestIcon from '@mui/icons-material/SouthWest';
 import { beacon, fonts } from '../theme/theme';
+import type { Route } from '../types/peer';
+import RouteBadge from './RouteBadge';
 
 export interface FileMeta {
   name: string;
@@ -29,6 +31,7 @@ export interface OfferData {
   files: FileMeta[];
   totalSize: number;
   senderName: string;
+  route?: Route;
 }
 
 interface TransferDialogProps {
@@ -89,9 +92,12 @@ export const TransferDialog: React.FC<TransferDialogProps> = ({
             <SouthWestIcon sx={{ fontSize: 20 }} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>
-              Incoming transfer
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.4 }}>
+                Incoming transfer
+              </Typography>
+              <RouteBadge route={offer.route} />
+            </Box>
             <Typography
               noWrap
               sx={{

@@ -35,6 +35,9 @@ class HistoryEntry {
   /// Incoming text was auto-copied to the clipboard.
   final bool copied;
 
+  /// 'direct' or 'relay'; null on older entries.
+  final String? route;
+
   bool get isText => kind == 'text';
 
   HistoryEntry({
@@ -50,6 +53,7 @@ class HistoryEntry {
     this.kind = 'files',
     this.text,
     this.copied = false,
+    this.route,
   });
 
   factory HistoryEntry.fromJson(Map<String, dynamic> json) => HistoryEntry(
@@ -65,6 +69,7 @@ class HistoryEntry {
         kind: json['kind'] ?? 'files',
         text: json['text'],
         copied: json['copied'] ?? false,
+        route: json['route'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -80,5 +85,6 @@ class HistoryEntry {
         'kind': kind,
         if (text != null) 'text': text,
         if (copied) 'copied': true,
+        if (route != null) 'route': route,
       };
 }

@@ -20,7 +20,10 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import { alpha } from '@mui/material/styles';
+import PublicIcon from '@mui/icons-material/Public';
 import UpdateBanner from './UpdateBanner';
+import { relayStatusColor } from './RelayDialog';
+import type { RelayStatus } from './RelayDialog';
 import { beacon, fonts } from '../theme/theme';
 
 interface TopBarProps {
@@ -32,6 +35,8 @@ interface TopBarProps {
   updateAvailable?: boolean;
   latestVersion?: string;
   onUpdateClick?: () => void;
+  relayStatus?: RelayStatus | null;
+  onRelayClick?: () => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({
@@ -43,6 +48,8 @@ const TopBar: React.FC<TopBarProps> = ({
   updateAvailable = false,
   latestVersion = '',
   onUpdateClick,
+  relayStatus,
+  onRelayClick,
 }) => {
   return (
     <AppBar
@@ -143,7 +150,7 @@ const TopBar: React.FC<TopBarProps> = ({
           )}
 
           {/* Live device count readout */}
-          <Tooltip title={`${peerCount} device${peerCount !== 1 ? 's' : ''} on network`}>
+          <Tooltip title={`${peerCount} device${peerCount !== 1 ? 's' : ''} reachable`}>
             <Box
               sx={{
                 display: 'flex',
@@ -177,6 +184,35 @@ const TopBar: React.FC<TopBarProps> = ({
               </Typography>
             </Box>
           </Tooltip>
+
+          {onRelayClick && (
+            <Tooltip title={`Relay server — ${relayStatus?.configured ? relayStatus.status : 'not set up'}`}>
+              <IconButton
+                id="btn-relay"
+                onClick={onRelayClick}
+                aria-label="relay server settings"
+                sx={{
+                  position: 'relative',
+                  color: relayStatus?.status === 'online' ? beacon.relay : beacon.textSecondary,
+                  '&:hover': { color: beacon.text, backgroundColor: alpha(beacon.text, 0.06) },
+                }}
+              >
+                <PublicIcon sx={{ fontSize: 20 }} />
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 9,
+                    right: 9,
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    border: `1.5px solid ${beacon.bg}`,
+                    backgroundColor: relayStatusColor(relayStatus),
+                  }}
+                />
+              </IconButton>
+            </Tooltip>
+          )}
 
           <Tooltip title="Scan again">
             <span>

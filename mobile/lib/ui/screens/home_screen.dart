@@ -22,6 +22,8 @@ import '../widgets/changelog_dialog.dart';
 import '../widgets/beacon_pulse.dart';
 import '../widgets/local_device_card.dart';
 import '../widgets/peer_card.dart';
+import '../widgets/route_badge.dart';
+import 'relay_screen.dart';
 import '../widgets/update_banner.dart';
 import '../../providers/update_visibility_provider.dart';
 import '../../models/peer.dart';
@@ -201,6 +203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     .read(updateBannerVisibleProvider.notifier)
                     .state = true,
               ),
+            const RelayButton(),
             IconButton(
               icon: const Icon(Icons.history_rounded, color: kTextSecondary),
               tooltip: 'History',
@@ -409,6 +412,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
+              if (progress.route != null && !isError) ...[
+                const SizedBox(width: 8),
+                RouteBadge(route: progress.route),
+              ],
               if (isCompleted && progress.filePath != null)
                 TextButton.icon(
                   onPressed: () {
@@ -559,7 +566,13 @@ class _OfferSheetState extends State<_OfferSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('INCOMING TRANSFER', style: overline()),
+                      Row(
+                        children: [
+                          Text('INCOMING TRANSFER', style: overline()),
+                          const SizedBox(width: 8),
+                          RouteBadge(route: offer.route),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         offer.senderName,

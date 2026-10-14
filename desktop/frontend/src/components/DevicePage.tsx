@@ -32,6 +32,7 @@ import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
+import RouteBadge, { routeLabel } from './RouteBadge';
 
 /** Must match MaxTextBytes in internal/transfer/protocol.go */
 const MAX_TEXT_BYTES = 16 * 1024;
@@ -219,6 +220,13 @@ const Bubble: React.FC<{
         <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: beacon.textFaint }}>
           {formatTime(entry.timestamp)}
         </Typography>
+        {entry.route && (
+          <Typography
+            sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: entry.route === 'relay' ? beacon.relay : beacon.textFaint }}
+          >
+            · {routeLabel(entry.route)}
+          </Typography>
+        )}
         {isText && (
           <Tooltip title={copied ? 'Copied' : 'Copy text'}>
             <IconButton
@@ -408,8 +416,9 @@ const DevicePage: React.FC<DevicePageProps> = ({
                   flexShrink: 0,
                 }}
               />
+              {online && <RouteBadge route={peer.via} />}
               <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary }} noWrap>
-                {online ? `${peer.ipAddress}:${peer.port}` : 'offline'}
+                {!online ? 'offline' : peer.via === 'relay' ? 'through relay server' : `${peer.ipAddress}:${peer.port}`}
               </Typography>
               <Typography sx={{ fontSize: '0.74rem', color: beacon.textFaint }} noWrap>
                 · {osInfo.label}

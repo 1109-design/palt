@@ -1,5 +1,27 @@
 export namespace main {
 	
+	export class RelayStatus {
+	    configured: boolean;
+	    status: string;
+	    detail: string;
+	    server: string;
+	    code: string;
+	    peers: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RelayStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.status = source["status"];
+	        this.detail = source["detail"];
+	        this.server = source["server"];
+	        this.code = source["code"];
+	        this.peers = source["peers"];
+	    }
+	}
 	export class UpdateInfo {
 	    isNewer: boolean;
 	    latestVersion: string;
@@ -53,6 +75,7 @@ export namespace models {
 	    kind?: string;
 	    text?: string;
 	    copied?: boolean;
+	    route?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new HistoryEntry(source);
@@ -72,6 +95,7 @@ export namespace models {
 	        this.kind = source["kind"];
 	        this.text = source["text"];
 	        this.copied = source["copied"];
+	        this.route = source["route"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -99,6 +123,7 @@ export namespace models {
 	    ipAddress: string;
 	    port: number;
 	    os: string;
+	    via: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Peer(source);
@@ -111,6 +136,7 @@ export namespace models {
 	        this.ipAddress = source["ipAddress"];
 	        this.port = source["port"];
 	        this.os = source["os"];
+	        this.via = source["via"];
 	    }
 	}
 

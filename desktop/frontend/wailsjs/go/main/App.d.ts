@@ -11,6 +11,8 @@ export function CheckForUpdate():Promise<main.UpdateInfo>;
 
 export function ClearHistory():Promise<void>;
 
+export function GenerateRelayCode(arg1:string):Promise<string>;
+
 export function GetAliases():Promise<Record<string, string>>;
 
 export function GetAppVersion():Promise<string>;
@@ -24,6 +26,8 @@ export function GetLastSeenVersion():Promise<string>;
 export function GetLocalDevice():Promise<models.Peer>;
 
 export function GetPeers():Promise<Array<models.Peer>>;
+
+export function GetRelayStatus():Promise<main.RelayStatus>;
 
 export function GetTrustedDevices():Promise<Array<string>>;
 
@@ -48,3 +52,5 @@ export function SendText(arg1:string,arg2:number,arg3:string,arg4:string):Promis
 export function SetAlias(arg1:string,arg2:string):Promise<void>;
 
 export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetRelayCode(arg1:string):Promise<void>;

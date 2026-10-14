@@ -26,6 +26,7 @@ import '../../services/transfer_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/os_icons.dart';
 import '../widgets/peer_card.dart';
+import '../widgets/route_badge.dart';
 
 /// Broadcast name of the device whose screen is open, so the home screen can
 /// skip toasting messages that are already visible in the thread.
@@ -229,9 +230,17 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                         ),
                       ),
                       const SizedBox(width: 6),
+                      if (online) ...[
+                        RouteBadge(route: peer.via),
+                        const SizedBox(width: 6),
+                      ],
                       Flexible(
                         child: Text(
-                          online ? peer.ipAddress : 'offline',
+                          !online
+                              ? 'offline'
+                              : peer.viaRelay
+                                  ? 'through relay'
+                                  : peer.ipAddress,
                           style: mono(fontSize: 11),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -338,6 +347,7 @@ List<HistoryEntry> _groupTransfers(List<HistoryEntry> entries) {
         status: failed.isEmpty ? 'completed' : 'error',
         errorMessage: failed.isEmpty ? null : failed.first.errorMessage,
         durationMillis: group.first.durationMillis,
+        route: group.first.route,
       ));
     }
     i = j;
@@ -528,6 +538,11 @@ class _Bubble extends StatelessWidget {
                 ],
                 Text(_formatTime(entry.timestamp),
                     style: mono(fontSize: 10.5, color: kTextFaint)),
+                if (entry.route != null)
+                  Text(' · ${routeLabel(entry.route)}',
+                      style: mono(
+                          fontSize: 10.5,
+                          color: entry.route == 'relay' ? kRelay : kTextFaint)),
               ],
             ),
           ),

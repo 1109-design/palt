@@ -18,6 +18,7 @@ import type { Peer } from '../types/peer';
 import { getOsInfo } from '../utils/osHelpers';
 import { alpha } from '@mui/material/styles';
 import { beacon, fonts } from '../theme/theme';
+import RouteBadge from './RouteBadge';
 
 interface PeerCardProps {
   peer: Peer;
@@ -173,8 +174,12 @@ const PeerCard: React.FC<PeerCardProps> = ({
             {osInfo.label}
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1, minHeight: 24 }}>
+            <RouteBadge route={peer.via} />
+            {peer.via !== 'relay' && (
+            <>
             <Typography
+              noWrap
               sx={{
                 fontFamily: fonts.mono,
                 fontSize: '0.74rem',
@@ -197,6 +202,8 @@ const PeerCard: React.FC<PeerCardProps> = ({
                 )}
               </IconButton>
             </Tooltip>
+            </>
+            )}
           </Box>
         </Box>
       </Box>

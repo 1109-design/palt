@@ -15,10 +15,11 @@ type HistoryEntry struct {
 	TotalSize      int64         `json:"totalSize"`
 	Direction      string        `json:"direction"` // "incoming" or "outgoing"
 	Timestamp      time.Time     `json:"timestamp"`
-	Status         string        `json:"status"`         // "completed" or "error"
-	ErrorMessage   string        `json:"errorMessage"`   // optional
-	DurationMillis int64         `json:"durationMillis"` // how long the transfer took
-	Kind           string        `json:"kind,omitempty"` // "text" for messages; empty means files
-	Text           string        `json:"text,omitempty"` // message body when Kind == "text"
+	Status         string        `json:"status"`           // "completed" or "error"
+	ErrorMessage   string        `json:"errorMessage"`     // optional
+	DurationMillis int64         `json:"durationMillis"`   // how long the transfer took
+	Kind           string        `json:"kind,omitempty"`   // "text" for messages; empty means files
+	Text           string        `json:"text,omitempty"`   // message body when Kind == "text"
 	Copied         bool          `json:"copied,omitempty"` // incoming text was auto-copied to the clipboard
+	Route          string        `json:"route,omitempty"`  // "direct" or "relay"; empty on older entries
 }

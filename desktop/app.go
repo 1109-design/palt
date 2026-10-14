@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,12 +32,13 @@ import (
 
 	"palt/internal/discovery"
 	"palt/internal/models"
+	"palt/internal/relay"
 	"palt/internal/transfer"
 )
 
 // AppVersion is the canonical version string for this build.
 // Bump this manually to match the git tag when cutting a release.
-const AppVersion = "v1.3.1"
+const AppVersion = "v1.4.0"
 
 // UpdateInfo is returned by CheckForUpdate and passed to the React frontend.
 type UpdateInfo struct {
@@ -61,6 +63,8 @@ type App struct {
 	discovery *discovery.Service
 
 	transferServer *transfer.Server
+	relay          *relay.Client
+	relayMu        sync.Mutex
 	pendingOffers  map[string]chan OfferResolution
 	startTime      map[string]time.Time
 	offersMu       sync.Mutex
@@ -87,7 +91,7 @@ func (a *App) startup(ctx context.Context) {
 	// Detect the host OS so peers can show a platform icon.
 	hostOS := runtime.GOOS // "linux", "darwin", "windows"
 
-	svc, err := discovery.NewService(ctx, hostname, paltPort, hostOS)
+	svc, err := discovery.NewService(ctx, hostname, paltPort, hostOS, a.emitPeers)
 	if err != nil {
 		log.Fatalf("[app] Could not start discovery service: %v", err)
 	}
@@ -148,6 +152,7 @@ func (a *App) startup(ctx context.Context) {
 			Status:         "completed",
 			DurationMillis: duration.Milliseconds(),
 			Files:          a.toHistoryFiles(meta.Files, savedPaths),
+			Route:          meta.Route,
 		})
 	}
 
@@ -172,6 +177,7 @@ func (a *App) startup(ctx context.Context) {
 			ErrorMessage:   err.Error(),
 			DurationMillis: duration.Milliseconds(),
 			Files:          a.toHistoryFiles(meta.Files, savedPaths),
+			Route:          meta.Route,
 		})
 	}
 
@@ -198,15 +204,18 @@ func (a *App) startup(ctx context.Context) {
 			Kind:        "text",
 			Text:        meta.Text,
 			Copied:      copied,
+			Route:       meta.Route,
 		})
 		wailsruntime.EventsEmit(a.ctx, "text_received", map[string]interface{}{
 			"senderName": meta.SenderName,
 			"text":       meta.Text,
 			"copied":     copied,
+			"route":      meta.Route,
 		})
 	}
 
-	a.transferServer.OnProgress = func(transferID string, written int64, total int64, sentItems int, totalItems int, currentFile string) {
+	a.transferServer.OnProgress = func(meta transfer.Metadata, written int64, total int64, sentItems int, totalItems int, currentFile string) {
+		transferID := meta.TransferID
 		a.offersMu.Lock()
 		start, ok := a.startTime[transferID]
 		a.offersMu.Unlock()
@@ -227,12 +236,15 @@ func (a *App) startup(ctx context.Context) {
 			"totalItems":  totalItems,
 			"currentFile": currentFile,
 			"speed":       speed,
+			"route":       meta.Route,
 		})
 	}
 
 	if err := a.transferServer.Start(); err != nil {
 		log.Fatalf("[app] Could not start transfer TCP server: %v", err)
 	}
+
+	a.startRelay()
 
 	log.Println("[app] PALT started successfully.")
 }
@@ -245,6 +257,7 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.transferServer != nil {
 		a.transferServer.Stop()
 	}
+	a.stopRelay()
 }
 
 // ─── Wails Bindings (callable from React) ────────────────────────────────────
@@ -404,12 +417,10 @@ func compareVersions(latest, current string) bool {
 	return false
 }
 
-// GetPeers returns the current list of discovered PALT peers on the LAN.
+// GetPeers returns the peers on the LAN plus those only reachable through
+// the relay. Each carries Via so the UI can show the route.
 func (a *App) GetPeers() []models.Peer {
-	if a.discovery == nil {
-		return []models.Peer{}
-	}
-	return a.discovery.GetPeers()
+	return a.mergedPeers()
 }
 
 // GetLocalDevice returns metadata about this device for display in the UI.
@@ -651,7 +662,13 @@ func (a *App) SendText(peerIP string, peerPort int, peerName string, text string
 	transferID := generateTransferID()
 	hostname, _ := os.Hostname()
 
-	err := transfer.SendText(peerIP, peerPort, transferID, hostname, text)
+	route := ""
+	dial := func() (net.Conn, error) {
+		conn, r, err := a.dialPeer(peerIP, peerPort, peerName)
+		route = r
+		return conn, err
+	}
+	err := transfer.SendText(dial, transferID, hostname, text)
 
 	entry := models.HistoryEntry{
 		ID:          transferID,
@@ -663,6 +680,7 @@ func (a *App) SendText(peerIP string, peerPort int, peerName string, text string
 		Status:      "completed",
 		Kind:        "text",
 		Text:        text,
+		Route:       route,
 	}
 	if err != nil {
 		log.Printf("[app] SendText error: %v", err)
@@ -689,7 +707,22 @@ func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths 
 	// Run network operation async
 	go func() {
 		start := time.Now()
-		err := transfer.SendFiles(peerIP, peerPort, filePaths, transferID, hostname, func(written, total int64, sentItems, totalItems int, currentFile string) {
+		route := ""
+		dial := func() (net.Conn, error) {
+			conn, r, err := a.dialPeer(peerIP, peerPort, peerName)
+			if err == nil {
+				route = r
+				// Tell the UI which way this transfer is going.
+				wailsruntime.EventsEmit(a.ctx, "transfer_started", map[string]interface{}{
+					"transferId": transferID,
+					"senderName": hostname,
+					"direction":  "outgoing",
+					"route":      route,
+				})
+			}
+			return conn, err
+		}
+		err := transfer.SendFiles(dial, filePaths, transferID, hostname, func(written, total int64, sentItems, totalItems int, currentFile string) {
 			elapsed := time.Since(start).Seconds()
 			var speed float64 = 0
 			if elapsed > 0 {
@@ -704,6 +737,7 @@ func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths 
 				"totalItems":  totalItems,
 				"currentFile": currentFile,
 				"speed":       speed,
+				"route":       route,
 			})
 		})
 
@@ -736,6 +770,7 @@ func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths 
 				ErrorMessage:   err.Error(),
 				DurationMillis: duration.Milliseconds(),
 				Files:          hFiles,
+				Route:          route,
 			})
 		} else {
 			// Ensure it completes at 100% locally
@@ -751,6 +786,7 @@ func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths 
 				Status:         "completed",
 				DurationMillis: duration.Milliseconds(),
 				Files:          hFiles,
+				Route:          route,
 			})
 		}
 	}()
@@ -798,7 +834,7 @@ func (a *App) logHistory(entry models.HistoryEntry) {
 	if err == nil {
 		_ = os.WriteFile(file, newData, 0o644)
 	}
-	
+
 	// Notify UI a new history item is added
 	wailsruntime.EventsEmit(a.ctx, "history_updated", history)
 }
