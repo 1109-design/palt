@@ -8,10 +8,16 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 )
 
 var (
 	ErrRejected = errors.New("peer rejected the file transfer")
+
+	// ErrTextUnsupported means the peer closed the connection without a
+	// verdict, which is how PALT builds older than text support react.
+	ErrTextUnsupported = errors.New("peer does not support text messages — update PALT on that device")
 )
 
 // SendFiles connects to a peer network endpoint, handshakes the batch metadata,
@@ -125,5 +131,46 @@ func SendFiles(peerIP string, peerPort int, filePaths []string, transferID strin
 	}
 
 	log.Printf("[TransferClient] Success! Wrote all %d bytes.", totalRead)
+	return nil
+}
+
+// SendText delivers a single text message. The message rides inside the
+// handshake, so the exchange is one frame out and one verdict byte back.
+func SendText(peerIP string, peerPort int, transferID string, senderName string, text string) error {
+	if len(text) == 0 {
+		return errors.New("message is empty")
+	}
+	if len(text) > MaxTextBytes {
+		return fmt.Errorf("message is too long (max %d KB)", MaxTextBytes/1024)
+	}
+
+	addr := net.JoinHostPort(peerIP, strconv.Itoa(peerPort))
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to dial peer: %w", err)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+	meta := &Metadata{
+		Action:     ActionText,
+		TransferID: transferID,
+		SenderName: senderName,
+		Text:       text,
+	}
+	if err := WriteOffer(conn, meta); err != nil {
+		return fmt.Errorf("failed to send message: %w", err)
+	}
+
+	verdictBuf := make([]byte, 1)
+	if _, err := io.ReadFull(conn, verdictBuf); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return ErrTextUnsupported
+		}
+		return fmt.Errorf("no reply from peer: %w", err)
+	}
+	if verdictBuf[0] != ResponseAccept {
+		return errors.New("peer rejected the message")
+	}
 	return nil
 }

@@ -48,6 +48,9 @@ export namespace models {
 	    status: string;
 	    errorMessage: string;
 	    durationMillis: number;
+	    kind?: string;
+	    text?: string;
+	    copied?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new HistoryEntry(source);
@@ -64,6 +67,9 @@ export namespace models {
 	        this.status = source["status"];
 	        this.errorMessage = source["errorMessage"];
 	        this.durationMillis = source["durationMillis"];
+	        this.kind = source["kind"];
+	        this.text = source["text"];
+	        this.copied = source["copied"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

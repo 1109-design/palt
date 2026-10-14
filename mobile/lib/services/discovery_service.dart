@@ -52,7 +52,7 @@ class DiscoveryService {
   /// Starts advertising and browsing. Safe to call multiple times.
   Future<void> start() async {
     _localIp = await getLocalIpAddress();
-    _deviceName = await _fetchDeviceName();
+    _deviceName = await fetchLocalDeviceName();
     await _advertise();
     await _browse();
   }
@@ -188,19 +188,21 @@ class DiscoveryService {
   }
 
   void _log(String msg) => print('[DiscoveryService] $msg'); // ignore: avoid_print
+}
 
-  Future<String> _fetchDeviceName() async {
-    try {
-      if (Platform.isAndroid) {
-        final info = await DeviceInfoPlugin().androidInfo;
-        return info.model;
-      } else if (Platform.isIOS) {
-        final info = await DeviceInfoPlugin().iosInfo;
-        return info.name;
-      }
-    } catch (_) {}
-    return Platform.localHostname.isNotEmpty ? Platform.localHostname : 'palt-mobile';
-  }
+/// The name this device advertises over mDNS. Peers list us under this name,
+/// so transfers must carry it as senderName for history to line up per device.
+Future<String> fetchLocalDeviceName() async {
+  try {
+    if (Platform.isAndroid) {
+      final info = await DeviceInfoPlugin().androidInfo;
+      return info.model;
+    } else if (Platform.isIOS) {
+      final info = await DeviceInfoPlugin().iosInfo;
+      return info.name;
+    }
+  } catch (_) {}
+  return Platform.localHostname.isNotEmpty ? Platform.localHostname : 'palt-mobile';
 }
 
 /// Returns the device's own WiFi IP for display purposes.

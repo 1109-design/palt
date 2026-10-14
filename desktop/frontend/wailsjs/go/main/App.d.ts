@@ -15,6 +15,8 @@ export function GetAliases():Promise<Record<string, string>>;
 
 export function GetAppVersion():Promise<string>;
 
+export function GetAutoCopyDevices():Promise<Array<string>>;
+
 export function GetHistory():Promise<Array<models.HistoryEntry>>;
 
 export function GetLastSeenVersion():Promise<string>;
@@ -22,6 +24,8 @@ export function GetLastSeenVersion():Promise<string>;
 export function GetLocalDevice():Promise<models.Peer>;
 
 export function GetPeers():Promise<Array<models.Peer>>;
+
+export function GetTrustedDevices():Promise<Array<string>>;
 
 export function OpenDownloadFolder():Promise<void>;
 
@@ -31,8 +35,12 @@ export function RejectOffer(arg1:string):Promise<void>;
 
 export function SaveLastSeenVersion(arg1:string):Promise<void>;
 
-export function SendFile(arg1:string,arg2:number):Promise<void>;
+export function SendFile(arg1:string,arg2:number,arg3:string):Promise<void>;
 
-export function SendFilePaths(arg1:string,arg2:number,arg3:Array<string>):Promise<void>;
+export function SendFilePaths(arg1:string,arg2:number,arg3:string,arg4:Array<string>):Promise<void>;
+
+export function SendText(arg1:string,arg2:number,arg3:string,arg4:string):Promise<void>;
 
 export function SetAlias(arg1:string,arg2:string):Promise<void>;
+
+export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;

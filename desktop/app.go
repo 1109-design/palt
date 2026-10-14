@@ -35,7 +35,7 @@ import (
 
 // AppVersion is the canonical version string for this build.
 // Bump this manually to match the git tag when cutting a release.
-const AppVersion = "v1.2.0"
+const AppVersion = "v1.3.0"
 
 // UpdateInfo is returned by CheckForUpdate and passed to the React frontend.
 type UpdateInfo struct {
@@ -171,6 +171,37 @@ func (a *App) startup(ctx context.Context) {
 			ErrorMessage:   err.Error(),
 			DurationMillis: duration.Milliseconds(),
 			Files:          a.toHistoryFiles(meta.Files),
+		})
+	}
+
+	a.transferServer.OnText = func(meta transfer.Metadata) {
+		// Auto-copy is opt-in per device and only honoured for trusted
+		// devices, so an arbitrary LAN peer can't overwrite the clipboard.
+		copied := false
+		if a.isTrusted(meta.SenderName) && a.isAutoCopy(meta.SenderName) {
+			if err := wailsruntime.ClipboardSetText(a.ctx, meta.Text); err != nil {
+				log.Printf("[app] Auto-copy failed: %v", err)
+			} else {
+				copied = true
+			}
+		}
+
+		a.logHistory(models.HistoryEntry{
+			ID:          meta.TransferID,
+			PartnerName: meta.SenderName,
+			Files:       []models.HistoryFile{},
+			TotalSize:   int64(len(meta.Text)),
+			Direction:   "incoming",
+			Timestamp:   time.Now(),
+			Status:      "completed",
+			Kind:        "text",
+			Text:        meta.Text,
+			Copied:      copied,
+		})
+		wailsruntime.EventsEmit(a.ctx, "text_received", map[string]interface{}{
+			"senderName": meta.SenderName,
+			"text":       meta.Text,
+			"copied":     copied,
 		})
 	}
 
@@ -459,6 +490,73 @@ func (a *App) AddTrustedDevice(name string) {
 	}
 }
 
+// GetTrustedDevices returns the names of devices whose transfers are auto-accepted.
+func (a *App) GetTrustedDevices() []string {
+	return readNameList(a.trustedFile())
+}
+
+// autoCopyFile returns the path to the auto-copy devices JSON file.
+func (a *App) autoCopyFile() string {
+	dir, err := configDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "autocopy.json")
+}
+
+func (a *App) isAutoCopy(name string) bool {
+	for _, n := range readNameList(a.autoCopyFile()) {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// GetAutoCopyDevices returns the devices whose incoming texts are copied to
+// the clipboard automatically.
+func (a *App) GetAutoCopyDevices() []string {
+	return readNameList(a.autoCopyFile())
+}
+
+// SetAutoCopy turns clipboard auto-copy on or off for a device. Enabling it
+// requires the device to be trusted first.
+func (a *App) SetAutoCopy(name string, enabled bool) error {
+	if enabled && !a.isTrusted(name) {
+		return fmt.Errorf("%s must be trusted (\"Always accept\") before auto-copy can be turned on", name)
+	}
+	file := a.autoCopyFile()
+	if file == "" {
+		return fmt.Errorf("could not locate config directory")
+	}
+	var out []string
+	for _, n := range readNameList(file) {
+		if n != name {
+			out = append(out, n)
+		}
+	}
+	if enabled {
+		out = append(out, name)
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(file, data, 0o644)
+}
+
+// readNameList loads a JSON array of device names; missing or bad files read as empty.
+func readNameList(file string) []string {
+	names := []string{}
+	if file == "" {
+		return names
+	}
+	if data, err := os.ReadFile(file); err == nil {
+		_ = json.Unmarshal(data, &names)
+	}
+	return names
+}
+
 // aliasesFile returns the path to the device aliases JSON file.
 func (a *App) aliasesFile() string {
 	dir, err := configDir()
@@ -514,8 +612,9 @@ func (a *App) RejectOffer(transferID string) {
 }
 
 // SendFile is called by React when clicking "Send File" on a PeerCard.
-// It opens an OS dialog allowing multiple file selection.
-func (a *App) SendFile(peerIP string, peerPort int) error {
+// It opens an OS dialog allowing multiple file selection. peerName is the
+// peer's broadcast name, recorded in history so per-device threads line up.
+func (a *App) SendFile(peerIP string, peerPort int, peerName string) error {
 	log.Printf("[app] SendFile triggered for peer %s:%d\n", peerIP, peerPort)
 
 	filePaths, err := wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
@@ -532,22 +631,50 @@ func (a *App) SendFile(peerIP string, peerPort int) error {
 	}
 
 	log.Printf("[app] User selected %d files to send.", len(filePaths))
-	return a.sendPaths(peerIP, peerPort, filePaths)
+	return a.sendPaths(peerIP, peerPort, peerName, filePaths)
 }
 
 // SendFilePaths is called by React when files are drag-and-dropped onto a
 // PeerCard. The paths come from the Wails OnFileDrop runtime event.
-func (a *App) SendFilePaths(peerIP string, peerPort int, filePaths []string) error {
+func (a *App) SendFilePaths(peerIP string, peerPort int, peerName string, filePaths []string) error {
 	log.Printf("[app] SendFilePaths triggered for peer %s:%d (%d files)\n", peerIP, peerPort, len(filePaths))
 	if len(filePaths) == 0 {
 		return nil
 	}
-	return a.sendPaths(peerIP, peerPort, filePaths)
+	return a.sendPaths(peerIP, peerPort, peerName, filePaths)
+}
+
+// SendText delivers a text message to a peer and records it in history.
+// It blocks until the peer acknowledges, so the UI can surface errors inline.
+func (a *App) SendText(peerIP string, peerPort int, peerName string, text string) error {
+	transferID := generateTransferID()
+	hostname, _ := os.Hostname()
+
+	err := transfer.SendText(peerIP, peerPort, transferID, hostname, text)
+
+	entry := models.HistoryEntry{
+		ID:          transferID,
+		PartnerName: peerName,
+		Files:       []models.HistoryFile{},
+		TotalSize:   int64(len(text)),
+		Direction:   "outgoing",
+		Timestamp:   time.Now(),
+		Status:      "completed",
+		Kind:        "text",
+		Text:        text,
+	}
+	if err != nil {
+		log.Printf("[app] SendText error: %v", err)
+		entry.Status = "error"
+		entry.ErrorMessage = err.Error()
+	}
+	a.logHistory(entry)
+	return err
 }
 
 // sendPaths streams the given local file paths to a peer, emitting the same
 // transfer_* events the UI already listens to.
-func (a *App) sendPaths(peerIP string, peerPort int, filePaths []string) error {
+func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths []string) error {
 	transferID := generateTransferID()
 	hostname, _ := os.Hostname()
 
@@ -600,7 +727,7 @@ func (a *App) sendPaths(peerIP string, peerPort int, filePaths []string) error {
 			})
 			a.logHistory(models.HistoryEntry{
 				ID:             transferID,
-				PartnerName:    peerIP, // maybe we should get peer name? peerIP for now
+				PartnerName:    peerName,
 				TotalSize:      totalSize,
 				Direction:      "outgoing",
 				Timestamp:      time.Now(),
@@ -616,7 +743,7 @@ func (a *App) sendPaths(peerIP string, peerPort int, filePaths []string) error {
 			})
 			a.logHistory(models.HistoryEntry{
 				ID:             transferID,
-				PartnerName:    peerIP,
+				PartnerName:    peerName,
 				TotalSize:      totalSize,
 				Direction:      "outgoing",
 				Timestamp:      time.Now(),

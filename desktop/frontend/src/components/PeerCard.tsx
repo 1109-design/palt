@@ -2,7 +2,8 @@
  * PeerCard.tsx — a discovered peer (Beacon)
  *
  * Surface card with an OS tile, display-type name, mono address readout and
- * a single amber Send action. Doubles as a drag-and-drop target: dropping
+ * a single amber Send action. Clicking the card opens the device page
+ * (thread + composer). Doubles as a drag-and-drop target: dropping
  * files anywhere on the card streams them to this peer (wired in App.tsx via
  * the Wails OnFileDrop runtime + the data-peer-* attributes below).
  */
@@ -25,6 +26,7 @@ interface PeerCardProps {
   dragActive?: boolean;
   onSendFile?: (peer: Peer) => void;
   onRename?: (peer: Peer) => void;
+  onOpen?: (peer: Peer) => void;
 }
 
 const PeerCard: React.FC<PeerCardProps> = ({
@@ -33,13 +35,15 @@ const PeerCard: React.FC<PeerCardProps> = ({
   dragActive = false,
   onSendFile,
   onRename,
+  onOpen,
 }) => {
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
   const [copied, setCopied] = useState(false);
   const [hoverDrop, setHoverDrop] = useState(false);
 
-  const handleCopyIp = () => {
+  const handleCopyIp = (e: React.MouseEvent) => {
+    e.stopPropagation();
     navigator.clipboard.writeText(`${peer.ipAddress}:${peer.port}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
@@ -54,6 +58,17 @@ const PeerCard: React.FC<PeerCardProps> = ({
       id={`card-peer-${peer.id}`}
       data-peer-ip={peer.ipAddress}
       data-peer-port={peer.port}
+      data-peer-name={peer.deviceName}
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-label={onOpen ? `Open ${alias || peer.deviceName}` : undefined}
+      onClick={() => onOpen?.(peer)}
+      onKeyDown={(e) => {
+        if (onOpen && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onOpen(peer);
+        }
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         setHoverDrop(true);
@@ -70,6 +85,9 @@ const PeerCard: React.FC<PeerCardProps> = ({
         border: `1px solid ${highlighted ? beacon.accent : beacon.hairline}`,
         borderRadius: '12px',
         p: 2.5,
+        cursor: onOpen ? 'pointer' : 'default',
+        outline: 'none',
+        '&:focus-visible': { borderColor: beacon.accent },
         transition: 'border-color 150ms ease, transform 150ms ease, background-color 150ms ease',
         animation: 'peer-arrive 320ms ease-out backwards',
         '@keyframes peer-arrive': {
@@ -132,7 +150,10 @@ const PeerCard: React.FC<PeerCardProps> = ({
                   size="small"
                   className="peer-rename"
                   aria-label={`rename ${displayName}`}
-                  onClick={() => onRename(peer)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRename(peer);
+                  }}
                   sx={{
                     p: 0.5,
                     color: beacon.textFaint,
@@ -207,7 +228,10 @@ const PeerCard: React.FC<PeerCardProps> = ({
             variant="outlined"
             fullWidth
             endIcon={<SendIcon sx={{ fontSize: 16 }} />}
-            onClick={() => onSendFile?.(peer)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSendFile?.(peer);
+            }}
             sx={{
               height: 40,
               fontSize: '0.85rem',

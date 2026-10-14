@@ -1,7 +1,8 @@
 /// peer_card.dart — a discovered peer (Beacon).
 ///
 /// Dark surface card: OS tile, display-type name, mono address readout,
-/// one amber Send action. Tapping anywhere on the card also sends.
+/// one amber Send action. Tapping the card opens the device screen (thread +
+/// composer); the amber square is a shortcut straight to the file picker.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,24 @@ import '../../services/transfer_service.dart';
 import '../../theme/app_theme.dart';
 
 import '../../providers/alias_provider.dart';
+import '../screens/device_screen.dart';
+
+/// Opens the system file picker and streams the chosen files to [peer].
+Future<void> pickAndSendFiles(WidgetRef ref, Peer peer) async {
+  try {
+    final result = await fp.FilePicker.pickFiles(allowMultiple: true);
+    if (result == null || result.files.isEmpty) return;
+    final files = result.paths
+        .where((path) => path != null)
+        .map((path) => File(path!))
+        .toList();
+    if (files.isNotEmpty) {
+      await ref.read(transferServiceProvider).sendFiles(peer, files);
+    }
+  } catch (e) {
+    // Handled by service
+  }
+}
 
 class PeerCard extends ConsumerWidget {
   final Peer peer;
@@ -87,7 +106,10 @@ class PeerCard extends ConsumerWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _handleSend(ref),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DeviceScreen(peer: peer)),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -147,16 +169,23 @@ class PeerCard extends ConsumerWidget {
                   onPressed: () => _showRenameDialog(context, ref, alias ?? ''),
                   visualDensity: VisualDensity.compact,
                 ),
-                // Send affordance
-                Container(
+                // Quick send: straight to the file picker
+                SizedBox(
                   width: 42,
                   height: 42,
-                  decoration: BoxDecoration(
+                  child: Material(
                     color: kAccent,
                     borderRadius: BorderRadius.circular(11),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(11),
+                      onTap: () => _handleSend(ref),
+                      child: const Tooltip(
+                        message: 'Send files',
+                        child: Icon(Icons.north_east_rounded,
+                            size: 19, color: kOnAccent),
+                      ),
+                    ),
                   ),
-                  child: const Icon(Icons.north_east_rounded,
-                      size: 19, color: kOnAccent),
                 ),
               ],
             ),
@@ -171,21 +200,6 @@ class PeerCard extends ConsumerWidget {
       onSendFile!();
       return;
     }
-
-    try {
-      fp.FilePickerResult? result =
-          await fp.FilePicker.pickFiles(allowMultiple: true);
-      if (result != null && result.files.isNotEmpty) {
-        List<File> files = result.paths
-            .where((path) => path != null)
-            .map((path) => File(path!))
-            .toList();
-        if (files.isNotEmpty) {
-          await ref.read(transferServiceProvider).sendFiles(peer, files);
-        }
-      }
-    } catch (e) {
-      // Handled by service
-    }
+    await pickAndSendFiles(ref, peer);
   }
 }

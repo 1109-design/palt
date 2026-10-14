@@ -26,6 +26,7 @@ import '../widgets/update_banner.dart';
 import '../../providers/update_visibility_provider.dart';
 import '../../models/peer.dart';
 import '../../theme/app_theme.dart';
+import 'device_screen.dart';
 import 'history_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -99,6 +100,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     ref.listen<OfferData?>(activeOfferProvider, (previous, next) {
       if (next != null) _showOfferSheet(next);
+    });
+
+    ref.listen<IncomingText?>(incomingTextProvider, (previous, next) {
+      if (next == null) return;
+      // Already visible in the thread when that device's screen is open.
+      if (ref.read(openDeviceNameProvider) == next.senderName) return;
+      final preview = next.text.length > 80
+          ? '${next.text.substring(0, 80)}…'
+          : next.text;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '${next.senderName}: $preview${next.copied ? ' — copied to clipboard' : ''}'),
+        ),
+      );
     });
 
     return Scaffold(

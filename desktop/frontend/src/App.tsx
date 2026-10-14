@@ -29,6 +29,7 @@ import UpdateDialog from './components/UpdateDialog';
 import ChangelogDialog from './components/ChangelogDialog';
 import HistoryView from './components/HistoryView';
 import RenameDialog from './components/RenameDialog';
+import DevicePage from './components/DevicePage';
 import { beacon, fonts } from './theme/theme';
 
 import type { Peer } from './types/peer';
@@ -56,6 +57,13 @@ const GetHistory           = isWails ? (WailsApp as any).GetHistory           : 
 const ClearHistory         = isWails ? (WailsApp as any).ClearHistory         : MockApp.ClearHistory;
 const OpenDownloadFolder   = isWails ? (WailsApp as any).OpenDownloadFolder   : () => { console.log('Mock: Open Folder'); };
 const GetAliases           = isWails ? (WailsApp as any).GetAliases           : () => Promise.resolve({});
+const SendText             = isWails ? (WailsApp as any).SendText             : MockApp.SendText;
+const GetTrustedDevices    = isWails ? (WailsApp as any).GetTrustedDevices    : MockApp.GetTrustedDevices;
+const GetAutoCopyDevices   = isWails ? (WailsApp as any).GetAutoCopyDevices   : MockApp.GetAutoCopyDevices;
+const SetAutoCopy          = isWails ? (WailsApp as any).SetAutoCopy          : MockApp.SetAutoCopy;
+const ReadClipboard        = isWails
+  ? () => (window as any).runtime.ClipboardGetText() as Promise<string>
+  : () => navigator.clipboard.readText();
 const SetAlias             = isWails ? (WailsApp as any).SetAlias             : (name: string, alias: string) => { console.log(`Mock: Set ${name} alias to ${alias}`); return Promise.resolve(); };
 
 /** How often (ms) to auto-refresh the peer list */
@@ -87,6 +95,10 @@ const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState(0); // 0 = Devices, 1 = History
   const [renamingPeer, setRenamingPeer] = useState<Peer | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  /** Device whose page is open; a snapshot so the page survives the peer going offline. */
+  const [openPeer, setOpenPeer] = useState<Peer | null>(null);
+  const [trusted, setTrusted] = useState<string[]>([]);
+  const [autoCopy, setAutoCopy] = useState<string[]>([]);
 
   // ── Update state ───────────────────────────────────────────────────────────
   const [appVersion, setAppVersion] = useState('');
@@ -96,6 +108,8 @@ const App: React.FC = () => {
   const [changelogNotes, setChangelogNotes] = useState('');
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const openPeerNameRef = useRef<string | null>(null);
+  openPeerNameRef.current = openPeer?.deviceName ?? null;
   const dragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Update + Changelog on mount ────────────────────────────────────────────
@@ -185,6 +199,20 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const fetchDeviceSettings = useCallback(async () => {
+    try {
+      const [t, ac] = await Promise.all([GetTrustedDevices(), GetAutoCopyDevices()]);
+      setTrusted(t || []);
+      setAutoCopy(ac || []);
+    } catch (err) {
+      console.error('[App] Device settings fetch failed:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDeviceSettings();
+  }, [fetchDeviceSettings]);
+
   // Initial load
   useEffect(() => {
     fetchLocalDevice();
@@ -242,6 +270,13 @@ const App: React.FC = () => {
       setHistory(data);
     });
 
+    win.runtime.EventsOn('text_received', (data: { senderName: string; text: string; copied?: boolean }) => {
+      // Already visible in the thread when that device's page is open.
+      if (openPeerNameRef.current === data.senderName) return;
+      const preview = data.text.length > 80 ? `${data.text.slice(0, 80)}…` : data.text;
+      setErrorMsg(`${data.senderName}: ${preview}${data.copied ? ' — copied to clipboard' : ''}`);
+    });
+
     return () => {
       win.runtime.EventsOff('peers_changed');
       win.runtime.EventsOff('history_updated');
@@ -250,6 +285,7 @@ const App: React.FC = () => {
       win.runtime.EventsOff('transfer_started');
       win.runtime.EventsOff('transfer_complete');
       win.runtime.EventsOff('transfer_error');
+      win.runtime.EventsOff('text_received');
     };
   }, []);
 
@@ -277,9 +313,10 @@ const App: React.FC = () => {
         if (!el) return;
         const ip = el.getAttribute('data-peer-ip')!;
         const port = parseInt(el.getAttribute('data-peer-port') || '0', 10);
+        const name = el.getAttribute('data-peer-name') || ip;
         const sendPaths = (WailsApp as any).SendFilePaths;
         if (typeof sendPaths === 'function') {
-          sendPaths(ip, port, paths).catch((e: any) =>
+          sendPaths(ip, port, name, paths).catch((e: any) =>
             setErrorMsg(`Send failed: ${e?.message || e}`),
           );
         }
@@ -314,7 +351,7 @@ const App: React.FC = () => {
           return;
         }
         // @ts-ignore
-        await WailsApp.SendFile(peer.ipAddress, peer.port);
+        await WailsApp.SendFile(peer.ipAddress, peer.port, peer.deviceName);
       } else {
         setErrorMsg(`Mock transfer to ${peer.deviceName} triggered`);
       }
@@ -323,13 +360,44 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleSendText = useCallback(async (peer: Peer, text: string) => {
+    await SendText(peer.ipAddress, peer.port, peer.deviceName, text);
+    if (!isWails) {
+      setHistory((prev) => [
+        {
+          id: `${Date.now()}`,
+          partnerName: peer.deviceName,
+          files: [],
+          totalSize: text.length,
+          direction: 'outgoing',
+          timestamp: new Date().toISOString(),
+          status: 'completed',
+          durationMillis: 0,
+          kind: 'text',
+          text,
+        },
+        ...prev,
+      ]);
+    }
+  }, []);
+
+  const handleToggleAutoCopy = useCallback(async (peer: Peer, enabled: boolean) => {
+    try {
+      await SetAutoCopy(peer.deviceName, enabled);
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+    fetchDeviceSettings();
+  }, [fetchDeviceSettings]);
+
   const acceptOffer = useCallback(async (transferId: string, alwaysTrust: boolean) => {
     if (alwaysTrust && offer) {
       try {
         if (isWails) {
           if (typeof (WailsApp as any).AddTrustedDevice === 'function') {
             // @ts-ignore
-            WailsApp.AddTrustedDevice(offer.senderName);
+            await WailsApp.AddTrustedDevice(offer.senderName);
+            fetchDeviceSettings();
           }
         }
         const trustedJSON = localStorage.getItem('palt_trusted_devices');
@@ -349,7 +417,7 @@ const App: React.FC = () => {
       // @ts-ignore
       await WailsApp.AcceptOffer(transferId);
     }
-  }, [offer]);
+  }, [offer, fetchDeviceSettings]);
 
   const rejectOffer = useCallback(async (transferId: string) => {
     setOffer(null);
@@ -379,6 +447,12 @@ const App: React.FC = () => {
     const updated = await GetAliases();
     setAliases(updated);
   }, []);
+
+  // Live record for the open device (fresh IP/port), matched by broadcast name.
+  const livePeer = useMemo(
+    () => (openPeer ? peers.find((p) => p.deviceName === openPeer.deviceName) ?? null : null),
+    [peers, openPeer],
+  );
 
   // ── Filtered peers ─────────────────────────────────────────────────────────
 
@@ -430,7 +504,23 @@ const App: React.FC = () => {
         onUpdateClick={() => setUpdateDialogOpen(true)}
       />
 
-      {/* ── Main content (offset for AppBar + StatusBar) ───────────────────── */}
+      {openPeer ? (
+        <DevicePage
+          peer={livePeer ?? openPeer}
+          online={!!livePeer}
+          alias={aliases[openPeer.deviceName]}
+          history={history}
+          dragActive={dragActive}
+          onBack={() => setOpenPeer(null)}
+          onSendFiles={handleSendFile}
+          onSendText={handleSendText}
+          trusted={trusted.includes(openPeer.deviceName)}
+          autoCopy={autoCopy.includes(openPeer.deviceName)}
+          onToggleAutoCopy={handleToggleAutoCopy}
+          readClipboard={ReadClipboard}
+        />
+      ) : (
+      /* ── Main content (offset for AppBar + StatusBar) ───────────────────── */
       <Container maxWidth="lg" component="main" sx={{ pt: 12, pb: 8, flex: 1 }}>
         <LocalDeviceCard device={localDevice} broadcasting />
 
@@ -523,6 +613,7 @@ const App: React.FC = () => {
                       dragActive={dragActive}
                       onSendFile={handleSendFile}
                       onRename={setRenamingPeer}
+                      onOpen={setOpenPeer}
                     />
                   </Grid>
                 ))}
@@ -539,6 +630,7 @@ const App: React.FC = () => {
           <HistoryView history={history} onClear={handleClearHistory} />
         )}
       </Container>
+      )}
 
       <StatusBar
         loading={loading}

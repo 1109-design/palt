@@ -17,4 +17,7 @@ type HistoryEntry struct {
 	Status         string        `json:"status"`         // "completed" or "error"
 	ErrorMessage   string        `json:"errorMessage"`   // optional
 	DurationMillis int64         `json:"durationMillis"` // how long the transfer took
+	Kind           string        `json:"kind,omitempty"` // "text" for messages; empty means files
+	Text           string        `json:"text,omitempty"` // message body when Kind == "text"
+	Copied         bool          `json:"copied,omitempty"` // incoming text was auto-copied to the clipboard
 }

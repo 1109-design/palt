@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/history_entry.dart';
 import '../../providers/history_provider.dart';
 
 import '../../utils/version.dart';
@@ -122,7 +123,7 @@ class HistoryScreen extends ConsumerWidget {
                         Text('No transfers yet', style: display(fontSize: 19)),
                         const SizedBox(height: 6),
                         const Text(
-                          'Every file you send or receive is logged here.',
+                          'Every file and message you send or receive is logged here.',
                           style: TextStyle(fontSize: 13, color: kTextSecondary),
                         ),
                       ],
@@ -174,7 +175,7 @@ class HistoryScreen extends ConsumerWidget {
 }
 
 class _HistoryTile extends StatelessWidget {
-  final dynamic entry;
+  final HistoryEntry entry;
   final String Function(int) formatSize;
   final String Function(int) formatDuration;
   final String Function(DateTime) formatTime;
@@ -218,6 +219,8 @@ class _HistoryTile extends StatelessWidget {
             child: Icon(
               failed
                   ? Icons.error_outline_rounded
+                  : entry.isText
+                  ? Icons.chat_bubble_outline_rounded
                   : (isIncoming
                       ? Icons.south_west_rounded
                       : Icons.north_east_rounded),
@@ -231,7 +234,9 @@ class _HistoryTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  entry.files.length == 1
+                  entry.isText
+                      ? entry.text ?? ''
+                      : entry.files.length == 1
                       ? entry.files[0].name
                       : '${entry.files.length} files',
                   style: const TextStyle(
@@ -272,11 +277,13 @@ class _HistoryTile extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(formatSize(entry.totalSize),
+              Text(entry.isText ? 'message' : formatSize(entry.totalSize),
                   style: mono(color: kText, fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
               Text(
-                '${formatDuration(entry.durationMillis)} · ${formatTime(entry.timestamp)}',
+                entry.isText
+                    ? formatTime(entry.timestamp)
+                    : '${formatDuration(entry.durationMillis)} · ${formatTime(entry.timestamp)}',
                 style: mono(fontSize: 10.5, color: kTextFaint),
               ),
             ],

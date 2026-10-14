@@ -13,4 +13,10 @@ export interface HistoryEntry {
   status: 'completed' | 'error';
   errorMessage?: string;
   durationMillis: number;
+  /** 'text' for messages; absent on file transfers and older entries. */
+  kind?: 'files' | 'text';
+  /** Message body when kind === 'text'. */
+  text?: string;
+  /** Incoming text was auto-copied to the clipboard. */
+  copied?: boolean;
 }

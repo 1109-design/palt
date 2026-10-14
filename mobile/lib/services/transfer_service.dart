@@ -3,14 +3,21 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 
 import '../models/history_entry.dart';
+import '../providers/auto_copy_provider.dart';
 import '../providers/trust_provider.dart';
 import '../providers/history_provider.dart';
 import '../models/peer.dart';
+import 'discovery_service.dart';
+
+/// Must match MaxOfferSize / MaxTextBytes in desktop/internal/transfer/protocol.go
+const kMaxOfferBytes = 64 * 1024;
+const kMaxTextBytes = 16 * 1024;
 
 final transferServiceProvider = Provider<TransferService>((ref) {
   final service = TransferService(ref);
@@ -39,32 +46,52 @@ class FileMeta {
 }
 
 class OfferData {
+  /// 'offer' for a file batch, 'text' for a message carried in [text].
+  final String action;
   final String transferId;
   final List<FileMeta> files;
   final int totalSize;
   final String senderName;
+  final String? text;
 
   OfferData({
+    this.action = 'offer',
     required this.transferId,
     required this.files,
     required this.totalSize,
     required this.senderName,
+    this.text,
   });
 
+  bool get isText => action == 'text';
+
   factory OfferData.fromJson(Map<String, dynamic> json) => OfferData(
+        action: json['action'] ?? 'offer',
         transferId: json['transferId'],
-        files: (json['files'] as List).map((e) => FileMeta.fromJson(e)).toList(),
-        totalSize: json['totalSize'],
+        files: ((json['files'] as List?) ?? [])
+            .map((e) => FileMeta.fromJson(e))
+            .toList(),
+        totalSize: json['totalSize'] ?? 0,
         senderName: json['senderName'],
+        text: json['text'],
       );
 
   Map<String, dynamic> toJson() => {
-        'action': 'offer',
+        'action': action,
         'transferId': transferId,
         'files': files.map((e) => e.toJson()).toList(),
         'totalSize': totalSize,
         'senderName': senderName,
+        if (text != null) 'text': text,
       };
+}
+
+/// A text message that just arrived, for the UI to surface as a toast.
+class IncomingText {
+  final String senderName;
+  final String text;
+  final bool copied;
+  const IncomingText(this.senderName, this.text, {this.copied = false});
 }
 
 enum TransferStatus { waiting, transferring, completed, error }
@@ -123,12 +150,15 @@ final activeOfferProvider = StateNotifierProvider<ActiveOfferNotifier, OfferData
 
 final transferProgressProvider = StateProvider<TransferProgress?>((ref) => null);
 
+final incomingTextProvider = StateProvider<IncomingText?>((ref) => null);
+
 // ── Core Service ─────────────────────────────────────────────────────────────
 
 class TransferService {
   final Ref ref;
   ServerSocket? _serverSocket;
   final _uuid = const Uuid();
+  final Future<String> _localName = fetchLocalDeviceName();
 
   TransferService(this.ref);
 
@@ -165,6 +195,10 @@ class TransferService {
 
         if (expectedLength == -1 && bytes.length >= 4) {
           expectedLength = ByteData.view(bytes.buffer).getUint32(0, Endian.big);
+          if (expectedLength > kMaxOfferBytes) {
+            socket.destroy();
+            return;
+          }
         }
 
         if (expectedLength != -1 && bytes.length >= 4 + expectedLength) {
@@ -172,6 +206,12 @@ class TransferService {
           final jsonBytes = bytes.sublist(4, 4 + expectedLength);
           final jsonStr = utf8.decode(jsonBytes);
           offer = OfferData.fromJson(jsonDecode(jsonStr));
+
+          // Text messages ride inside the handshake; ack and we're done.
+          if (offer.isText) {
+            await _receiveText(socket, offer);
+            return;
+          }
 
           // Surface to UI
           final isTrusted = ref.read(trustProvider.notifier).isTrusted(offer.senderName);
@@ -349,6 +389,124 @@ class TransferService {
     }
   }
 
+  Future<void> _receiveText(Socket socket, OfferData offer) async {
+    final text = offer.text ?? '';
+    final ok = text.isNotEmpty && utf8.encode(text).length <= kMaxTextBytes;
+    socket.add([ok ? 0x01 : 0x00]);
+    await socket.flush();
+    socket.destroy();
+    if (!ok) return;
+
+    // Auto-copy is opt-in per device and only for trusted devices, so an
+    // arbitrary LAN peer can't overwrite the clipboard.
+    var copied = false;
+    if (ref.read(trustProvider.notifier).isTrusted(offer.senderName) &&
+        ref.read(autoCopyProvider.notifier).isEnabled(offer.senderName)) {
+      try {
+        await Clipboard.setData(ClipboardData(text: text));
+        copied = true;
+      } catch (e) {
+        print('[TransferService] Auto-copy failed: $e');
+      }
+    }
+
+    ref.read(historyProvider.notifier).addEntry(HistoryEntry(
+          id: offer.transferId,
+          partnerName: offer.senderName,
+          files: const [],
+          totalSize: utf8.encode(text).length,
+          direction: 'incoming',
+          timestamp: DateTime.now(),
+          status: 'completed',
+          durationMillis: 0,
+          kind: 'text',
+          text: text,
+          copied: copied,
+        ));
+    ref.read(incomingTextProvider.notifier).state =
+        IncomingText(offer.senderName, text, copied: copied);
+  }
+
+  // ── Send Text ───────────────────────────────────────────────────────────────
+
+  /// Sends a text message and records it in history. Throws with a
+  /// user-readable message when the peer can't take it.
+  Future<void> sendText(Peer peer, String text) async {
+    final transferId = _uuid.v4();
+    final bytes = utf8.encode(text).length;
+    String? error;
+
+    try {
+      if (text.trim().isEmpty) throw 'Message is empty';
+      if (bytes > kMaxTextBytes) {
+        throw 'Message is too long (max ${kMaxTextBytes ~/ 1024} KB)';
+      }
+
+      final socket = await Socket.connect(peer.ipAddress, peer.port,
+          timeout: const Duration(seconds: 5));
+      try {
+        final offer = OfferData(
+          action: 'text',
+          transferId: transferId,
+          files: const [],
+          totalSize: 0,
+          senderName: await _localName,
+          text: text,
+        );
+        final jsonBytes = utf8.encode(jsonEncode(offer.toJson()));
+        final lengthBuffer = ByteData(4)
+          ..setUint32(0, jsonBytes.length, Endian.big);
+        socket.add(lengthBuffer.buffer.asUint8List());
+        socket.add(jsonBytes);
+        await socket.flush();
+
+        final verdict = Completer<int>();
+        socket.listen(
+          (data) {
+            if (!verdict.isCompleted && data.isNotEmpty) verdict.complete(data[0]);
+          },
+          onError: (e) {
+            if (!verdict.isCompleted) verdict.completeError(e);
+          },
+          // Builds without text support drop the connection without a verdict.
+          onDone: () {
+            if (!verdict.isCompleted) {
+              verdict.completeError(
+                  'This device does not support text messages — update PALT on it');
+            }
+          },
+          cancelOnError: true,
+        );
+
+        final v = await verdict.future.timeout(const Duration(seconds: 10),
+            onTimeout: () => throw 'No reply from ${peer.deviceName}');
+        if (v != 0x01) throw 'Message rejected by ${peer.deviceName}';
+      } finally {
+        socket.destroy();
+      }
+    } on SocketException catch (e) {
+      error = 'Could not reach ${peer.deviceName}: ${e.osError?.message ?? e.message}';
+    } catch (e) {
+      error = e.toString();
+    }
+
+    ref.read(historyProvider.notifier).addEntry(HistoryEntry(
+          id: transferId,
+          partnerName: peer.deviceName,
+          files: const [],
+          totalSize: bytes,
+          direction: 'outgoing',
+          timestamp: DateTime.now(),
+          status: error == null ? 'completed' : 'error',
+          errorMessage: error,
+          durationMillis: 0,
+          kind: 'text',
+          text: text,
+        ));
+
+    if (error != null) throw error;
+  }
+
   // ── Send Files ──────────────────────────────────────────────────────────────
 
   Future<void> sendFiles(Peer peer, List<File> files) async {
@@ -364,7 +522,7 @@ class TransferService {
     if (metaFiles.isEmpty) return;
 
     final transferId = _uuid.v4();
-    final senderName = Platform.localHostname.isNotEmpty ? Platform.localHostname : 'Android Client';
+    final senderName = await _localName;
     final totalFiles = metaFiles.length;
     final stopwatch = Stopwatch();
 

@@ -26,6 +26,17 @@ class HistoryEntry {
   final String? errorMessage;
   final int durationMillis;
 
+  /// 'text' for messages, 'files' for file transfers.
+  final String kind;
+
+  /// Message body when [kind] is 'text'.
+  final String? text;
+
+  /// Incoming text was auto-copied to the clipboard.
+  final bool copied;
+
+  bool get isText => kind == 'text';
+
   HistoryEntry({
     required this.id,
     required this.partnerName,
@@ -36,6 +47,9 @@ class HistoryEntry {
     required this.status,
     this.errorMessage,
     required this.durationMillis,
+    this.kind = 'files',
+    this.text,
+    this.copied = false,
   });
 
   factory HistoryEntry.fromJson(Map<String, dynamic> json) => HistoryEntry(
@@ -48,6 +62,9 @@ class HistoryEntry {
         status: json['status'],
         errorMessage: json['errorMessage'],
         durationMillis: json['durationMillis'],
+        kind: json['kind'] ?? 'files',
+        text: json['text'],
+        copied: json['copied'] ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -60,5 +77,8 @@ class HistoryEntry {
         'status': status,
         'errorMessage': errorMessage,
         'durationMillis': durationMillis,
+        'kind': kind,
+        if (text != null) 'text': text,
+        if (copied) 'copied': true,
       };
 }

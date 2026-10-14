@@ -26,6 +26,10 @@ export function GetAppVersion() {
   return window['go']['main']['App']['GetAppVersion']();
 }
 
+export function GetAutoCopyDevices() {
+  return window['go']['main']['App']['GetAutoCopyDevices']();
+}
+
 export function GetHistory() {
   return window['go']['main']['App']['GetHistory']();
 }
@@ -40,6 +44,10 @@ export function GetLocalDevice() {
 
 export function GetPeers() {
   return window['go']['main']['App']['GetPeers']();
+}
+
+export function GetTrustedDevices() {
+  return window['go']['main']['App']['GetTrustedDevices']();
 }
 
 export function OpenDownloadFolder() {
@@ -58,14 +66,22 @@ export function SaveLastSeenVersion(arg1) {
   return window['go']['main']['App']['SaveLastSeenVersion'](arg1);
 }
 
-export function SendFile(arg1, arg2) {
-  return window['go']['main']['App']['SendFile'](arg1, arg2);
+export function SendFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendFile'](arg1, arg2, arg3);
 }
 
-export function SendFilePaths(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SendFilePaths'](arg1, arg2, arg3);
+export function SendFilePaths(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SendFilePaths'](arg1, arg2, arg3, arg4);
+}
+
+export function SendText(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SendText'](arg1, arg2, arg3, arg4);
 }
 
 export function SetAlias(arg1, arg2) {
   return window['go']['main']['App']['SetAlias'](arg1, arg2);
+}
+
+export function SetAutoCopy(arg1, arg2) {
+  return window['go']['main']['App']['SetAutoCopy'](arg1, arg2);
 }

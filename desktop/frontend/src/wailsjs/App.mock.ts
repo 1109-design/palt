@@ -42,6 +42,17 @@ export const AcceptOffer = (transferId: string): Promise<void> => Promise.resolv
 export const AddTrustedDevice = (name: string): Promise<void> => Promise.resolve();
 export const GetHistory = (): Promise<any[]> => Promise.resolve([]);
 export const ClearHistory = (): Promise<void> => Promise.resolve();
+let mockTrusted: string[] = ['Pixel 8'];
+let mockAutoCopy: string[] = [];
+export const GetTrustedDevices = (): Promise<string[]> => Promise.resolve(mockTrusted);
+export const GetAutoCopyDevices = (): Promise<string[]> => Promise.resolve(mockAutoCopy);
+export const SetAutoCopy = (name: string, enabled: boolean): Promise<void> => {
+  if (enabled && !mockTrusted.includes(name)) return Promise.reject(`${name} must be trusted first`);
+  mockAutoCopy = enabled ? [...mockAutoCopy.filter((n) => n !== name), name] : mockAutoCopy.filter((n) => n !== name);
+  return Promise.resolve();
+};
+export const SendText = (ip: string, port: number, name: string, text: string): Promise<void> =>
+  new Promise((r) => setTimeout(r, 250));
 
 export async function GetPeers(): Promise<Peer[]> {
   // In real Wails, this calls the Go App.GetPeers() binding.

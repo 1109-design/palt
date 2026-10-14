@@ -13,6 +13,7 @@ import SouthWestIcon from '@mui/icons-material/SouthWest';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import HistoryIcon from '@mui/icons-material/History';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import { HistoryEntry } from '../types/history';
 import { beacon, fonts } from '../theme/theme';
 
@@ -21,7 +22,7 @@ interface HistoryViewProps {
   onClear: () => void;
 }
 
-const formatSize = (bytes: number) => {
+export const formatSize = (bytes: number) => {
   if (bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -34,11 +35,11 @@ const formatDuration = (ms: number) => {
   return `${(ms / 1000).toFixed(1)}s`;
 };
 
-const formatTime = (timestamp: string) =>
+export const formatTime = (timestamp: string) =>
   new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 /** "Today" / "Yesterday" / "Mon, 14 Jul" */
-const dayLabel = (timestamp: string) => {
+export const dayLabel = (timestamp: string) => {
   const d = new Date(timestamp);
   const today = new Date();
   const yesterday = new Date(today);
@@ -87,7 +88,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
           No transfers yet
         </Typography>
         <Typography sx={{ fontSize: '0.85rem', color: beacon.textSecondary }}>
-          Every file you send or receive is logged here.
+          Every file and message you send or receive is logged here.
         </Typography>
       </Box>
     );
@@ -119,6 +120,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {entries.map((entry) => {
               const outgoing = entry.direction === 'outgoing';
+              const isText = entry.kind === 'text';
               const failed = entry.status !== 'completed';
               const dirColor = outgoing ? beacon.accent : beacon.ok;
               return (
@@ -153,6 +155,8 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
                   >
                     {failed ? (
                       <ErrorOutlineIcon sx={{ fontSize: 17 }} />
+                    ) : isText ? (
+                      <ChatBubbleOutlineIcon sx={{ fontSize: 15 }} />
                     ) : outgoing ? (
                       <NorthEastIcon sx={{ fontSize: 16 }} />
                     ) : (
@@ -164,7 +168,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Tooltip
                       title={
-                        entry.files.length > 1
+                        isText
+                          ? entry.text || ''
+                          : entry.files.length > 1
                           ? entry.files.map((f) => f.name).join(', ')
                           : failed
                           ? entry.errorMessage || 'Transfer failed'
@@ -175,7 +181,9 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
                         noWrap
                         sx={{ fontSize: '0.88rem', fontWeight: 600, color: beacon.text }}
                       >
-                        {entry.files.length === 1
+                        {isText
+                          ? entry.text
+                          : entry.files.length === 1
                           ? entry.files[0].name
                           : `${entry.files.length} files`}
                       </Typography>
@@ -197,12 +205,13 @@ const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
                   {/* Mono readout */}
                   <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                     <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.76rem', color: beacon.text }}>
-                      {formatSize(entry.totalSize)}
+                      {isText ? 'message' : formatSize(entry.totalSize)}
                     </Typography>
                     <Typography
                       sx={{ fontFamily: fonts.mono, fontSize: '0.7rem', color: beacon.textFaint, mt: 0.25 }}
                     >
-                      {formatDuration(entry.durationMillis)} · {formatTime(entry.timestamp)}
+                      {!isText && `${formatDuration(entry.durationMillis)} · `}
+                      {formatTime(entry.timestamp)}
                     </Typography>
                   </Box>
                 </Box>

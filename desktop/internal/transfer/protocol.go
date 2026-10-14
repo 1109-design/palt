@@ -9,12 +9,17 @@ import (
 // This perfectly aligns with the advertised mDNS port.
 const Port = 9876
 
-// MaxOfferSize sets an upper limit on the JSON handshake size (8KB) to prevent overflow attacks.
-const MaxOfferSize = 8192
+// MaxOfferSize sets an upper limit on the JSON handshake size (64KB) to prevent overflow attacks.
+// It has to fit a full text message plus JSON escaping overhead.
+const MaxOfferSize = 64 * 1024
+
+// MaxTextBytes caps the UTF-8 size of a single text message.
+const MaxTextBytes = 16 * 1024
 
 // Action values for the handshake
 const (
-	ActionOffer = "offer"
+	ActionOffer = "offer" // file batch; payload bytes follow an accept
+	ActionText  = "text"  // text message carried inside the handshake itself
 )
 
 // Response Bytes
@@ -35,6 +40,7 @@ type Metadata struct {
 	Files      []FileMeta `json:"files"`
 	TotalSize  int64      `json:"totalSize"`
 	SenderName string     `json:"senderName"`
+	Text       string     `json:"text,omitempty"` // only set for ActionText
 }
 
 // ReadOffer parses the exact 4-byte length header and subsequent JSON payload.

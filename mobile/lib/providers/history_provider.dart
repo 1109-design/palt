@@ -32,9 +32,9 @@ class HistoryNotifier extends StateNotifier<List<HistoryEntry>> {
     // Prepend new entry
     state = [entry, ...state];
     
-    // Keep last 100 items for mobile to save space
-    if (state.length > 100) {
-      state = state.sublist(0, 100);
+    // Keep last 500 items for mobile to save space
+    if (state.length > 500) {
+      state = state.sublist(0, 500);
     }
     
     await _saveHistory();

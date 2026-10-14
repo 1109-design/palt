@@ -21,6 +21,10 @@ type Server struct {
 	// OnProgress provides real-time chunk progress back to the UI.
 	OnProgress func(transferID string, written int64, total int64, sentItems int, totalItems int, currentFile string)
 
+	// OnText is called when a text message arrives. Messages are delivered
+	// without an accept prompt.
+	OnText func(meta Metadata)
+
 	// OnComplete is called when a transfer finishes successfully.
 	OnComplete func(meta Metadata)
 
@@ -80,6 +84,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 	meta, err := ReadOffer(conn)
 	if err != nil {
 		log.Printf("[TransferServer] Failed to read offer protocol: %v\n", err)
+		return
+	}
+
+	if meta.Action == ActionText {
+		if len(meta.Text) == 0 || len(meta.Text) > MaxTextBytes {
+			conn.Write([]byte{ResponseReject})
+			return
+		}
+		if _, err := conn.Write([]byte{ResponseAccept}); err != nil {
+			log.Printf("[TransferServer] Failed to ack text message: %v\n", err)
+			return
+		}
+		if s.OnText != nil {
+			s.OnText(*meta)
+		}
 		return
 	}
 
