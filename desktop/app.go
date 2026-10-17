@@ -23,11 +23,13 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -90,7 +92,7 @@ type App struct {
 	quitting     atomic.Bool
 
 	features featureState
-	tray         trayState
+	tray     trayState
 }
 
 // NewApp constructs an App instance. Wails calls this during startup.
@@ -281,6 +283,15 @@ func (a *App) startup(ctx context.Context) {
 
 	ensureAutostart()
 	a.startTray()
+
+	// A terminate signal (logout, shutdown, kill) really quits, past the
+	// close-to-tray handler.
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+		<-sig
+		a.quit()
+	}()
 
 	log.Println("[app] PALT started successfully.")
 	if wd, err := os.Getwd(); err == nil {

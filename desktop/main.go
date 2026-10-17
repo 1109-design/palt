@@ -29,7 +29,7 @@ var assets embed.FS
 const instanceID = "com.lads.palt.desktop"
 
 func main() {
-	if signalRunningInstance(instanceID) {
+	if !generatingBindings && signalRunningInstance(instanceID) {
 		return
 	}
 	app := NewApp()
@@ -54,7 +54,13 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 12, G: 18, B: 32, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
-		StartHidden:      startHidden,
+		// Not StartHidden: on Linux a window started hidden stays blank
+		// when shown later. Hide it once the page has loaded instead.
+		OnDomReady: func(ctx context.Context) {
+			if startHidden && app.windowHidden.Load() {
+				app.hideWindow()
+			}
+		},
 		// With a tray, closing the window only hides it.
 		OnBeforeClose: func(ctx context.Context) bool {
 			if app.trayEnabled && !app.quitting.Load() {
@@ -66,7 +72,7 @@ func main() {
 		// Launching PALT again (or from the menu while it sits in the tray)
 		// brings up the running window instead of fighting it for the port.
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               instanceID,
+			UniqueId: instanceID,
 			OnSecondInstanceLaunch: func(d options.SecondInstanceData) {
 				if len(d.Args) > 0 && (d.Args[0] == "--send" || d.Args[0] == "--ring") {
 					app.handleArgs(d.Args, d.WorkingDirectory)

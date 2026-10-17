@@ -14,6 +14,10 @@ export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function ConnectByIP(arg1) {
+  return window['go']['main']['App']['ConnectByIP'](arg1);
+}
+
 export function DeleteHistoryEntry(arg1, arg2) {
   return window['go']['main']['App']['DeleteHistoryEntry'](arg1, arg2);
 }
@@ -28,6 +32,10 @@ export function GetAppVersion() {
 
 export function GetAutoCopyDevices() {
   return window['go']['main']['App']['GetAutoCopyDevices']();
+}
+
+export function GetDeviceStatus() {
+  return window['go']['main']['App']['GetDeviceStatus']();
 }
 
 export function GetHistory() {
@@ -74,6 +82,10 @@ export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
+export function PingDevice(arg1) {
+  return window['go']['main']['App']['PingDevice'](arg1);
+}
+
 export function RejectOffer(arg1) {
   return window['go']['main']['App']['RejectOffer'](arg1);
 }
@@ -90,8 +102,16 @@ export function RevealHistoryFile(arg1, arg2) {
   return window['go']['main']['App']['RevealHistoryFile'](arg1, arg2);
 }
 
+export function RingDevice(arg1) {
+  return window['go']['main']['App']['RingDevice'](arg1);
+}
+
 export function SaveLastSeenVersion(arg1) {
   return window['go']['main']['App']['SaveLastSeenVersion'](arg1);
+}
+
+export function SendClipboard(arg1) {
+  return window['go']['main']['App']['SendClipboard'](arg1);
 }
 
 export function SendFile(arg1, arg2, arg3) {
@@ -116,4 +136,8 @@ export function SetAutoCopy(arg1, arg2) {
 
 export function SetRelayServer(arg1) {
   return window['go']['main']['App']['SetRelayServer'](arg1);
+}
+
+export function StopRinging() {
+  return window['go']['main']['App']['StopRinging']();
 }

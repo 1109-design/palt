@@ -259,6 +259,7 @@ class TransferService {
       }
       final offer = OfferData.fromJson(json, route: conn.route, paired: true, senderId: fromId);
       if (offer.action == 'link') {
+        await ref.read(localNameProvider.future); // never announce a placeholder name
         conn.add([0x01]);
         await conn.flush();
         await ref.read(linkManagerProvider).run(conn, reader, conn.route, initiator: false);

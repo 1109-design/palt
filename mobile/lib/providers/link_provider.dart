@@ -110,7 +110,12 @@ class Connector {
 
   Connector(this.ref);
 
-  void start() {
+  /// Starts dialing once this device's name is known, so peers never see
+  /// a placeholder name.
+  Future<void> start() async {
+    try {
+      await ref.read(localNameProvider.future);
+    } catch (_) {}
     _timer = Timer.periodic(_connectInterval, (_) => _tick());
     _tick();
   }

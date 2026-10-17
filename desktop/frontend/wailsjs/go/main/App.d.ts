@@ -9,6 +9,8 @@ export function CheckForUpdate():Promise<main.UpdateInfo>;
 
 export function ClearHistory():Promise<void>;
 
+export function ConnectByIP(arg1:string):Promise<void>;
+
 export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
 
 export function GetAliases():Promise<Record<string, string>>;
@@ -16,6 +18,8 @@ export function GetAliases():Promise<Record<string, string>>;
 export function GetAppVersion():Promise<string>;
 
 export function GetAutoCopyDevices():Promise<Array<string>>;
+
+export function GetDeviceStatus():Promise<Record<string, main.DeviceStatus>>;
 
 export function GetHistory():Promise<Array<models.HistoryEntry>>;
 
@@ -39,6 +43,8 @@ export function OpenHistoryFile(arg1:string,arg2:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function PingDevice(arg1:string):Promise<void>;
+
 export function RejectOffer(arg1:string):Promise<void>;
 
 export function RescanPeers():Promise<void>;
@@ -47,7 +53,11 @@ export function ResetPairing():Promise<void>;
 
 export function RevealHistoryFile(arg1:string,arg2:string):Promise<void>;
 
+export function RingDevice(arg1:string):Promise<void>;
+
 export function SaveLastSeenVersion(arg1:string):Promise<void>;
+
+export function SendClipboard(arg1:string):Promise<void>;
 
 export function SendFile(arg1:string,arg2:number,arg3:string):Promise<void>;
 
@@ -60,3 +70,5 @@ export function SetAlias(arg1:string,arg2:string):Promise<void>;
 export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetRelayServer(arg1:string):Promise<void>;
+
+export function StopRinging():Promise<void>;

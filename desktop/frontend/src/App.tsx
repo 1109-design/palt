@@ -264,7 +264,11 @@ const App: React.FC = () => {
   }, [fetchRelayStatus]);
 
   useEffect(() => {
-    GetDeviceStatus().then((s: Record<string, DeviceStatus>) => setDeviceStatus(s || {})).catch(() => {});
+    // Through a promise chain so even a missing binding can't throw here.
+    Promise.resolve()
+      .then(() => GetDeviceStatus())
+      .then((s: Record<string, DeviceStatus>) => setDeviceStatus(s || {}))
+      .catch(() => {});
   }, []);
 
   const handleRing = useCallback(async (peer: Peer) => {
