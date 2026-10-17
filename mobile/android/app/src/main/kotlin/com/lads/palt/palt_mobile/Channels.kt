@@ -232,7 +232,8 @@ object Channels {
         messages.setMethodCallHandler { call, result ->
             fun bg(work: () -> Any?) = worker.execute {
                 val out = try {
-                    Result.success(work())
+                    // Unit isn't a value Flutter can receive: answer null.
+                    Result.success(work().takeUnless { it == Unit })
                 } catch (e: Exception) {
                     Result.failure(e)
                 }
