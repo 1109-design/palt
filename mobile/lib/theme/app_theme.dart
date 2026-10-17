@@ -24,6 +24,12 @@ const kOk            = Color(0xFF53D993);
 const kDanger        = Color(0xFFFF7B72);
 /// Route tag for peers/transfers going through the relay server.
 const kRelay         = Color(0xFF7AA2FF);
+/// Action tiles and received bubbles.
+const kTile          = Color(0xFF141E31);
+/// Sent bubbles: dark amber, with light amber text and meta.
+const kSent          = Color(0xFF3A2B12);
+const kOnSent        = Color(0xFFFFE6C2);
+const kSentMeta      = Color(0xFFC9A46A);
 
 // ── Type helpers ─────────────────────────────────────────────────────────────
 

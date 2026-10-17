@@ -246,60 +246,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
         ],
       ),
-      floatingActionButton: progress == null
-          ? FloatingActionButton.extended(
-              onPressed: _rescan,
-              icon: const Icon(Icons.radar_rounded),
-              label: const Text('Scan'),
-            )
-          : null,
     );
   }
 
   Widget _buildBody(BuildContext context, WidgetRef ref,
       AsyncValue<List<Peer>> peersAsync, dynamic updateInfo) {
     final bannerVisible = ref.watch(updateBannerVisibleProvider);
+    final peers = peersAsync.valueOrNull ?? const <Peer>[];
+    final paired = peers.where((p) => p.paired).toList();
+    final nearby = peers.where((p) => !p.paired).toList();
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
       slivers: [
         SliverAppBar(
           pinned: true,
-          toolbarHeight: 64,
+          toolbarHeight: 68,
           backgroundColor: kBg,
+          titleSpacing: 20,
           title: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               // The transmit lamp
               Container(
-                width: 34,
-                height: 34,
+                width: 10,
+                height: 10,
                 decoration: BoxDecoration(
-                  color: kSurface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: kHairline),
-                ),
-                child: Center(
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: kAccent,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: kAccent.withValues(alpha: 0.5),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                  ),
+                  color: kAccent,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: kAccent.withValues(alpha: 0.16), spreadRadius: 5),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Text('PALT',
-                  style: display(fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(width: 14),
+              Text('PALT', style: display(fontSize: 24, fontWeight: FontWeight.w800)),
             ],
           ),
           actions: [
@@ -312,21 +293,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     .read(updateBannerVisibleProvider.notifier)
                     .state = true,
               ),
-            const PairButton(),
-            IconButton(
-              icon: const Icon(Icons.tune_rounded, color: kTextSecondary),
-              tooltip: 'Settings',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
-            ),
             IconButton(
               icon: const Icon(Icons.history_rounded, color: kTextSecondary),
               tooltip: 'History',
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const HistoryScreen()),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.tune_rounded, color: kTextSecondary),
+              tooltip: 'Settings',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
               ),
             ),
             const SizedBox(width: 8),
@@ -345,50 +325,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         const SliverToBoxAdapter(child: LocalDeviceCard()),
 
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 32, 20, 10),
-            child: Row(
-              children: [
-                Text('NEARBY DEVICES', style: overline(color: kTextSecondary)),
-                const SizedBox(width: 10),
-                peersAsync.when(
-                  data: (peers) => Text('${peers.length}',
-                      style: mono(color: kAccent, fontWeight: FontWeight.w600)),
-                  error: (_, __) => Text('offline', style: mono(color: kDanger)),
-                  loading: () => const SizedBox(
-                    width: 10,
-                    height: 10,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(child: Divider(color: kHairline, height: 1)),
-              ],
+        if (paired.isNotEmpty) ...[
+          _sectionHeader('YOUR DEVICES', '${paired.length} connected'),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => PeerCard(peer: paired[i]),
+              childCount: paired.length,
             ),
           ),
-        ),
+        ],
 
-        peersAsync.when(
-          data: (peers) => peers.isEmpty
-              ? SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _buildEmptyState(),
-                )
-              : SliverPadding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => PeerCard(peer: peers[index]),
-                      childCount: peers.length,
-                    ),
-                  ),
-                ),
-          error: (err, _) => SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(
+        if (nearby.isNotEmpty) ...[
+          _sectionHeader('NEARBY', 'not paired'),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => PeerCard(peer: nearby[i]),
+              childCount: nearby.length,
+            ),
+          ),
+        ],
+
+        if (peers.isEmpty)
+          peersAsync.when(
+            data: (_) => SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.symmetric(vertical: 48),
+                child: _buildEmptyState(),
+              ),
+            ),
+            error: (err, _) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(40),
                 child: Text(
                   'Discovery hit a problem: $err\nPull down to try again.',
                   textAlign: TextAlign.center,
@@ -396,22 +363,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             ),
+            loading: () => const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(48),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
           ),
-          loading: () => const SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        ),
 
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 40, bottom: 120),
-            child: _buildFooter(context),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const SizedBox(height: 28),
+              _pairButton(context),
+              const SizedBox(height: 14),
+              _buildFooter(context),
+              // Room for the live transfer card.
+              SizedBox(height: ref.watch(transferProgressProvider) != null ? 150 : 18),
+            ],
           ),
         ),
       ],
     );
   }
+
+  Widget _sectionHeader(String title, String trailing) => SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 26, 20, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(child: Text(title, style: overline(color: kTextSecondary))),
+              Text(trailing, style: mono(color: kTextFaint)),
+            ],
+          ),
+        ),
+      );
+
+  /// Pairing lives here, at the thumb, instead of a header icon.
+  Widget _pairButton(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: CustomPaint(
+          painter: _DashedBorder(color: const Color(0xFF2C3B5A), radius: 18),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PairScreen())),
+              child: const SizedBox(
+                height: 56,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.qr_code_scanner_rounded, color: kAccent, size: 20),
+                    SizedBox(width: 10),
+                    Text('Pair a device',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kAccent)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 
   Widget _buildEmptyState() {
     return Center(
@@ -606,9 +623,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildFooter(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
       child: const Text(
-        'made with ❤️ by uriel • $kAppVersion',
+        'PALT $kAppVersion · made with ❤️ by uriel',
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 11, color: kTextFaint),
       ),
@@ -790,4 +806,29 @@ class _OfferSheetState extends State<_OfferSheet> {
       ),
     );
   }
+}
+
+/// A rounded dashed outline.
+class _DashedBorder extends CustomPainter {
+  final Color color;
+  final double radius;
+  const _DashedBorder({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)));
+    for (final m in path.computeMetrics()) {
+      for (var d = 0.0; d < m.length; d += 10) {
+        canvas.drawPath(m.extractPath(d, d + 5), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorder old) => old.color != color || old.radius != radius;
 }

@@ -144,7 +144,7 @@ class _PlayerCardState extends State<_PlayerCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            _Art(url: p.art),
+            MediaArt(url: p.art),
             const SizedBox(width: 14),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -219,9 +219,10 @@ class _PlayerCardState extends State<_PlayerCard> {
 }
 
 /// Cover art from a web URL or a data: URL, or a placeholder.
-class _Art extends StatelessWidget {
+class MediaArt extends StatelessWidget {
   final String url;
-  const _Art({required this.url});
+  final double size;
+  const MediaArt({super.key, required this.url, this.size = 72});
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +235,7 @@ class _Art extends StatelessWidget {
     } else {
       img = const _NoArt();
     }
-    return ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(width: 72, height: 72, child: img));
+    return ClipRRect(borderRadius: BorderRadius.circular(14), child: SizedBox(width: size, height: size, child: img));
   }
 }
 

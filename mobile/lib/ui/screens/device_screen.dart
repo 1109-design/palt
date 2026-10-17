@@ -1,13 +1,16 @@
 /// device_screen.dart — one peer, full screen (Beacon).
 ///
-/// Opened by tapping a PeerCard. Shows the shared history with that device
-/// as a thread (outgoing right in amber, incoming left in green) and a
-/// composer for text messages and files. If the peer drops off the network
+/// Opened by tapping a PeerCard. Paired devices get two tabs: Control (what
+/// it's playing, then the actions as tiles) and Activity (the shared history
+/// as a chat: sent right in dark amber, received left, pictures as
+/// thumbnails). Unpaired devices get the chat only. A composer for text and
+/// files sits under both. If the peer drops off the network
 /// the thread stays readable but sending is disabled until it returns.
 /// Auto-copy (incoming texts → clipboard) is opt-in per device and only
 /// offered for trusted devices; "Send clipboard" is always a manual tap.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,7 +25,9 @@ import '../../providers/alias_provider.dart';
 import '../../providers/auto_copy_provider.dart';
 import '../../providers/device_features_provider.dart';
 import '../../features/device_actions.dart';
+import '../../features/media.dart';
 import '../../features/phone_features.dart';
+import '../../providers/link_provider.dart';
 import '../widgets/device_status.dart';
 import 'media_screen.dart';
 import '../../providers/history_provider.dart';
@@ -30,7 +35,6 @@ import '../../providers/peer_provider.dart';
 import '../../services/transfer_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/media.dart';
-import '../../utils/os_icons.dart';
 import '../widgets/peer_card.dart';
 import '../widgets/route_badge.dart';
 
@@ -52,6 +56,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
   bool _sending = false;
+  int _tab = 0; // 0 Control, 1 Activity
   String? _sendError;
   late final StateController<String?> _openDevice;
 
@@ -189,8 +194,10 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
 
     final alias = ref.watch(aliasProvider)[peer.deviceName];
     final displayName = (alias != null && alias.isNotEmpty) ? alias : peer.deviceName;
-    final osInfo = getOsInfo(peer.os);
     final paired = peer.paired;
+    final status = ref.watch(peerStatusProvider)[peer.deviceName];
+    // Unpaired devices only exchange files and text: no Control tab.
+    final control = paired && _tab == 0;
 
     // History is newest-first, which is exactly what a reversed list wants.
     final thread = _groupTransfers(ref
@@ -214,48 +221,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        // Paired devices get a status panel and quick actions under the title.
-        bottom: paired
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(262),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: Column(
-                    children: [
-                      StatusPanel(
-                        status: ref.watch(peerStatusProvider)[peer.deviceName],
-                        peer: peer,
-                        online: online,
-                      ),
-                      const SizedBox(height: 6),
-                      QuickActions(actions: [
-                        (icon: Icons.attach_file_rounded, label: 'Files', onTap: online ? () => pickAndSendFiles(ref, peer) : null),
-                        (icon: Icons.content_paste_go_rounded, label: 'Clipboard', onTap: online ? () => sendClipboardTo(context, ref, peer) : null),
-                        (icon: Icons.notifications_active_rounded, label: 'Ring', onTap: online ? () => sendDevicePacket(context, ref, peer, 'ring') : null),
-                        (icon: Icons.waving_hand_rounded, label: 'Ping', onTap: online ? () => sendDevicePacket(context, ref, peer, 'user_ping') : null),
-                        (icon: Icons.wifi_rounded, label: 'Wi-Fi', onTap: online ? () => shareWifiTo(context, peer) : null),
-                        (
-                          icon: Icons.play_circle_outline_rounded,
-                          label: 'Media',
-                          onTap: online
-                              ? () => Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => MediaScreen(device: peer.deviceName)))
-                              : null
-                        ),
-                        (
-                          icon: Icons.router_rounded,
-                          label: 'Internet',
-                          onTap: online
-                              ? () => shareInternetWith(context, ref, peer,
-                                  phoneOnline: ref.read(localStatusProvider)?.internet ?? true)
-                              : null
-                        ),
-                      ]),
-                    ],
-                  ),
-                ),
-              )
-            : null,
+        toolbarHeight: 64,
         actions: [
           IconButton(
             tooltip: 'Device settings',
@@ -264,93 +230,82 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
           ),
           const SizedBox(width: 4),
         ],
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: kSurfaceRaised,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: kHairline),
-              ),
-              child: Icon(osInfo.icon, color: kTextSecondary, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        title: GestureDetector(
+          onLongPress: () => showRenameDialog(context, ref, peer),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(displayName,
+                  style: display(fontSize: 20, fontWeight: FontWeight.w800),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 3),
+              Row(
                 children: [
-                  Text(displayName,
-                      style: display(fontSize: 17),
+                  if (online) ...[
+                    RouteBadge(route: peer.via, ip: peer.ipAddress),
+                    const SizedBox(width: 10),
+                  ],
+                  Flexible(
+                    child: Text(
+                      !online
+                          ? 'offline'
+                          : [
+                              if (status != null && status.battery >= 0) '${status.battery}%',
+                              if (status != null && networkLabel(status).isNotEmpty) networkLabel(status),
+                              if (status == null && !peer.viaRelay) peer.ipAddress,
+                            ].join('   '),
+                      style: mono(fontSize: 11),
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: online ? kOk : kTextFaint,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      if (online) ...[
-                        RouteBadge(route: peer.via, ip: peer.ipAddress),
-                        const SizedBox(width: 6),
-                      ],
-                      Flexible(
-                        child: Text(
-                          !online
-                              ? 'offline'
-                              : peer.viaRelay
-                                  ? 'through relay'
-                                  : peer.ipAddress,
-                          style: mono(fontSize: 11),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       body: SafeArea(
         top: false,
         child: Column(
           children: [
-            if (progress != null) _ProgressStrip(progress: progress),
+            if (paired)
+              _Tabs(
+                selected: _tab,
+                onSelect: (i) => setState(() => _tab = i),
+              ),
             Expanded(
-              child: thread.isEmpty
-                  ? _EmptyThread(online: online)
-                  : ListView.builder(
-                      reverse: true,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      itemCount: thread.length,
-                      itemBuilder: (context, i) {
-                        final entry = thread[i];
-                        // Reversed list: the day header sits above the
-                        // oldest entry of each day, i.e. when the next
-                        // (older) item is from a different day.
-                        final older = i + 1 < thread.length ? thread[i + 1] : null;
-                        final showDay = older == null ||
-                            _dayLabel(older.timestamp) != _dayLabel(entry.timestamp);
-                        return Column(
-                          // Stretch so each bubble can align left/right.
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (showDay) _DayDivider(label: _dayLabel(entry.timestamp)),
-                            _Bubble(entry: entry),
-                          ],
-                        );
-                      },
-                    ),
+              child: control
+                  ? _ControlTab(peer: peer, online: online)
+                  : thread.isEmpty && progress == null
+                      ? _EmptyThread(online: online)
+                      : ListView.builder(
+                          reverse: true,
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                          itemCount: thread.length + (progress != null ? 1 : 0),
+                          itemBuilder: (context, i) {
+                            if (progress != null) {
+                              if (i == 0) return _ProgressBubble(progress: progress);
+                              i--;
+                            }
+                            final entry = thread[i];
+                            // Reversed list: the day header sits above the
+                            // oldest entry of each day, i.e. when the next
+                            // (older) item is from a different day.
+                            final older = i + 1 < thread.length ? thread[i + 1] : null;
+                            final showDay = older == null ||
+                                _dayLabel(older.timestamp) != _dayLabel(entry.timestamp);
+                            return Column(
+                              // Stretch so each bubble can align left/right.
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (showDay) _DayDivider(label: _dayLabel(entry.timestamp)),
+                                _Bubble(entry: entry),
+                              ],
+                            );
+                          },
+                        ),
             ),
             if (notice != null)
               Padding(
@@ -369,7 +324,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
               enabled: online,
               canSend: canSend,
               sending: _sending,
-              hint: online ? 'Message $displayName' : 'Device offline',
+              hint: online ? 'Send text to $displayName…' : 'Device offline',
               onAttach: () => pickAndSendFiles(ref, peer),
               onPasteSend: () => _sendClipboard(peer),
               onSend: () => _submit(peer),
@@ -378,6 +333,356 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Control | Activity
+class _Tabs extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onSelect;
+  const _Tabs({required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tab(int i, String label) {
+      final on = i == selected;
+      return Expanded(
+        child: Material(
+          color: on ? const Color(0xFF1E2A42) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => onSelect(i),
+            child: SizedBox(
+              height: 40,
+              child: Center(
+                child: Text(label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+                      color: on ? kText : kTextSecondary,
+                    )),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(16)),
+      child: Row(children: [tab(0, 'Control'), const SizedBox(width: 4), tab(1, 'Activity')]),
+    );
+  }
+}
+
+/// The remote: what's playing, then the actions as tiles.
+class _ControlTab extends ConsumerWidget {
+  final Peer peer;
+  final bool online;
+  const _ControlTab({required this.peer, required this.online});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    VoidCallback? when(VoidCallback f) => online ? f : null;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      children: [
+        _NowPlaying(device: peer.deviceName),
+        LayoutBuilder(builder: (context, box) {
+          const gap = 8.0, h = 78.0;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _Tile(
+                  height: h * 2 + gap,
+                  big: true,
+                  icon: Icons.attach_file_rounded,
+                  label: 'Send files',
+                  sub: 'Photos, docs, anything',
+                  onTap: when(() => pickAndSendFiles(ref, peer)),
+                ),
+              ),
+              const SizedBox(width: gap),
+              Expanded(
+                child: Column(children: [
+                  Row(children: [
+                    Expanded(
+                        child: _Tile(
+                            height: h,
+                            icon: Icons.content_paste_go_rounded,
+                            label: 'Clipboard',
+                            onTap: when(() => sendClipboardTo(context, ref, peer)))),
+                    const SizedBox(width: gap),
+                    Expanded(
+                        child: _Tile(
+                            height: h,
+                            icon: Icons.notifications_active_rounded,
+                            label: 'Ring',
+                            onTap: when(() => sendDevicePacket(context, ref, peer, 'ring')))),
+                  ]),
+                  const SizedBox(height: gap),
+                  Row(children: [
+                    Expanded(
+                        child: _Tile(
+                            height: h,
+                            icon: Icons.waving_hand_rounded,
+                            label: 'Ping',
+                            onTap: when(() => sendDevicePacket(context, ref, peer, 'user_ping')))),
+                    const SizedBox(width: gap),
+                    Expanded(
+                        child: _Tile(
+                            height: h,
+                            icon: Icons.wifi_rounded,
+                            label: 'Share Wi-Fi',
+                            onTap: when(() => shareWifiTo(context, peer)))),
+                  ]),
+                ]),
+              ),
+            ],
+          );
+        }),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 52,
+          child: OutlinedButton.icon(
+            onPressed: when(() => shareInternetWith(context, ref, peer,
+                phoneOnline: ref.read(localStatusProvider)?.internet ?? true)),
+            icon: const Icon(Icons.public_rounded, size: 18),
+            label: Text('Share internet with ${peer.deviceName}', maxLines: 1, overflow: TextOverflow.ellipsis),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFC9D3E6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Tile extends StatelessWidget {
+  final double height;
+  final IconData icon;
+  final String label;
+  final String? sub;
+  final bool big;
+  final VoidCallback? onTap;
+  const _Tile({required this.height, required this.icon, required this.label, this.sub, this.big = false, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final fg = big ? kOnAccent : (enabled ? const Color(0xFFC9D3E6) : kTextFaint);
+    return Material(
+      color: big ? (enabled ? kAccent : kAccent.withValues(alpha: 0.35)) : kTile,
+      borderRadius: BorderRadius.circular(big ? 22 : 20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(big ? 22 : 20),
+        onTap: onTap,
+        child: SizedBox(
+          height: height,
+          child: big
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(icon, size: 28, color: fg),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(label, style: display(fontSize: 21, fontWeight: FontWeight.w800, color: fg)),
+                        if (sub != null)
+                          Text(sub!, style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.75))),
+                      ]),
+                    ],
+                  ),
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 21, color: fg),
+                    const SizedBox(height: 6),
+                    Text(label, style: TextStyle(fontSize: 12, color: fg), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What the device is playing, with transport and its volume. Opens the
+/// full remote on tap. Nothing at all when the device reports no media.
+class _NowPlaying extends ConsumerStatefulWidget {
+  final String device;
+  const _NowPlaying({required this.device});
+
+  @override
+  ConsumerState<_NowPlaying> createState() => _NowPlayingState();
+}
+
+class _NowPlayingState extends ConsumerState<_NowPlaying> {
+  Timer? _tick;
+  double? _volumeDrag;
+
+  @override
+  void initState() {
+    super.initState();
+    // The progress bar moves on its own while playing.
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  void _act(String player, String action, [double value = 0]) =>
+      sendMediaAction(ref.read(linkManagerProvider), widget.device, player, action, value);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(peerMediaProvider)[widget.device];
+    if (state == null) return const SizedBox.shrink();
+    final p = state.main;
+    if (p == null && state.volume < 0) return const SizedBox.shrink();
+    final pos = p == null ? 0 : state.positionOf(p);
+    final v = _volumeDrag ?? state.volume.toDouble();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 12, 10),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1B2640), Color(0xFF131C2E)],
+          stops: [0, 0.7],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: kHairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (p != null) ...[
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => MediaScreen(device: widget.device))),
+              child: Row(children: [
+                MediaArt(url: p.art, size: 68),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${p.name.toUpperCase()} · ON ${widget.device.toUpperCase()}',
+                        style: mono(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Text(p.title.isEmpty ? 'Unknown' : p.title,
+                        style: display(fontSize: 18, fontWeight: FontWeight.w800),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    if (p.artist.isNotEmpty)
+                      Text(p.artist,
+                          style: const TextStyle(fontSize: 13, color: kTextSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                  ]),
+                ),
+              ]),
+            ),
+            if (p.length > 0) ...[
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: (pos / p.length).clamp(0.0, 1.0),
+                  minHeight: 4,
+                  backgroundColor: kHairline,
+                  valueColor: const AlwaysStoppedAnimation(kText),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(children: [
+                Text(_clock(pos), style: mono(fontSize: 10, color: kTextFaint)),
+                const Spacer(),
+                Text(_clock(p.length), style: mono(fontSize: 10, color: kTextFaint)),
+              ]),
+            ],
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  iconSize: 30,
+                  tooltip: 'Previous',
+                  onPressed: p.canPrev ? () => _act(p.id, 'previous') : null,
+                  icon: const Icon(Icons.skip_previous_rounded, color: kText),
+                ),
+                const SizedBox(width: 14),
+                SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: Material(
+                    color: kText,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => _act(p.id, 'playpause'),
+                      child: Icon(p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          size: 30, color: kBg),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                IconButton(
+                  iconSize: 30,
+                  tooltip: 'Next',
+                  onPressed: p.canNext ? () => _act(p.id, 'next') : null,
+                  icon: const Icon(Icons.skip_next_rounded, color: kText),
+                ),
+              ],
+            ),
+          ],
+          if (state.volume >= 0)
+            Row(children: [
+              GestureDetector(
+                onTap: () => _act('', 'mute'),
+                child: Icon(state.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                    size: 20, color: state.muted ? kDanger : kTextSecondary),
+              ),
+              Expanded(
+                child: Slider(
+                  value: v.clamp(0, 100),
+                  max: 100,
+                  onChanged: (x) => setState(() => _volumeDrag = x),
+                  onChangeEnd: (x) {
+                    _act('', 'volume', x.roundToDouble());
+                    Future.delayed(const Duration(seconds: 1), () {
+                      if (mounted) setState(() => _volumeDrag = null);
+                    });
+                  },
+                ),
+              ),
+              SizedBox(width: 28, child: Text('${v.round()}', style: mono(fontSize: 11))),
+            ]),
+        ],
+      ),
+    );
+  }
+
+  static String _clock(int ms) {
+    final s = ms ~/ 1000;
+    final h = s ~/ 3600, m = (s % 3600) ~/ 60, sec = s % 60;
+    final mm = h > 0 ? m.toString().padLeft(2, '0') : '$m';
+    return '${h > 0 ? '$h:' : ''}$mm:${sec.toString().padLeft(2, '0')}';
   }
 }
 
@@ -487,51 +792,54 @@ class _DayDivider extends StatelessWidget {
   const _DayDivider({required this.label});
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          const Expanded(child: Divider(color: kHairline, height: 1)),
-          const SizedBox(width: 12),
-          Text(label.toUpperCase(), style: overline()),
-          const SizedBox(width: 12),
-          const Expanded(child: Divider(color: kHairline, height: 1)),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 8),
+        child: Center(
+          child: Text(label.toUpperCase(),
+              style: mono(fontSize: 10, color: kTextFaint).copyWith(letterSpacing: 1.2)),
+        ),
+      );
 }
 
-/// A picture or video frame shown inline in the thread, WhatsApp-style.
-/// Falls back to the plain file row when it can't be loaded.
+/// A picture or video frame shown inline as a thumbnail of a fixed size.
+/// Falls back to the plain file card when it can't be loaded.
 class _ImageTile extends StatelessWidget {
   final HistoryFile file;
   final bool outgoing;
   final Widget fallback;
   final VoidCallback onTap;
-  const _ImageTile(
-      {required this.file, required this.outgoing, required this.fallback, required this.onTap});
+  final double width, height;
+  final BorderRadius radius;
+  const _ImageTile({
+    required this.file,
+    required this.outgoing,
+    required this.fallback,
+    required this.onTap,
+    required this.width,
+    required this.height,
+    required this.radius,
+  });
 
   Widget _frame(BuildContext context, String src, {Widget? overlay}) {
     final dpr = MediaQuery.of(context).devicePixelRatio;
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 320, minWidth: 120),
+        borderRadius: radius,
+        child: SizedBox(
+          width: width,
+          height: height,
           child: Stack(
-            alignment: Alignment.center,
+            fit: StackFit.expand,
             children: [
               Image.file(
                 File(src),
-                cacheWidth: (260 * dpr).round(),
+                cacheWidth: (width * dpr).round(),
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
                 errorBuilder: (_, __, ___) => fallback,
               ),
-              if (overlay != null) Positioned.fill(child: overlay),
+              if (overlay != null) overlay,
             ],
           ),
         ),
@@ -543,27 +851,27 @@ class _ImageTile extends StatelessWidget {
         children: [
           Center(
             child: Container(
-              width: 46,
-              height: 46,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: kBg.withValues(alpha: 0.65),
                 shape: BoxShape.circle,
                 border: Border.all(color: kText.withValues(alpha: 0.25)),
               ),
-              child: const Icon(Icons.play_arrow_rounded, color: kText, size: 28),
+              child: const Icon(Icons.play_arrow_rounded, color: kText, size: 24),
             ),
           ),
           if (duration != null && duration > Duration.zero)
             Positioned(
-              left: 8,
-              bottom: 8,
+              left: 6,
+              bottom: 6,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
                   color: kBg.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(formatDuration(duration), style: mono(fontSize: 10.5, color: kText)),
+                child: Text(formatDuration(duration), style: mono(fontSize: 10, color: kText)),
               ),
             ),
         ],
@@ -588,12 +896,9 @@ class _ImageTile extends StatelessWidget {
           }
           if (snap.connectionState == ConnectionState.done) return fallback;
           return Container(
-            width: 220,
-            height: 140,
-            decoration: BoxDecoration(
-              color: kSurfaceRaised,
-              borderRadius: BorderRadius.circular(10),
-            ),
+            width: width,
+            height: height,
+            decoration: BoxDecoration(color: kSurfaceRaised, borderRadius: radius),
           );
         },
       );
@@ -614,34 +919,88 @@ class _Bubble extends ConsumerWidget {
 
   bool _isPicture(HistoryFile f) => isMediaName(f.name) && entry.status == 'completed';
 
-  Widget _fileRow(BuildContext context, HistoryFile f, Color tint, bool outgoing, bool failed) {
+  /// A file as a card: type tile, name, size and an Open button.
+  Widget _fileCard(BuildContext context, HistoryFile f, bool outgoing, bool failed) {
     final canOpen = !failed && _canOpen(f, outgoing);
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: canOpen ? () => _openFile(context, f, outgoing) : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.insert_drive_file_outlined, size: 17, color: tint),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                f.name,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: kText),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    final tint = failed ? kDanger : (outgoing ? kAccent : kRelay);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(Icons.insert_drive_file_outlined, size: 19, color: tint),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  f.name,
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: outgoing ? kOnSent : kText),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(_formatSize(f.size), style: mono(fontSize: 10, color: outgoing ? kSentMeta : kTextFaint)),
+              ],
+            ),
+          ),
+          if (canOpen) ...[
+            const SizedBox(width: 10),
+            SizedBox(
+              height: 32,
+              child: TextButton(
+                onPressed: () => _openFile(context, f, outgoing),
+                style: TextButton.styleFrom(
+                  backgroundColor: outgoing ? Colors.black.withValues(alpha: 0.22) : const Color(0xFF1E2A42),
+                  foregroundColor: outgoing ? kOnSent : kText,
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  minimumSize: Size.zero,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                child: const Text('Open'),
               ),
             ),
-            const SizedBox(width: 10),
-            Text(_formatSize(f.size), style: mono(fontSize: 11)),
-            if (canOpen) ...[
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded, size: 16, color: kTextFaint),
-            ],
           ],
-        ),
+        ],
+      ),
+    );
+  }
+
+  /// Pictures: one as a 150-wide thumbnail, several as a 3-across grid.
+  Widget _pictures(BuildContext context, bool outgoing, bool failed) {
+    final files = entry.files;
+    Widget tile(HistoryFile f, double w, double h, BorderRadius r) => _ImageTile(
+          file: f,
+          outgoing: outgoing,
+          width: w,
+          height: h,
+          radius: r,
+          onTap: () => _openFile(context, f, outgoing),
+          fallback: Container(width: w, height: h, color: kSurfaceRaised,
+              child: const Icon(Icons.image_not_supported_outlined, color: kTextFaint, size: 20)),
+        );
+    if (files.length == 1) {
+      return tile(files.first, 150, 190, BorderRadius.circular(14));
+    }
+    const cell = 72.0, gap = 3.0;
+    return SizedBox(
+      width: cell * 3 + gap * 2,
+      child: Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [for (final f in files) tile(f, cell, cell, BorderRadius.circular(6))],
       ),
     );
   }
@@ -696,41 +1055,52 @@ class _Bubble extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final outgoing = entry.direction == 'outgoing';
     final failed = entry.status != 'completed';
-    final tint = failed ? kDanger : (outgoing ? kAccent : kOk);
-    final maxWidth = MediaQuery.of(context).size.width * 0.78;
+    final maxWidth = MediaQuery.of(context).size.width * 0.76;
     final picturesOnly =
         !entry.isText && entry.files.isNotEmpty && entry.files.every(_isPicture);
+    final metaColor = outgoing ? kSentMeta : kTextFaint;
+    final total = entry.files.fold<int>(0, (n, f) => n + f.size);
 
     final body = entry.isText
         ? SelectableText(
             entry.text ?? '',
-            style: const TextStyle(fontSize: 14.5, color: kText, height: 1.35),
+            style: TextStyle(fontSize: 14.5, color: outgoing ? kOnSent : kText, height: 1.35),
           )
-        : Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final f in entry.files)
-                if (_isPicture(f))
-                  Padding(
-                    padding: EdgeInsets.only(bottom: f == entry.files.last ? 0 : 4),
-                    child: _ImageTile(
-                      file: f,
-                      outgoing: outgoing,
-                      onTap: () => _openFile(context, f, outgoing),
-                      fallback: _fileRow(context, f, tint, outgoing, failed),
-                    ),
-                  )
-                else
-                  _fileRow(context, f, tint, outgoing, failed),
-            ],
-          );
+        : picturesOnly
+            ? _pictures(context, outgoing, failed)
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [for (final f in entry.files) _fileCard(context, f, outgoing, failed)],
+              );
+
+    final meta = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (entry.copied) ...[
+          Icon(Icons.content_paste_rounded, size: 11, color: metaColor),
+          const SizedBox(width: 4),
+          Text('copied · ', style: mono(fontSize: 10, color: metaColor)),
+        ],
+        if (picturesOnly)
+          Text(
+              '${entry.files.length > 1 ? '${entry.files.length} photos · ' : ''}${_formatSize(total)} · ',
+              style: mono(fontSize: 10, color: metaColor)),
+        Text(_formatTime(entry.timestamp), style: mono(fontSize: 10, color: metaColor)),
+        if (entry.route != null)
+          Text(' · ${routeLabel(entry.route)}',
+              style: mono(fontSize: 10, color: entry.route == 'relay' ? kRelay : metaColor)),
+        if (outgoing && !failed) ...[
+          const SizedBox(width: 4),
+          Icon(Icons.done_rounded, size: 13, color: metaColor),
+        ],
+      ],
+    );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
-        crossAxisAlignment:
-            outgoing ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: outgoing ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           GestureDetector(
             onLongPress: () => _showActions(context, ref),
@@ -738,57 +1108,51 @@ class _Bubble extends ConsumerWidget {
               constraints: BoxConstraints(maxWidth: maxWidth),
               padding: picturesOnly
                   ? const EdgeInsets.all(4)
-                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  : const EdgeInsets.fromLTRB(12, 9, 12, 7),
               decoration: BoxDecoration(
-                color: tint.withValues(alpha: 0.08),
-                border: Border.all(color: tint.withValues(alpha: 0.28)),
+                color: outgoing ? kSent : kTile,
+                border: failed ? Border.all(color: kDanger.withValues(alpha: 0.6)) : null,
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(outgoing ? 14 : 4),
-                  topRight: Radius.circular(outgoing ? 4 : 14),
-                  bottomLeft: const Radius.circular(14),
-                  bottomRight: const Radius.circular(14),
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(outgoing ? 18 : 6),
+                  bottomRight: Radius.circular(outgoing ? 6 : 18),
                 ),
               ),
-              child: Material(type: MaterialType.transparency, child: body),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    body,
+                    Padding(
+                      padding: picturesOnly
+                          ? const EdgeInsets.fromLTRB(6, 5, 6, 2)
+                          : const EdgeInsets.only(top: 4),
+                      child: meta,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (entry.copied) ...[
-                  const Icon(Icons.content_paste_rounded, size: 12, color: kTextSecondary),
-                  const SizedBox(width: 4),
-                  const Text('Copied to clipboard',
-                      style: TextStyle(fontSize: 11, color: kTextSecondary)),
-                  const SizedBox(width: 8),
-                ],
-                if (failed) ...[
-                  const Icon(Icons.error_outline_rounded, size: 13, color: kDanger),
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: entry.errorMessage == null
-                        ? null
-                        : () => ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(entry.errorMessage!)),
-                            ),
-                    child: const Text('Not delivered',
-                        style: TextStyle(fontSize: 11, color: kDanger)),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Text(_formatTime(entry.timestamp),
-                    style: mono(fontSize: 10.5, color: kTextFaint)),
-                if (entry.route != null)
-                  Text(' · ${routeLabel(entry.route)}',
-                      style: mono(
-                          fontSize: 10.5,
-                          color: entry.route == 'relay' ? kRelay : kTextFaint)),
-              ],
+          if (failed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
+              child: GestureDetector(
+                onTap: entry.errorMessage == null
+                    ? null
+                    : () => ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(entry.errorMessage!)),
+                        ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.error_outline_rounded, size: 13, color: kDanger),
+                  SizedBox(width: 4),
+                  Text('Not delivered', style: TextStyle(fontSize: 11, color: kDanger)),
+                ]),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -812,7 +1176,7 @@ class _EmptyThread extends StatelessWidget {
             Text('Nothing shared yet', style: display(fontSize: 18)),
             const SizedBox(height: 6),
             const Text(
-              'Type a message below, or tap the clip to send files.',
+              'Type a message below, or tap + to send files.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: kTextSecondary, height: 1.5),
             ),
@@ -823,9 +1187,10 @@ class _EmptyThread extends StatelessWidget {
   }
 }
 
-class _ProgressStrip extends StatelessWidget {
+/// The transfer in progress, as the newest bubble in the chat.
+class _ProgressBubble extends StatelessWidget {
   final TransferProgress progress;
-  const _ProgressStrip({required this.progress});
+  const _ProgressBubble({required this.progress});
 
   @override
   Widget build(BuildContext context) {
@@ -835,68 +1200,87 @@ class _ProgressStrip extends StatelessWidget {
     final color = isError ? kDanger : (isDone ? kOk : kAccent);
     final value = progress.total > 0 ? progress.written / progress.total : 0.0;
 
-    final label = isError
-        ? (progress.error ?? 'Transfer failed')
+    final title = isError
+        ? 'Transfer failed'
         : isDone
             ? 'Transfer complete'
             : isWaiting
                 ? 'Waiting for the other device…'
-                : '${progress.currentFileName ?? 'Transferring'} · file ${progress.sentItems ?? 1} of ${progress.totalItems ?? 1}';
+                : (progress.currentFileName ?? 'Transferring…');
+    final detail = isError
+        ? (progress.error ?? '')
+        : [
+            if ((progress.totalItems ?? 1) > 1) 'file ${progress.sentItems ?? 1} of ${progress.totalItems}',
+            '${_formatSize(isDone ? progress.total : progress.written)} / ${_formatSize(progress.total)}',
+            if (!isDone && !isWaiting && progress.speed != null) '${_formatSize(progress.speed!.round())}/s',
+            if (progress.route != null) routeLabel(progress.route),
+          ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: const BoxDecoration(
-        color: kSurface,
-        border: Border(bottom: BorderSide(color: kHairline)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(label,
-                    style: TextStyle(fontSize: 12.5, color: isError ? kDanger : kText),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ),
-              if (progress.route != null && !isError) ...[
-                const SizedBox(width: 8),
-                RouteBadge(route: progress.route),
-              ],
-            ],
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        width: 250,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: const BoxDecoration(
+          color: kSent,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(6),
           ),
-          if (!isError) ...[
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: isWaiting ? null : (isDone ? 1.0 : value),
-                minHeight: 4,
-                backgroundColor: kHairline,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isError
+                      ? Icons.error_outline_rounded
+                      : isDone
+                          ? Icons.check_rounded
+                          : Icons.swap_vert_rounded,
+                  size: 19,
+                  color: color,
+                ),
               ),
-            ),
-            if (!isWaiting) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Text(
-                    '${_formatSize(isDone ? progress.total : progress.written)} / ${_formatSize(progress.total)}',
-                    style: mono(fontSize: 10.5, color: kTextFaint),
-                  ),
-                  const Spacer(),
-                  Text(
-                    isDone
-                        ? 'done'
-                        : '${progress.speed != null ? '${_formatSize(progress.speed!.round())}/s' : '—'} · ${(value * 100).round()}%',
-                    style: mono(fontSize: 10.5),
-                  ),
-                ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kOnSent),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(detail,
+                      style: mono(fontSize: 10, color: isError ? kDanger : kSentMeta),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                ]),
+              ),
+            ]),
+            if (!isError) ...[
+              const SizedBox(height: 9),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: isWaiting ? null : (isDone ? 1.0 : value),
+                  minHeight: 4,
+                  backgroundColor: Colors.black.withValues(alpha: 0.3),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
               ),
             ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -928,65 +1312,81 @@ class _Composer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: kHairline)),
+        border: Border(top: BorderSide(color: Color(0xFF1A2438))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          IconButton(
-            icon: const Icon(Icons.attach_file_rounded),
-            color: kTextSecondary,
-            tooltip: 'Send files',
-            onPressed: enabled ? onAttach : null,
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: Material(
+              color: kTile,
+              shape: const CircleBorder(),
+              child: IconButton(
+                icon: const Icon(Icons.add_rounded, size: 24),
+                color: kAccent,
+                tooltip: 'Send files',
+                onPressed: enabled ? onAttach : null,
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.content_paste_go_rounded),
-            color: kTextSecondary,
-            tooltip: 'Send clipboard',
-            onPressed: enabled && !sending ? onPasteSend : null,
-          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
               decoration: BoxDecoration(
-                color: kSurface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: kHairline),
+                color: kTile,
+                borderRadius: BorderRadius.circular(22),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: TextField(
-                controller: controller,
-                focusNode: focus,
-                enabled: enabled,
-                minLines: 1,
-                maxLines: 6,
-                keyboardType: TextInputType.multiline,
-                textCapitalization: TextCapitalization.sentences,
-                style: const TextStyle(fontSize: 15, color: kText),
-                decoration: InputDecoration(
-                  hintText: hint,
-                  hintStyle: const TextStyle(color: kTextFaint),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  filled: false,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
+              padding: const EdgeInsets.only(left: 16, right: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      focusNode: focus,
+                      enabled: enabled,
+                      minLines: 1,
+                      maxLines: 6,
+                      keyboardType: TextInputType.multiline,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: const TextStyle(fontSize: 15, color: kText),
+                      decoration: InputDecoration(
+                        hintText: hint,
+                        hintStyle: const TextStyle(color: kTextFaint),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        filled: false,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.content_paste_go_rounded, size: 19),
+                    color: kTextSecondary,
+                    tooltip: 'Send clipboard',
+                    onPressed: enabled && !sending ? onPasteSend : null,
+                  ),
+                ],
               ),
             ),
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 46,
-            height: 46,
+            width: 44,
+            height: 44,
             child: Material(
-              color: canSend ? kAccent : kSurfaceRaised,
-              borderRadius: BorderRadius.circular(12),
+              color: canSend ? kAccent : kTile,
+              shape: const CircleBorder(),
               child: InkWell(
-                borderRadius: BorderRadius.circular(12),
+                customBorder: const CircleBorder(),
                 onTap: canSend ? onSend : null,
                 child: Center(
                   child: sending

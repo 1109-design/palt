@@ -1,8 +1,9 @@
-/// peer_card.dart — a discovered peer (Beacon).
+/// peer_card.dart — a device on the home screen (Beacon).
 ///
-/// Dark surface card: OS tile, display-type name, mono address readout,
-/// one amber Send action. Tapping the card opens the device screen (thread +
-/// composer); the amber square is a shortcut straight to the file picker.
+/// Paired devices get a hero card: identity and route, battery, network and
+/// what's playing, and the four actions used most (Send in amber). Devices
+/// that aren't paired are a slim row with a Send button — files and text
+/// only. Tapping either opens the device screen; long-press renames.
 library;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/device_actions.dart';
+import '../../features/media.dart';
 import '../../features/phone_features.dart';
 import 'device_status.dart';
 import 'dart:io';
@@ -21,6 +23,7 @@ import '../../theme/app_theme.dart';
 
 import '../../providers/alias_provider.dart';
 import '../screens/device_screen.dart';
+import '../screens/media_screen.dart';
 import 'route_badge.dart';
 
 /// Opens the system file picker and streams the chosen files to [peer].
@@ -40,73 +43,67 @@ Future<void> pickAndSendFiles(WidgetRef ref, Peer peer) async {
   }
 }
 
-class PeerCard extends ConsumerWidget {
-  final Peer peer;
-  final VoidCallback? onSendFile;
-
-  const PeerCard({super.key, required this.peer, this.onSendFile});
-
-  void _showRenameDialog(BuildContext context, WidgetRef ref, String currentAlias) {
-    final controller = TextEditingController(text: currentAlias);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('RENAME DEVICE', style: overline()),
-            const SizedBox(height: 4),
-            Text(
-              peer.deviceName,
-              style: display(fontSize: 19),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Nickname — leave empty to reset',
-            helperText: 'Only this phone sees the nickname',
-          ),
-          autofocus: true,
-          style: const TextStyle(color: kText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              ref
-                  .read(aliasProvider.notifier)
-                  .setAlias(peer.deviceName, controller.text.trim());
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
+void showRenameDialog(BuildContext context, WidgetRef ref, Peer peer) {
+  final controller = TextEditingController(text: ref.read(aliasProvider)[peer.deviceName] ?? '');
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('RENAME DEVICE', style: overline()),
+          const SizedBox(height: 4),
+          Text(
+            peer.deviceName,
+            style: display(fontSize: 19),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
-    );
-  }
+      content: TextField(
+        controller: controller,
+        decoration: const InputDecoration(
+          hintText: 'Nickname — leave empty to reset',
+          helperText: 'Only this phone sees the nickname',
+        ),
+        autofocus: true,
+        style: const TextStyle(color: kText),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            ref.read(aliasProvider.notifier).setAlias(peer.deviceName, controller.text.trim());
+            Navigator.pop(context);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+}
+
+class PeerCard extends ConsumerWidget {
+  final Peer peer;
+
+  const PeerCard({super.key, required this.peer});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (peer.paired) return _PairedCard(peer: peer, onSend: () => _handleSend(ref), onRename: (a) => _showRenameDialog(context, ref, a));
+    if (peer.paired) return _PairedCard(peer: peer);
     final osInfo = getOsInfo(peer.os);
-    final aliases = ref.watch(aliasProvider);
-    final alias = aliases[peer.deviceName];
-    final hasAlias = alias != null && alias.isNotEmpty;
+    final alias = ref.watch(aliasProvider)[peer.deviceName] ?? '';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       decoration: BoxDecoration(
         color: kSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kHairline),
+        borderRadius: BorderRadius.circular(18),
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(
@@ -116,28 +113,28 @@ class PeerCard extends ConsumerWidget {
             context,
             MaterialPageRoute(builder: (_) => DeviceScreen(peer: peer)),
           ),
+          onLongPress: () => showRenameDialog(context, ref, peer),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
             child: Row(
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     color: kSurfaceRaised,
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: kHairline),
                   ),
-                  child: Icon(osInfo.icon, color: kTextSecondary, size: 25),
+                  child: Icon(osInfo.icon, color: kTextSecondary, size: 20),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        hasAlias ? alias : peer.deviceName,
-                        style: display(fontSize: 17),
+                        alias.isNotEmpty ? alias : peer.deviceName,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: kText),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -145,32 +142,12 @@ class PeerCard extends ConsumerWidget {
                       Row(
                         children: [
                           RouteBadge(route: peer.via, ip: peer.ipAddress),
-                          if (!peer.viaRelay) ...[
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(peer.ipAddress,
-                                  style: mono(fontSize: 11.5),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                            ),
-                          ],
                           const SizedBox(width: 8),
-                          Container(
-                            width: 3,
-                            height: 3,
-                            decoration: const BoxDecoration(
-                              color: kTextFaint,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            osInfo.label,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: kTextFaint,
-                            ),
+                          const Flexible(
+                            child: Text('Files and text only',
+                                style: TextStyle(fontSize: 12, color: kTextSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
                           ),
                         ],
                       ),
@@ -178,29 +155,15 @@ class PeerCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 18, color: kTextFaint),
-                  tooltip: 'Rename',
-                  onPressed: () => _showRenameDialog(context, ref, alias ?? ''),
-                  visualDensity: VisualDensity.compact,
-                ),
-                // Quick send: straight to the file picker
-                SizedBox(
-                  width: 42,
-                  height: 42,
-                  child: Material(
-                    color: kAccent,
-                    borderRadius: BorderRadius.circular(11),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(11),
-                      onTap: () => _handleSend(ref),
-                      child: const Tooltip(
-                        message: 'Send files',
-                        child: Icon(Icons.north_east_rounded,
-                            size: 19, color: kOnAccent),
-                      ),
-                    ),
+                OutlinedButton(
+                  onPressed: () => pickAndSendFiles(ref, peer),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
+                  child: const Text('Send'),
                 ),
               ],
             ),
@@ -209,36 +172,43 @@ class PeerCard extends ConsumerWidget {
       ),
     );
   }
-
-  Future<void> _handleSend(WidgetRef ref) async {
-    if (onSendFile != null) {
-      onSendFile!();
-      return;
-    }
-    await pickAndSendFiles(ref, peer);
-  }
 }
 
-/// A paired device as a little control panel: identity, live battery and
-/// network, and the actions you use most.
+/// A paired device as the hero of the home screen.
 class _PairedCard extends ConsumerWidget {
   final Peer peer;
-  final VoidCallback onSend;
-  final void Function(String alias) onRename;
-  const _PairedCard({required this.peer, required this.onSend, required this.onRename});
+  const _PairedCard({required this.peer});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final osInfo = getOsInfo(peer.os);
     final alias = ref.watch(aliasProvider)[peer.deviceName] ?? '';
     final status = ref.watch(peerStatusProvider)[peer.deviceName];
+    final playing = ref.watch(peerMediaProvider)[peer.deviceName]?.main?.playing ?? false;
     void open() => Navigator.push(context, MaterialPageRoute(builder: (_) => DeviceScreen(peer: peer)));
+
+    final stats = <Widget>[
+      if (status != null && status.battery >= 0)
+        _Stat(
+          lead: BatteryGlyph(status: status, width: 18),
+          label: '${status.battery}%',
+          color: batteryColor(status) == kText ? kTextSecondary : batteryColor(status),
+        ),
+      if (status != null && networkLabel(status).isNotEmpty)
+        _Stat(lead: Icon(networkIcon(status), size: 15, color: kTextSecondary), label: networkLabel(status)),
+      if (playing) const _Stat(lead: Icon(Icons.music_note_rounded, size: 15, color: kTextSecondary), label: 'Playing'),
+    ];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       decoration: BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1B2640), Color(0xFF141D30)],
+          stops: [0, 0.6],
+        ),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: kHairline),
       ),
       clipBehavior: Clip.antiAlias,
@@ -246,23 +216,22 @@ class _PairedCard extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: open,
-          onLongPress: () => onRename(alias),
+          onLongPress: () => showRenameDialog(context, ref, peer),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 56,
+                      height: 56,
                       decoration: BoxDecoration(
-                        color: kSurfaceRaised,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: kHairline),
+                        color: kAccent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(18),
                       ),
-                      child: Icon(osInfo.icon, color: kText, size: 24),
+                      child: Icon(osInfo.icon, color: kAccent, size: 28),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -270,10 +239,10 @@ class _PairedCard extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(alias.isNotEmpty ? alias : peer.deviceName,
-                              style: display(fontSize: 18),
+                              style: display(fontSize: 21, fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 5),
                           Row(
                             children: [
                               Container(
@@ -281,9 +250,8 @@ class _PairedCard extends ConsumerWidget {
                                 height: 7,
                                 decoration: const BoxDecoration(color: kOk, shape: BoxShape.circle),
                               ),
-                              const SizedBox(width: 6),
-                              Text('Paired · ${osInfo.label}',
-                                  style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                              const SizedBox(width: 7),
+                              const Text('Connected', style: TextStyle(fontSize: 13, color: kTextSecondary)),
                               const SizedBox(width: 8),
                               RouteBadge(route: peer.via, ip: peer.ipAddress),
                             ],
@@ -294,24 +262,99 @@ class _PairedCard extends ConsumerWidget {
                     const Icon(Icons.chevron_right_rounded, color: kTextFaint),
                   ],
                 ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: kBg,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: kHairline),
-                  ),
-                  child: StatusLine(status: status),
+                if (stats.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 14),
+                  Wrap(spacing: 18, runSpacing: 8, children: stats),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    _CardAction(
+                      icon: Icons.arrow_upward_rounded,
+                      label: 'Send',
+                      primary: true,
+                      onTap: () => pickAndSendFiles(ref, peer),
+                    ),
+                    const SizedBox(width: 8),
+                    _CardAction(
+                      icon: Icons.content_paste_go_rounded,
+                      label: 'Clipboard',
+                      onTap: () => sendClipboardTo(context, ref, peer),
+                    ),
+                    const SizedBox(width: 8),
+                    _CardAction(
+                      icon: Icons.notifications_active_rounded,
+                      label: 'Ring',
+                      onTap: () => sendDevicePacket(context, ref, peer, 'ring'),
+                    ),
+                    const SizedBox(width: 8),
+                    _CardAction(
+                      icon: Icons.play_arrow_rounded,
+                      label: 'Media',
+                      onTap: () => Navigator.push(
+                          context, MaterialPageRoute(builder: (_) => MediaScreen(device: peer.deviceName))),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                QuickActions(actions: [
-                  (icon: Icons.attach_file_rounded, label: 'Files', onTap: onSend),
-                  (icon: Icons.content_paste_go_rounded, label: 'Clipboard', onTap: () => sendClipboardTo(context, ref, peer)),
-                  (icon: Icons.notifications_active_rounded, label: 'Ring', onTap: () => sendDevicePacket(context, ref, peer, 'ring')),
-                  (icon: Icons.waving_hand_rounded, label: 'Ping', onTap: () => sendDevicePacket(context, ref, peer, 'user_ping')),
-                  (icon: Icons.chat_bubble_outline_rounded, label: 'Chat', onTap: open),
-                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final Widget lead;
+  final String label;
+  final Color color;
+  const _Stat({required this.lead, required this.label, this.color = kTextSecondary});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          lead,
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 150),
+            child: Text(label, style: mono(fontSize: 12, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      );
+}
+
+class _CardAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+  const _CardAction({required this.icon, required this.label, required this.onTap, this.primary = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = primary ? kOnAccent : const Color(0xFFC9D3E6);
+    return Expanded(
+      child: Material(
+        color: primary ? kAccent : const Color(0xFF0F1626),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: SizedBox(
+            height: 64,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 21, color: fg),
+                const SizedBox(height: 4),
+                Text(label,
+                    style: TextStyle(fontSize: 12, fontWeight: primary ? FontWeight.w600 : FontWeight.w500, color: fg),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
