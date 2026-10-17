@@ -20,6 +20,14 @@ export const beacon = {
   danger:        '#FF7B72',
   /** Route tag for transfers going through the relay server. */
   relay:         '#7AA2FF',
+  /** Action tiles and received bubbles. */
+  tile:          '#141E31',
+  /** Sent bubbles: dark amber, with light amber text and meta. */
+  sent:          '#3A2B12',
+  onSent:        '#FFE6C2',
+  sentMeta:      '#C9A46A',
+  /** Paired-device hero card. */
+  cardGradient:  'linear-gradient(135deg, #1B2640 0%, #141D30 60%)',
 } as const;
 
 export const fonts = {

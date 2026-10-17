@@ -77,6 +77,8 @@ export function GetStartupError():Promise<string>;
 
 export function GetThread(arg1:string,arg2:number,arg3:number):Promise<Array<main.SMSMessage>>;
 
+export function GetZoom():Promise<number>;
+
 export function InstallClipboardHelper():Promise<void>;
 
 export function JoinPairing(arg1:string):Promise<void>;
@@ -128,6 +130,8 @@ export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;
 export function SetDeviceSetting(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function SetRelayServer(arg1:string):Promise<void>;
+
+export function SetZoom(arg1:number):Promise<boolean>;
 
 export function ShareInternet(arg1:string):Promise<void>;
 

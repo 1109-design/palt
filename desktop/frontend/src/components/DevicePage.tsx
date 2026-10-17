@@ -1,26 +1,29 @@
 /**
- * DevicePage.tsx — one peer, full screen (Beacon)
+ * DevicePage.tsx — one peer, full window (Beacon)
  *
- * Opened by clicking a PeerCard. Shows the shared history with that device
- * as a thread (outgoing on the right in amber, incoming on the left in
- * green) and a composer for text messages and files. The whole page is a
- * file drop target for this peer via the same data-peer-* attributes the
- * cards use. Auto-copy (incoming texts → clipboard) is opt-in per device and
- * only offered for paired devices; "Send clipboard" is always a manual tap. If the peer drops off the network the thread stays readable
- * but sending is disabled until it comes back.
+ * Opened by clicking a PeerCard. A paired device gets two panes: Control on
+ * the left (what it's playing, the actions, its vitals) and Activity on the
+ * right — the shared history as a chat thread with thumbnails, and a
+ * composer for text and files. On a narrow window the panes become tabs.
+ * A device that isn't paired only gets Activity.
+ *
+ * The whole page is a file drop target for this peer via the same
+ * data-peer-* attributes the cards use. Auto-copy (incoming texts →
+ * clipboard) is opt-in per device and only offered for paired devices. If
+ * the peer drops off the network the thread stays readable but sending is
+ * disabled until it comes back.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Typography, IconButton, Tooltip, Button, InputBase, CircularProgress, Switch,
-  Dialog, DialogTitle, DialogContent, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText,
-  Skeleton,
+  Menu, MenuItem, ListItemIcon, ListItemText, Skeleton, Slider, Badge,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
-import SendIcon from '@mui/icons-material/ArrowUpward';
+import AddIcon from '@mui/icons-material/AddRounded';
+import SendIcon from '@mui/icons-material/ArrowUpwardRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import CheckIcon from '@mui/icons-material/Check';
+import DoneIcon from '@mui/icons-material/DoneRounded';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
@@ -30,26 +33,36 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FolderOpenIcon from '@mui/icons-material/FolderOpenOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import PlayArrowIcon from '@mui/icons-material/PlayArrowRounded';
-import type { DeviceStatus, MediaState, Peer } from '../types/peer';
-import type { HistoryEntry, HistoryFile } from '../types/history';
-import { getOsInfo } from '../utils/osHelpers';
+import PauseIcon from '@mui/icons-material/PauseRounded';
+import SkipNextIcon from '@mui/icons-material/SkipNextRounded';
+import SkipPreviousIcon from '@mui/icons-material/SkipPreviousRounded';
+import VolumeUpIcon from '@mui/icons-material/VolumeUpRounded';
+import VolumeOffIcon from '@mui/icons-material/VolumeOffRounded';
+import MusicNoteIcon from '@mui/icons-material/MusicNoteRounded';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import NotificationsIcon from '@mui/icons-material/NotificationsOutlined';
 import TuneIcon from '@mui/icons-material/Tune';
-import { Badge } from '@mui/material';
 import WavingHandIcon from '@mui/icons-material/WavingHand';
 import WifiIcon from '@mui/icons-material/Wifi';
 import RouterIcon from '@mui/icons-material/Router';
 import SmsIcon from '@mui/icons-material/SmsOutlined';
 import CallIcon from '@mui/icons-material/CallOutlined';
-import DeviceStatusPanel from './DeviceStatusPanel';
-import PeerMediaCard from './PeerMediaCard';
+import ArrowOutwardIcon from '@mui/icons-material/ArrowOutwardRounded';
+import BoltIcon from '@mui/icons-material/Bolt';
+import type { DeviceStatus, MediaPlayer, MediaState, Peer } from '../types/peer';
+import type { HistoryEntry, HistoryFile } from '../types/history';
+import { getOsInfo } from '../utils/osHelpers';
+import { useLayoutWidth } from '../utils/zoom';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
-import RouteBadge, { routeLabel } from './RouteBadge';
+import RouteBadge, { routeColor, routeLabel } from './RouteBadge';
+import { networkLabel } from './DeviceStatusChip';
 
 /** Must match MaxTextBytes in internal/transfer/protocol.go */
 const MAX_TEXT_BYTES = 16 * 1024;
+
+/** Below this width (in zoomed CSS px) Control and Activity become tabs. */
+const TWO_PANE_MIN = 960;
 
 interface DevicePageProps {
   /** The device as last seen; kept so the page survives the peer going offline. */
@@ -129,17 +142,23 @@ const formatDuration = (secs: number) => {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 };
 
+const menuPaper = { paper: { sx: { backgroundColor: beacon.surfaceRaised, border: `1px solid ${beacon.hairline}` } } };
+
+// ── Activity ────────────────────────────────────────────────────────────────
+
 /**
- * ImageTile — a picture shown in the thread, WhatsApp-style. Falls back to the
- * plain file row when the preview can't be made (file moved, unsupported, …).
+ * ImageTile — a picture or video as a thumbnail in the thread. Falls back to
+ * a file card when the preview can't be made (file moved, unsupported, …).
  */
 const ImageTile: React.FC<{
   entry: HistoryEntry;
   file: HistoryFile;
-  tint: string;
+  width: number;
+  height: number;
+  outgoing: boolean;
   onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
   loadPreview: (path: string, name: string) => Promise<MediaPreview>;
-}> = ({ entry, file, tint, onFileAction, loadPreview }) => {
+}> = ({ entry, file, width, height, outgoing, onFileAction, loadPreview }) => {
   const key = `${file.path || ''}|${file.name}`;
   const [preview, setPreview] = useState<MediaPreview | null | undefined>(previewCache.get(key));
 
@@ -161,12 +180,12 @@ const ImageTile: React.FC<{
   }, [key, file.path, file.name, loadPreview]);
 
   if (preview === null) {
-    return <FileRow entry={entry} file={file} tint={tint} onFileAction={onFileAction} />;
+    return <FileCard entry={entry} file={file} outgoing={outgoing} onFileAction={onFileAction} />;
   }
   const src = preview?.url;
 
   return (
-    <Box sx={{ position: 'relative', '&:hover .img-reveal': { opacity: 1 } }}>
+    <Box sx={{ position: 'relative', width, height, flexShrink: 0, '&:hover .img-reveal': { opacity: 1 } }}>
       {src ? (
         <Box
           component="img"
@@ -176,11 +195,9 @@ const ImageTile: React.FC<{
           onClick={() => onFileAction(file, 'open')}
           sx={{
             display: 'block',
-            maxWidth: '100%',
-            width: 'auto',
-            maxHeight: 320,
-            minWidth: 120,
-            borderRadius: '8px',
+            width: '100%',
+            height: '100%',
+            borderRadius: '14px',
             cursor: 'pointer',
             objectFit: 'cover',
             backgroundColor: beacon.bg,
@@ -189,10 +206,10 @@ const ImageTile: React.FC<{
       ) : (
         <Skeleton
           variant="rounded"
-          width={240}
-          height={160}
+          width={width}
+          height={height}
           animation="wave"
-          sx={{ borderRadius: '8px', backgroundColor: alpha(tint, 0.08), transform: 'none' }}
+          sx={{ borderRadius: '14px', backgroundColor: alpha(beacon.text, 0.06), transform: 'none' }}
         />
       )}
       {preview?.video && (
@@ -204,20 +221,19 @@ const ImageTile: React.FC<{
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: 48,
-              height: 48,
+              width: Math.min(44, width / 2),
+              height: Math.min(44, width / 2),
               borderRadius: '50%',
               backgroundColor: alpha(beacon.bg, 0.65),
               border: `1px solid ${alpha(beacon.text, 0.25)}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              display: 'grid',
+              placeItems: 'center',
               cursor: 'pointer',
             }}
           >
-            <PlayArrowIcon sx={{ fontSize: 28, color: beacon.text }} />
+            <PlayArrowIcon sx={{ fontSize: Math.min(26, width / 3), color: beacon.text }} />
           </Box>
-          {preview.duration > 0 && (
+          {preview.duration > 0 && width > 100 && (
             <Typography
               sx={{
                 position: 'absolute',
@@ -237,7 +253,7 @@ const ImageTile: React.FC<{
           )}
         </>
       )}
-      {src && (
+      {src && width > 100 && (
         <Tooltip title="Show in folder">
           <IconButton
             className="img-reveal"
@@ -264,88 +280,77 @@ const ImageTile: React.FC<{
   );
 };
 
-const FileRow: React.FC<{
+/** A non-picture file: tinted icon, name, size, and Open. */
+const FileCard: React.FC<{
   entry: HistoryEntry;
   file: HistoryFile;
-  tint: string;
+  outgoing: boolean;
   onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
-}> = ({ entry, file, tint, onFileAction }) => {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+}> = ({ entry, file, outgoing, onFileAction }) => {
   const actionable = canLocate(entry, file) && entry.status === 'completed';
-
-  const row = (
-    <Box
-      component={actionable ? 'button' : 'div'}
-      onClick={actionable ? (e: React.MouseEvent<HTMLElement>) => setAnchor(e.currentTarget) : undefined}
-      aria-haspopup={actionable ? 'menu' : undefined}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.25,
-        minWidth: 0,
-        // The negative margin gives the hover highlight room; widen by the same
-        // amount so the row's own size isn't 8px short (which truncated names).
-        width: 'calc(100% + 8px)',
-        boxSizing: 'border-box',
-        border: 'none',
-        background: 'none',
-        font: 'inherit',
-        textAlign: 'left',
-        p: 0.5,
-        m: -0.5,
-        borderRadius: '6px',
-        cursor: actionable ? 'pointer' : 'default',
-        ...(actionable && {
-          '&:hover': { backgroundColor: alpha(tint, 0.1) },
-          '&:hover .file-name': { textDecoration: 'underline' },
-          '&:focus-visible': { outline: `1px solid ${tint}` },
-        }),
-      }}
-    >
-      <InsertDriveFileIcon sx={{ fontSize: 18, color: tint, flexShrink: 0 }} />
-      <Typography className="file-name" noWrap sx={{ fontSize: '0.86rem', fontWeight: 600, color: beacon.text, minWidth: 0 }}>
-        {file.name}
-      </Typography>
-      <Typography
-        sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary, flexShrink: 0, ml: 'auto', pl: 1 }}
-      >
-        {formatSize(file.size)}
-      </Typography>
-    </Box>
-  );
+  const fg = outgoing ? beacon.onSent : beacon.text;
+  const meta = outgoing ? beacon.sentMeta : beacon.textSecondary;
 
   return (
-    <>
-      <Tooltip title={actionable ? '' : 'Location not recorded for this file'} placement="top">
-        {row}
-      </Tooltip>
-      <Menu
-        anchorEl={anchor}
-        open={!!anchor}
-        onClose={() => setAnchor(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        slotProps={{ paper: { sx: { backgroundColor: beacon.surfaceRaised, border: `1px solid ${beacon.hairline}` } } }}
+    <Tooltip title={actionable ? '' : 'Location not recorded for this file'} placement="top">
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.25,
+          minWidth: 240,
+          p: 1,
+          borderRadius: '14px',
+          backgroundColor: alpha(beacon.bg, 0.35),
+        }}
       >
-        <MenuItem
-          onClick={() => {
-            setAnchor(null);
-            onFileAction(file, 'open');
+        <Box
+          sx={{
+            width: 40,
+            height: 40,
+            borderRadius: '12px',
+            flexShrink: 0,
+            display: 'grid',
+            placeItems: 'center',
+            backgroundColor: alpha(outgoing ? beacon.accent : beacon.relay, 0.16),
+            color: outgoing ? beacon.accent : beacon.relay,
           }}
         >
-          <ListItemIcon><OpenInNewIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-          <ListItemText primaryTypographyProps={{ fontSize: '0.86rem' }}>Open</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            setAnchor(null);
-            onFileAction(file, 'reveal');
-          }}
-        >
-          <ListItemIcon><FolderOpenIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-          <ListItemText primaryTypographyProps={{ fontSize: '0.86rem' }}>Show in folder</ListItemText>
-        </MenuItem>
-      </Menu>
-    </>
+          <InsertDriveFileIcon sx={{ fontSize: 20 }} />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography noWrap title={file.name} sx={{ fontSize: '0.88rem', fontWeight: 600, color: fg }}>
+            {file.name}
+          </Typography>
+          <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.7rem', color: meta }}>{formatSize(file.size)}</Typography>
+        </Box>
+        {actionable && (
+          <>
+            <Tooltip title="Show in folder">
+              <IconButton size="small" aria-label={`show ${file.name} in folder`} onClick={() => onFileAction(file, 'reveal')} sx={{ color: meta }}>
+                <FolderOpenIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+            <Button
+              size="small"
+              onClick={() => onFileAction(file, 'open')}
+              sx={{
+                minWidth: 0,
+                px: 1.5,
+                py: 0.5,
+                borderRadius: 999,
+                fontSize: '0.76rem',
+                color: fg,
+                backgroundColor: alpha(beacon.text, 0.08),
+                '&:hover': { backgroundColor: alpha(beacon.text, 0.14) },
+              }}
+            >
+              Open
+            </Button>
+          </>
+        )}
+      </Box>
+    </Tooltip>
   );
 };
 
@@ -358,13 +363,14 @@ const Bubble: React.FC<{
   const outgoing = entry.direction === 'outgoing';
   const failed = entry.status !== 'completed';
   const isText = entry.kind === 'text';
-  const tint = failed ? beacon.danger : outgoing ? beacon.accent : beacon.ok;
-  // Picture-only bubbles hug the image, like a chat app.
-  const picturesOnly = !isText && entry.files.length > 0 && entry.files.every((f) => isInlineImage(entry, f));
+  const pictures = isText ? [] : entry.files.filter((f) => isInlineImage(entry, f));
+  const others = isText ? [] : entry.files.filter((f) => !isInlineImage(entry, f));
   const [copied, setCopied] = useState(false);
-  // Right-click (or long-press on a touchscreen) opens the message menu.
+  // Right-click opens the message menu.
   const [menuAt, setMenuAt] = useState<{ top: number; left: number } | null>(null);
   const singleFile = !isText && entry.files.length === 1 && entry.status === 'completed' && canLocate(entry, entry.files[0]);
+  const fg = outgoing ? beacon.onSent : beacon.text;
+  const metaColor = outgoing ? beacon.sentMeta : beacon.textFaint;
 
   const copy = () => {
     navigator.clipboard.writeText(entry.text || '');
@@ -385,6 +391,33 @@ const Bubble: React.FC<{
     </MenuItem>
   );
 
+  const tile = (f: HistoryFile, i: number, w: number, h: number) => (
+    <ImageTile key={i} entry={entry} file={f} width={w} height={h} outgoing={outgoing} onFileAction={onFileAction} loadPreview={loadPreview} />
+  );
+
+  const meta = (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75, mt: 0.5, color: metaColor }}>
+      {entry.copied && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+          <ContentPasteIcon sx={{ fontSize: 12 }} />
+          <Typography sx={{ fontSize: '0.68rem' }}>copied</Typography>
+        </Box>
+      )}
+      {!isText && entry.files.length > 1 && (
+        <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem' }}>
+          {entry.files.length} files · {formatSize(entry.files.reduce((n, f) => n + f.size, 0))}
+        </Typography>
+      )}
+      <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem' }}>{formatTime(entry.timestamp)}</Typography>
+      {entry.route && (
+        <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', color: entry.route === 'relay' ? beacon.relay : undefined }}>
+          · {routeLabel(entry.route)}
+        </Typography>
+      )}
+      {outgoing && !failed && <DoneIcon sx={{ fontSize: 14 }} />}
+    </Box>
+  );
+
   return (
     <Box
       onContextMenu={(e: React.MouseEvent) => {
@@ -393,101 +426,81 @@ const Bubble: React.FC<{
       }}
       sx={{
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: outgoing ? 'flex-end' : 'flex-start',
+        alignItems: 'center',
+        gap: 0.5,
+        flexDirection: outgoing ? 'row-reverse' : 'row',
         '&:hover .bubble-copy': { opacity: 1 },
       }}
     >
       <Box
         sx={{
-          maxWidth: '72%',
-          px: picturesOnly ? 0.5 : 1.75,
-          py: picturesOnly ? 0.5 : 1.25,
-          borderRadius: '12px',
-          borderTopRightRadius: outgoing ? '4px' : '12px',
-          borderTopLeftRadius: outgoing ? '12px' : '4px',
-          backgroundColor: alpha(tint, 0.08),
-          border: `1px solid ${alpha(tint, 0.28)}`,
+          maxWidth: 'min(72%, 560px)',
+          px: pictures.length && !others.length ? 0.75 : 1.5,
+          pt: pictures.length && !others.length ? 0.75 : 1.1,
+          pb: 0.75,
+          borderRadius: '18px',
+          [outgoing ? 'borderBottomRightRadius' : 'borderBottomLeftRadius']: '6px',
+          backgroundColor: outgoing ? beacon.sent : beacon.tile,
+          border: failed ? `1px solid ${alpha(beacon.danger, 0.6)}` : '1px solid transparent',
         }}
       >
         {isText ? (
           <Typography
-            sx={{
-              fontSize: '0.9rem',
-              color: beacon.text,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              userSelect: 'text',
-            }}
+            sx={{ fontSize: '0.92rem', lineHeight: 1.5, color: fg, whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'text' }}
           >
             {entry.text}
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-            {entry.files.map((f, i) => (
-              isInlineImage(entry, f) ? (
-                <ImageTile key={i} entry={entry} file={f} tint={tint} onFileAction={onFileAction} loadPreview={loadPreview} />
-              ) : (
-                <FileRow key={i} entry={entry} file={f} tint={tint} onFileAction={onFileAction} />
-              )
+            {pictures.length === 1 && tile(pictures[0], 0, 260, 200)}
+            {pictures.length === 2 && <Box sx={{ display: 'flex', gap: 0.5 }}>{pictures.map((f, i) => tile(f, i, 150, 170))}</Box>}
+            {pictures.length > 2 && (
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 96px)', gap: 0.5 }}>
+                {pictures.map((f, i) => tile(f, i, 96, 96))}
+              </Box>
+            )}
+            {others.map((f, i) => (
+              <FileCard key={i} entry={entry} file={f} outgoing={outgoing} onFileAction={onFileAction} />
             ))}
           </Box>
         )}
-      </Box>
-
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5, px: 0.5 }}>
+        <Box sx={{ px: pictures.length && !others.length ? 0.75 : 0 }}>{meta}</Box>
         {failed && (
           <Tooltip title={entry.errorMessage || ''}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: beacon.danger }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: beacon.danger, mt: 0.25, px: pictures.length ? 0.75 : 0 }}>
               <ErrorOutlineIcon sx={{ fontSize: 13 }} />
               <Typography sx={{ fontSize: '0.7rem' }}>Not delivered</Typography>
             </Box>
           </Tooltip>
         )}
-        {entry.copied && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, color: beacon.textSecondary }}>
-            <ContentPasteIcon sx={{ fontSize: 12 }} />
-            <Typography sx={{ fontSize: '0.7rem' }}>Copied to clipboard</Typography>
-          </Box>
-        )}
-        <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: beacon.textFaint }}>
-          {formatTime(entry.timestamp)}
-        </Typography>
-        {entry.route && (
-          <Typography
-            sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: entry.route === 'relay' ? beacon.relay : beacon.textFaint }}
-          >
-            · {routeLabel(entry.route)}
-          </Typography>
-        )}
-        {isText && (
-          <Tooltip title={copied ? 'Copied' : 'Copy text'}>
-            <IconButton
-              size="small"
-              className="bubble-copy"
-              aria-label="copy message"
-              onClick={copy}
-              sx={{
-                p: 0.25,
-                color: beacon.textFaint,
-                opacity: copied ? 1 : 0,
-                transition: 'opacity 150ms',
-                '&:hover': { color: beacon.text },
-                '&:focus-visible': { opacity: 1 },
-              }}
-            >
-              {copied ? <CheckIcon sx={{ fontSize: 13, color: beacon.ok }} /> : <ContentCopyIcon sx={{ fontSize: 13 }} />}
-            </IconButton>
-          </Tooltip>
-        )}
       </Box>
+
+      {isText && (
+        <Tooltip title={copied ? 'Copied' : 'Copy text'}>
+          <IconButton
+            size="small"
+            className="bubble-copy"
+            aria-label="copy message"
+            onClick={copy}
+            sx={{
+              color: beacon.textFaint,
+              opacity: copied ? 1 : 0,
+              transition: 'opacity 150ms',
+              '&:hover': { color: beacon.text },
+              '&:focus-visible': { opacity: 1 },
+            }}
+          >
+            {copied ? <DoneIcon sx={{ fontSize: 15, color: beacon.ok }} /> : <ContentCopyIcon sx={{ fontSize: 14 }} />}
+          </IconButton>
+        </Tooltip>
+      )}
 
       <Menu
         open={!!menuAt}
         onClose={() => setMenuAt(null)}
         anchorReference="anchorPosition"
         anchorPosition={menuAt ?? undefined}
-        slotProps={{ paper: { sx: { backgroundColor: beacon.surfaceRaised, border: `1px solid ${beacon.hairline}` } } }}
+        slotProps={menuPaper}
       >
         {isText && menuItem('Copy', <ContentCopyIcon sx={{ fontSize: 18 }} />, copy)}
         {singleFile && menuItem('Open', <OpenInNewIcon sx={{ fontSize: 18 }} />, () => onFileAction(entry.files[0], 'open'))}
@@ -497,6 +510,262 @@ const Bubble: React.FC<{
     </Box>
   );
 };
+
+// ── Control ─────────────────────────────────────────────────────────────────
+
+const clock = (ms: number) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+};
+
+/** What the device is playing: art, title, seek bar, transport, volume. */
+const NowPlaying: React.FC<{
+  device: string;
+  state?: MediaState;
+  receivedAt?: number;
+  onAction: (player: string, action: string, value?: number) => void;
+}> = ({ device, state, receivedAt, onAction }) => {
+  const [, tick] = useState(0);
+  const [seek, setSeek] = useState<number | null>(null);
+  const [vol, setVol] = useState<number | null>(null);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const players = state?.players ?? [];
+  const p: MediaPlayer | undefined = players.find((x) => x.playing) ?? players.find((x) => x.title);
+  if (!state || (!p && state.volume.level < 0)) return null;
+
+  const position = p
+    ? Math.min(p.position + (p.playing && receivedAt ? Date.now() - receivedAt : 0), p.length || Infinity)
+    : 0;
+  const transport = { color: beacon.text, '&.Mui-disabled': { color: beacon.textFaint } };
+
+  return (
+    <Box sx={{ p: 2, borderRadius: '22px', background: beacon.cardGradient, border: `1px solid ${beacon.hairline}` }}>
+      {p && (
+        <>
+          <Box sx={{ display: 'flex', gap: 1.75, alignItems: 'center' }}>
+            <Box
+              sx={{
+                width: 72,
+                height: 72,
+                borderRadius: '14px',
+                overflow: 'hidden',
+                flexShrink: 0,
+                backgroundColor: beacon.surfaceRaised,
+                display: 'grid',
+                placeItems: 'center',
+              }}
+            >
+              {p.art ? (
+                <img src={p.art} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <MusicNoteIcon sx={{ color: beacon.textFaint }} />
+              )}
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography
+                noWrap
+                sx={{ fontFamily: fonts.mono, fontSize: '0.62rem', letterSpacing: '0.08em', color: p.playing ? beacon.accent : beacon.textFaint, textTransform: 'uppercase' }}
+              >
+                {p.name} · on {device}
+              </Typography>
+              <Typography noWrap sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1.08rem', color: beacon.text, mt: 0.25 }}>
+                {p.title || 'Unknown'}
+              </Typography>
+              {p.artist && (
+                <Typography noWrap sx={{ fontSize: '0.82rem', color: beacon.textSecondary }}>
+                  {p.artist}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+
+          {p.canSeek && p.length > 0 && (
+            <Box sx={{ mt: 1.5 }}>
+              <Slider
+                size="small"
+                value={seek ?? position}
+                max={p.length}
+                onChange={(_, v) => setSeek(v as number)}
+                onChangeCommitted={(_, v) => {
+                  onAction(p.id, 'seek', v as number);
+                  setTimeout(() => setSeek(null), 1000);
+                }}
+                aria-label="seek"
+                sx={{ py: 0.75, '& .MuiSlider-thumb': { width: 12, height: 12 } }}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: -0.5 }}>
+                <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', color: beacon.textFaint }}>{clock(seek ?? position)}</Typography>
+                <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', color: beacon.textFaint }}>{clock(p.length)}</Typography>
+              </Box>
+            </Box>
+          )}
+
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2.5, mt: 1 }}>
+            <IconButton disabled={!p.canPrev} onClick={() => onAction(p.id, 'previous')} aria-label="previous" sx={transport}>
+              <SkipPreviousIcon sx={{ fontSize: 30 }} />
+            </IconButton>
+            <IconButton
+              onClick={() => onAction(p.id, 'playpause')}
+              aria-label={p.playing ? 'pause' : 'play'}
+              sx={{
+                width: 56,
+                height: 56,
+                backgroundColor: beacon.accent,
+                color: beacon.onAccent,
+                '&:hover': { backgroundColor: beacon.accentHover },
+              }}
+            >
+              {p.playing ? <PauseIcon sx={{ fontSize: 30 }} /> : <PlayArrowIcon sx={{ fontSize: 30 }} />}
+            </IconButton>
+            <IconButton disabled={!p.canNext} onClick={() => onAction(p.id, 'next')} aria-label="next" sx={transport}>
+              <SkipNextIcon sx={{ fontSize: 30 }} />
+            </IconButton>
+          </Box>
+        </>
+      )}
+      {state.volume.level >= 0 && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mt: p ? 1.25 : 0 }}>
+          <Tooltip title={state.volume.muted ? `Unmute ${device}` : `Mute ${device}`}>
+            <IconButton size="small" onClick={() => onAction('', 'mute')} sx={{ color: state.volume.muted ? beacon.danger : beacon.textSecondary }}>
+              {state.volume.muted ? <VolumeOffIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          <Slider
+            size="small"
+            value={vol ?? state.volume.level}
+            max={100}
+            onChange={(_, v) => setVol(v as number)}
+            onChangeCommitted={(_, v) => {
+              onAction('', 'volume', v as number);
+              setTimeout(() => setVol(null), 1000);
+            }}
+            aria-label={`${device} volume`}
+            sx={{ '& .MuiSlider-thumb': { width: 12, height: 12 } }}
+          />
+          <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.7rem', color: beacon.textSecondary, minWidth: 32, textAlign: 'right' }}>
+            {Math.round(vol ?? state.volume.level)}%
+          </Typography>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+/** One square action in the Control grid. */
+const Tile: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+  tall?: boolean;
+  tint?: string;
+}> = ({ icon, label, sub, onClick, disabled, primary, tall, tint }) => (
+  <Box
+    component="button"
+    disabled={disabled}
+    onClick={onClick}
+    sx={{
+      gridRow: tall ? 'span 2' : undefined,
+      minHeight: 92,
+      p: 1.75,
+      border: 'none',
+      borderRadius: '20px',
+      cursor: disabled ? 'default' : 'pointer',
+      textAlign: 'left',
+      font: 'inherit',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 1,
+      backgroundColor: primary ? beacon.accent : beacon.tile,
+      color: primary ? beacon.onAccent : beacon.text,
+      opacity: disabled ? 0.45 : 1,
+      transition: 'background-color 150ms',
+      '&:hover:not(:disabled)': { backgroundColor: primary ? beacon.accentHover : beacon.surfaceRaised },
+      '& .tile-icon': { fontSize: primary ? 30 : 22, color: primary ? beacon.onAccent : tint ?? beacon.accent },
+    }}
+  >
+    {icon}
+    <Box>
+      <Typography sx={{ fontSize: primary ? '1.02rem' : '0.86rem', fontWeight: 700, lineHeight: 1.25, color: 'inherit' }}>{label}</Typography>
+      {sub && (
+        <Typography sx={{ fontSize: '0.74rem', lineHeight: 1.35, mt: 0.25, color: primary ? alpha(beacon.onAccent, 0.7) : beacon.textSecondary }}>
+          {sub}
+        </Typography>
+      )}
+    </Box>
+  </Box>
+);
+
+/** Battery, network and route as three compact rows. */
+const Vitals: React.FC<{ status?: DeviceStatus; peer: Peer; online: boolean }> = ({ status, peer, online }) => {
+  const s: DeviceStatus = status ?? { battery: -1, charging: false, network: '', ssid: '', cellular: '', signal: -1 };
+  const low = s.battery >= 0 && s.battery <= 15 && !s.charging;
+  const path = peer.path || peer.via || 'direct';
+  const rows: [string, React.ReactNode, string?][] = [
+    [
+      'Battery',
+      s.battery < 0 ? '—' : (
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: low ? beacon.danger : s.charging ? beacon.ok : beacon.text }}>
+          {s.charging && <BoltIcon sx={{ fontSize: 14 }} />}
+          {s.battery}%
+        </Box>
+      ),
+      s.charging ? 'charging' : low ? 'low' : s.battery >= 0 ? 'on battery' : status ? 'no battery' : 'not reported yet',
+    ],
+    ['Network', networkLabel(s) || '—', s.network === 'cellular' && s.signal >= 0 ? `signal ${s.signal}/4` : undefined],
+    [
+      'Connection',
+      <Box component="span" sx={{ color: online ? routeColor(path) : beacon.textFaint }}>
+        {!online ? 'Offline' : { usb: 'USB cable', wifi: 'Same Wi-Fi', lan: 'Same network', relay: 'Via relay' }[path] ?? 'Direct'}
+      </Box>,
+      peer.via === 'relay' ? 'end-to-end encrypted' : online ? `${peer.ipAddress}:${peer.port}` : undefined,
+    ],
+  ];
+
+  return (
+    <Box sx={{ borderRadius: '20px', backgroundColor: beacon.tile, px: 2, py: 0.75 }}>
+      {rows.map(([label, value, note], i) => (
+        <Box
+          key={label}
+          sx={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 1.5,
+            py: 1.1,
+            borderTop: i ? `1px solid ${alpha(beacon.hairline, 0.6)}` : 'none',
+          }}
+        >
+          <Typography variant="overline" sx={{ width: 92, flexShrink: 0, lineHeight: 1 }}>
+            {label}
+          </Typography>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography noWrap sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '0.95rem', color: beacon.text }}>
+              {value}
+            </Typography>
+            {note && (
+              <Typography noWrap sx={{ fontFamily: fonts.mono, fontSize: '0.68rem', color: beacon.textFaint }}>
+                {note}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+};
+
+// ── Page ────────────────────────────────────────────────────────────────────
 
 const DevicePage: React.FC<DevicePageProps> = ({
   peer,
@@ -534,6 +803,10 @@ const DevicePage: React.FC<DevicePageProps> = ({
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
   const displayName = alias || peer.deviceName;
+  const twoPane = useLayoutWidth() >= TWO_PANE_MIN;
+  const [tab, setTab] = useState<'control' | 'activity'>('control');
+  const showControl = paired && (twoPane || tab === 'control');
+  const showActivity = !paired || twoPane || tab === 'activity';
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -561,11 +834,11 @@ const DevicePage: React.FC<DevicePageProps> = ({
   useEffect(() => {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [thread.length]);
+  }, [thread.length, showActivity]);
 
   useEffect(() => {
-    if (online) inputRef.current?.focus();
-  }, [online]);
+    if (online && showActivity) inputRef.current?.focus();
+  }, [online, showActivity]);
 
   const draftBytes = useMemo(() => new TextEncoder().encode(draft).length, [draft]);
   const tooLong = draftBytes > MAX_TEXT_BYTES;
@@ -609,183 +882,69 @@ const DevicePage: React.FC<DevicePageProps> = ({
     send(text, false);
   };
 
-  return (
-    <Box
-      data-peer-ip={online ? peer.ipAddress : undefined}
-      data-peer-port={online ? peer.port : undefined}
-      data-peer-name={online ? peer.deviceName : undefined}
-      sx={{
-        '--wails-drop-target': online ? 'drop' : undefined,
-        position: 'fixed',
-        top: 60,
-        bottom: 30,
-        left: 0,
-        right: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: 'background.default',
-      }}
-    >
-      {/* ── Header ───────────────────────────────────────────────────────── */}
-      <Box sx={{ borderBottom: `1px solid ${beacon.hairline}` }}>
-        <Box
-          sx={{
-            maxWidth: 900,
-            mx: 'auto',
-            px: { xs: 2, sm: 3 },
-            py: 2,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-          }}
-        >
-          <Tooltip title="Back to devices">
-            <IconButton aria-label="back" onClick={onBack} sx={{ color: beacon.textSecondary, '&:hover': { color: beacon.text } }}>
-              <ArrowBackIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </Tooltip>
+  const headerButton = { color: beacon.textSecondary, '&:hover': { color: beacon.text, backgroundColor: alpha(beacon.text, 0.06) } };
+  const pillButton = {
+    height: 38,
+    px: 1.75,
+    borderRadius: 999,
+    fontSize: '0.84rem',
+    color: beacon.text,
+    backgroundColor: beacon.tile,
+    '&:hover': { backgroundColor: beacon.surfaceRaised },
+    '& .MuiButton-startIcon': { color: beacon.accent },
+  };
 
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: '12px',
-              backgroundColor: beacon.surfaceRaised,
-              border: `1px solid ${beacon.hairline}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: beacon.textSecondary,
-              flexShrink: 0,
-            }}
-          >
-            <OsIcon sx={{ fontSize: 22 }} />
-          </Box>
+  const statusLine = [
+    status && status.battery >= 0 ? `${status.battery}%${status.charging ? ' ⚡' : ''}` : '',
+    status ? networkLabel(status) : '',
+  ].filter(Boolean).join(' · ');
 
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography
-              noWrap
-              sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1.15rem', letterSpacing: '-0.01em', color: beacon.text }}
-            >
-              {displayName}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
-              <Box
-                sx={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  backgroundColor: online ? beacon.ok : beacon.textFaint,
-                  flexShrink: 0,
-                }}
-              />
-              <Typography sx={{ fontSize: '0.8rem', color: online ? beacon.textSecondary : beacon.textFaint }} noWrap>
-                {!online ? 'Offline' : paired ? 'Paired' : 'Not paired'} · {osInfo.label}
-              </Typography>
-              {online && <RouteBadge route={peer.path || peer.via} />}
-              {online && !paired && (
-                <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary }} noWrap>
-                  {peer.via === 'relay' ? 'through relay server' : `${peer.ipAddress}:${peer.port}`}
-                </Typography>
-              )}
-            </Box>
-          </Box>
+  // ── Control pane ─────────────────────────────────────────────────────────
+  const control = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      {online && <NowPlaying device={displayName} state={media} receivedAt={mediaReceivedAt} onAction={onMediaAction} />}
 
-          {online && paired && (
-            <>
-              <Tooltip title="Ring — plays a loud sound, even on silent">
-                <IconButton onClick={() => onRing(peer)} aria-label="ring device" sx={{ color: beacon.textSecondary }}>
-                  <NotificationsActiveIcon sx={{ fontSize: 19 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Ping">
-                <IconButton onClick={() => onPing(peer)} aria-label="ping device" sx={{ color: beacon.textSecondary }}>
-                  <WavingHandIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Share this computer's Wi-Fi">
-                <IconButton onClick={() => onShareWifi(peer)} aria-label="share wi-fi" sx={{ color: beacon.textSecondary }}>
-                  <WifiIcon sx={{ fontSize: 19 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip
-                title={
-                  hotspotOn
-                    ? 'Hotspot on — click to stop'
-                    : status && !status.internet
-                    ? `${peer.deviceName} has no internet — share this computer's`
-                    : "Share this computer's internet"
-                }
-              >
-                <IconButton
-                  onClick={() => onShareInternet(peer)}
-                  aria-label="share internet"
-                  sx={{ color: hotspotOn ? beacon.ok : status && !status.internet ? beacon.relay : beacon.textSecondary }}
-                >
-                  <RouterIcon sx={{ fontSize: 19 }} />
-                </IconButton>
-              </Tooltip>
-              {peer.os === 'android' && (
-                <Tooltip title="Messages (SMS)">
-                  <IconButton onClick={onShowMessages} aria-label="messages" sx={{ color: beacon.textSecondary }}>
-                    <SmsIcon sx={{ fontSize: 19 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-              {peer.os === 'android' && (
-                <Tooltip title="Calls">
-                  <IconButton onClick={onShowCalls} aria-label="calls" sx={{ color: beacon.textSecondary }}>
-                    <CallIcon sx={{ fontSize: 19 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-              <Tooltip title="Phone notifications">
-                <IconButton onClick={onShowNotifications} aria-label="phone notifications" sx={{ color: beacon.textSecondary }}>
-                  <Badge badgeContent={notificationCount} color="primary" max={99}>
-                    <NotificationsIcon sx={{ fontSize: 19 }} />
-                  </Badge>
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Device settings">
-                <IconButton onClick={(e) => setSettingsAnchor(e.currentTarget)} aria-label="device settings" sx={{ color: beacon.textSecondary }}>
-                  <TuneIcon sx={{ fontSize: 19 }} />
-                </IconButton>
-              </Tooltip>
-              <Menu anchorEl={settingsAnchor} open={!!settingsAnchor} onClose={() => setSettingsAnchor(null)}>
-                <MenuItem onClick={() => onToggleAutoCopy(peer, !autoCopy)} sx={{ gap: 1.5 }}>
-                  <Switch size="small" checked={autoCopy} />
-                  <Typography sx={{ fontSize: '0.86rem' }}>Copy its messages to my clipboard</Typography>
-                </MenuItem>
-                {SETTING_LABELS.map(([key, label]) => (
-                  <MenuItem key={key} onClick={() => onSetSetting(key, !settings[key])} sx={{ gap: 1.5 }}>
-                    <Switch size="small" checked={!!settings[key]} />
-                    <Typography sx={{ fontSize: '0.86rem' }}>{label}</Typography>
-                  </MenuItem>
-                ))}
-              </Menu>
-            </>
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<AttachFileIcon sx={{ fontSize: 17 }} />}
-            disabled={!online}
-            onClick={() => onSendFiles(peer)}
-            sx={{ height: 38, fontSize: '0.84rem', flexShrink: 0 }}
-          >
-            Send files
-          </Button>
-        </Box>
-        {paired && (
-          <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 3 }, pb: 2, mt: -1 }}>
-            <DeviceStatusPanel status={status} peer={peer} online={online} />
-            {online && <PeerMediaCard device={peer.deviceName} state={media} receivedAt={mediaReceivedAt} onAction={onMediaAction} />}
-          </Box>
-        )}
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr 1fr', gap: 1.25 }}>
+        <Tile
+          primary
+          tall
+          disabled={!online}
+          icon={<ArrowOutwardIcon className="tile-icon" />}
+          label="Send files"
+          sub="or drop them anywhere"
+          onClick={() => onSendFiles(peer)}
+        />
+        <Tile disabled={!online} icon={<ContentPasteGoIcon className="tile-icon" />} label="Clipboard" sub="send mine" onClick={sendClipboard} />
+        <Tile disabled={!online} icon={<NotificationsActiveIcon className="tile-icon" />} label="Ring" sub="find it" onClick={() => onRing(peer)} />
+        <Tile disabled={!online} icon={<WavingHandIcon className="tile-icon" />} label="Ping" sub="say hi" onClick={() => onPing(peer)} />
+        <Tile disabled={!online} icon={<WifiIcon className="tile-icon" />} label="Wi-Fi" sub="share network" onClick={() => onShareWifi(peer)} />
       </Box>
 
-      {/* ── Thread ───────────────────────────────────────────────────────── */}
+      <Button
+        variant="outlined"
+        disabled={!online}
+        startIcon={<RouterIcon sx={{ fontSize: 19 }} />}
+        onClick={() => onShareInternet(peer)}
+        sx={{
+          height: 48,
+          borderRadius: '16px',
+          fontSize: '0.88rem',
+          ...(hotspotOn && { borderColor: beacon.ok, color: beacon.ok }),
+          ...(!hotspotOn && status && !status.internet && { borderColor: beacon.relay, color: beacon.relay }),
+        }}
+      >
+        {hotspotOn ? 'Sharing internet — stop' : `Share internet with ${displayName}`}
+      </Button>
+
+      <Vitals status={status} peer={peer} online={online} />
+    </Box>
+  );
+
+  // ── Activity pane ────────────────────────────────────────────────────────
+  const activity = (
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box ref={threadRef} sx={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
-        <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 3 }, py: 3, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ maxWidth: 860, mx: 'auto', px: { xs: 2, sm: 3 }, py: 3, minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
           {thread.length === 0 ? (
             <Box sx={{ m: 'auto', textAlign: 'center', py: 6 }}>
               <ForumOutlinedIcon sx={{ fontSize: 48, color: beacon.textFaint, mb: 1.5 }} />
@@ -797,13 +956,23 @@ const DevicePage: React.FC<DevicePageProps> = ({
               </Typography>
             </Box>
           ) : (
-            <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
               {groups.map(({ label, entries }, gi) => (
                 <React.Fragment key={`${label}-${gi}`}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 1 }}>
-                    <Box sx={{ flex: 1, height: '1px', backgroundColor: beacon.hairline }} />
-                    <Typography variant="overline">{label}</Typography>
-                    <Box sx={{ flex: 1, height: '1px', backgroundColor: beacon.hairline }} />
+                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 1.5 }}>
+                    <Typography
+                      sx={{
+                        px: 1.5,
+                        py: 0.4,
+                        borderRadius: 999,
+                        backgroundColor: beacon.surface,
+                        fontFamily: fonts.mono,
+                        fontSize: '0.68rem',
+                        color: beacon.textSecondary,
+                      }}
+                    >
+                      {label}
+                    </Typography>
                   </Box>
                   {entries.map((entry) => (
                     <Bubble key={entry.id} entry={entry} onFileAction={onFileAction} loadPreview={loadPreview} onDelete={onDeleteEntry} />
@@ -813,77 +982,47 @@ const DevicePage: React.FC<DevicePageProps> = ({
             </Box>
           )}
         </Box>
-
-        {dragActive && online && (
-          <Box
-            sx={{
-              position: 'absolute',
-              inset: 12,
-              borderRadius: '12px',
-              border: `1.5px dashed ${beacon.accent}`,
-              backgroundColor: alpha(beacon.bg, 0.85),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none',
-            }}
-          >
-            <Typography sx={{ color: beacon.accent, fontWeight: 600, fontSize: '0.95rem' }}>
-              Drop to send to {displayName}
-            </Typography>
-          </Box>
-        )}
       </Box>
 
-      {/* ── Composer ─────────────────────────────────────────────────────── */}
-      <Box sx={{ borderTop: `1px solid ${beacon.hairline}` }}>
-        <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 3 }, py: 1.5 }}>
-          {(sendError || tooLong || !online) && (
-            <Typography sx={{ fontSize: '0.76rem', color: online ? beacon.danger : beacon.textSecondary, mb: 1 }}>
-              {!online
-                ? `${displayName} is offline. Sending resumes when it reappears on the network.`
-                : tooLong
-                ? `Message is too long (${(draftBytes / 1024).toFixed(1)} KB of ${MAX_TEXT_BYTES / 1024} KB). Send it as a file instead.`
-                : sendError}
-            </Typography>
-          )}
+      {/* ── Composer ───────────────────────────────────────────────────── */}
+      <Box sx={{ maxWidth: 860, width: '100%', mx: 'auto', px: { xs: 2, sm: 3 }, pb: 2, pt: 1 }}>
+        {(sendError || tooLong || !online) && (
+          <Typography sx={{ fontSize: '0.76rem', color: online ? beacon.danger : beacon.textSecondary, mb: 1, px: 1 }}>
+            {!online
+              ? `${displayName} is offline. Sending resumes when it reappears on the network.`
+              : tooLong
+              ? `Message is too long (${(draftBytes / 1024).toFixed(1)} KB of ${MAX_TEXT_BYTES / 1024} KB). Send it as a file instead.`
+              : sendError}
+          </Typography>
+        )}
+        <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+          <Tooltip title="Send files">
+            <span>
+              <IconButton
+                aria-label="attach files"
+                disabled={!online}
+                onClick={() => onSendFiles(peer)}
+                sx={{ width: 46, height: 46, backgroundColor: beacon.tile, color: beacon.accent, '&:hover': { backgroundColor: beacon.surfaceRaised } }}
+              >
+                <AddIcon sx={{ fontSize: 24 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
           <Box
             sx={{
+              flex: 1,
+              minWidth: 0,
               display: 'flex',
               alignItems: 'flex-end',
-              gap: 1,
-              p: 0.75,
-              pl: 0.5,
-              borderRadius: '12px',
-              backgroundColor: beacon.surface,
-              border: `1px solid ${beacon.hairline}`,
-              '&:focus-within': { borderColor: beacon.textFaint },
+              minHeight: 46,
+              pl: 2.25,
+              pr: 0.5,
+              borderRadius: '23px',
+              backgroundColor: beacon.tile,
+              border: '1px solid transparent',
+              '&:focus-within': { borderColor: beacon.hairline },
             }}
           >
-            <Tooltip title="Send files">
-              <span>
-                <IconButton
-                  aria-label="attach files"
-                  disabled={!online}
-                  onClick={() => onSendFiles(peer)}
-                  sx={{ color: beacon.textSecondary, '&:hover': { color: beacon.text } }}
-                >
-                  <AttachFileIcon sx={{ fontSize: 20 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Send clipboard">
-              <span>
-                <IconButton
-                  aria-label="send clipboard"
-                  disabled={!online || sending}
-                  onClick={sendClipboard}
-                  sx={{ color: beacon.textSecondary, '&:hover': { color: beacon.text } }}
-                >
-                  <ContentPasteGoIcon sx={{ fontSize: 20 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
             <InputBase
               inputRef={inputRef}
               multiline
@@ -902,30 +1041,218 @@ const DevicePage: React.FC<DevicePageProps> = ({
                   submit();
                 }
               }}
-              sx={{ fontSize: '0.9rem', color: beacon.text, py: 1, '& textarea::placeholder': { color: beacon.textFaint, opacity: 1 } }}
+              sx={{ fontSize: '0.92rem', color: beacon.text, py: 1.35, '& textarea::placeholder': { color: beacon.textFaint, opacity: 1 } }}
             />
-            <Tooltip title="Send (Enter) · newline (Shift+Enter)">
+            <Tooltip title="Send clipboard">
               <span>
                 <IconButton
-                  aria-label="send message"
-                  disabled={!canSend}
-                  onClick={submit}
-                  sx={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: '9px',
-                    backgroundColor: beacon.accent,
-                    color: beacon.onAccent,
-                    '&:hover': { backgroundColor: beacon.accentHover },
-                    '&.Mui-disabled': { backgroundColor: beacon.surfaceRaised, color: beacon.textFaint },
-                  }}
+                  aria-label="send clipboard"
+                  disabled={!online || sending}
+                  onClick={sendClipboard}
+                  sx={{ m: 0.25, color: beacon.textSecondary, '&:hover': { color: beacon.text } }}
                 >
-                  {sending ? <CircularProgress size={16} sx={{ color: beacon.textFaint }} /> : <SendIcon sx={{ fontSize: 18 }} />}
+                  <ContentPasteGoIcon sx={{ fontSize: 20 }} />
                 </IconButton>
               </span>
             </Tooltip>
           </Box>
+          <Tooltip title="Send (Enter) · newline (Shift+Enter)">
+            <span>
+              <IconButton
+                aria-label="send message"
+                disabled={!canSend}
+                onClick={submit}
+                sx={{
+                  width: 46,
+                  height: 46,
+                  backgroundColor: beacon.accent,
+                  color: beacon.onAccent,
+                  '&:hover': { backgroundColor: beacon.accentHover },
+                  '&.Mui-disabled': { backgroundColor: beacon.tile, color: beacon.textFaint },
+                }}
+              >
+                {sending ? <CircularProgress size={18} sx={{ color: beacon.textFaint }} /> : <SendIcon sx={{ fontSize: 22 }} />}
+              </IconButton>
+            </span>
+          </Tooltip>
         </Box>
+      </Box>
+    </Box>
+  );
+
+  return (
+    <Box
+      data-peer-ip={online ? peer.ipAddress : undefined}
+      data-peer-port={online ? peer.port : undefined}
+      data-peer-name={online ? peer.deviceName : undefined}
+      sx={{
+        '--wails-drop-target': online ? 'drop' : undefined,
+        position: 'fixed',
+        top: 60,
+        bottom: 30,
+        left: 0,
+        right: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: 'background.default',
+      }}
+    >
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <Box sx={{ borderBottom: `1px solid ${beacon.hairline}`, px: { xs: 2, sm: 3 }, py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Tooltip title="Back to devices">
+          <IconButton aria-label="back" onClick={onBack} sx={headerButton}>
+            <ArrowBackIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Tooltip>
+
+        <Box
+          sx={{
+            width: 44,
+            height: 44,
+            borderRadius: '14px',
+            backgroundColor: paired ? alpha(beacon.accent, 0.12) : beacon.surfaceRaised,
+            display: 'grid',
+            placeItems: 'center',
+            color: paired ? beacon.accent : beacon.textSecondary,
+            flexShrink: 0,
+          }}
+        >
+          <OsIcon sx={{ fontSize: 22 }} />
+        </Box>
+
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography noWrap sx={{ fontFamily: fonts.display, fontWeight: 800, fontSize: '1.3rem', letterSpacing: '-0.02em', color: beacon.text, lineHeight: 1.2 }}>
+            {displayName}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, minWidth: 0 }}>
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: online ? beacon.ok : beacon.textFaint, flexShrink: 0 }} />
+            <Typography noWrap sx={{ fontSize: '0.8rem', color: online ? beacon.textSecondary : beacon.textFaint, flexShrink: 0 }}>
+              {!online ? 'Offline' : paired ? 'Connected' : 'Not paired · files and text only'}
+            </Typography>
+            {online && <RouteBadge route={peer.path || peer.via} />}
+            {online && paired && statusLine && (
+              <Typography noWrap sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary, minWidth: 0 }}>
+                {statusLine}
+              </Typography>
+            )}
+            {online && !paired && (
+              <Typography noWrap sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary }}>
+                {peer.via === 'relay' ? 'through relay server' : `${peer.ipAddress}:${peer.port}`}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+
+        {online && paired && (
+          <>
+            {peer.os === 'android' && (
+              <Button startIcon={<SmsIcon />} onClick={onShowMessages} sx={pillButton}>
+                Messages
+              </Button>
+            )}
+            {peer.os === 'android' && (
+              <Button startIcon={<CallIcon />} onClick={onShowCalls} sx={pillButton}>
+                Calls
+              </Button>
+            )}
+            <Tooltip title="Its notifications">
+              <IconButton onClick={onShowNotifications} aria-label="phone notifications" sx={headerButton}>
+                <Badge badgeContent={notificationCount} color="primary" max={99}>
+                  <NotificationsIcon sx={{ fontSize: 21 }} />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Device settings">
+              <IconButton onClick={(e) => setSettingsAnchor(e.currentTarget)} aria-label="device settings" sx={headerButton}>
+                <TuneIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Tooltip>
+            <Menu anchorEl={settingsAnchor} open={!!settingsAnchor} onClose={() => setSettingsAnchor(null)} slotProps={menuPaper}>
+              <MenuItem onClick={() => onToggleAutoCopy(peer, !autoCopy)} sx={{ gap: 1.5 }}>
+                <Switch size="small" checked={autoCopy} />
+                <Typography sx={{ fontSize: '0.86rem' }}>Copy its messages to my clipboard</Typography>
+              </MenuItem>
+              {SETTING_LABELS.map(([key, label]) => (
+                <MenuItem key={key} onClick={() => onSetSetting(key, !settings[key])} sx={{ gap: 1.5 }}>
+                  <Switch size="small" checked={!!settings[key]} />
+                  <Typography sx={{ fontSize: '0.86rem' }}>{label}</Typography>
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
+        )}
+        {!paired && (
+          <Button variant="contained" startIcon={<ArrowOutwardIcon />} disabled={!online} onClick={() => onSendFiles(peer)} sx={{ height: 38, borderRadius: 999, flexShrink: 0 }}>
+            Send files
+          </Button>
+        )}
+      </Box>
+
+      {/* ── Tabs on a narrow window ──────────────────────────────────────── */}
+      {paired && !twoPane && (
+        <Box sx={{ display: 'flex', gap: 0.5, p: 0.5, mx: 2, mt: 1.5, borderRadius: 999, backgroundColor: beacon.surface }} role="tablist">
+          {(['control', 'activity'] as const).map((t) => (
+            <Box
+              key={t}
+              component="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              sx={{
+                flex: 1,
+                border: 'none',
+                cursor: 'pointer',
+                py: 1,
+                borderRadius: 999,
+                fontFamily: fonts.body,
+                fontSize: '0.86rem',
+                fontWeight: 600,
+                backgroundColor: tab === t ? beacon.surfaceRaised : 'transparent',
+                color: tab === t ? beacon.text : beacon.textSecondary,
+              }}
+            >
+              {t === 'control' ? 'Control' : 'Activity'}
+            </Box>
+          ))}
+        </Box>
+      )}
+
+      {/* ── Panes ────────────────────────────────────────────────────────── */}
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
+        {showControl && (
+          <Box
+            sx={{
+              width: twoPane ? 420 : '100%',
+              flexShrink: 0,
+              overflowY: 'auto',
+              p: { xs: 2, sm: 2.5 },
+              borderRight: twoPane ? `1px solid ${beacon.hairline}` : 'none',
+            }}
+          >
+            <Box sx={{ maxWidth: twoPane ? 'none' : 620, mx: 'auto' }}>{control}</Box>
+          </Box>
+        )}
+        {showActivity && activity}
+
+        {dragActive && online && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 12,
+              borderRadius: '18px',
+              border: `1.5px dashed ${beacon.accent}`,
+              backgroundColor: alpha(beacon.bg, 0.85),
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            <Typography sx={{ color: beacon.accent, fontWeight: 600, fontSize: '0.95rem' }}>
+              Drop to send to {displayName}
+            </Typography>
+          </Box>
+        )}
       </Box>
     </Box>
   );

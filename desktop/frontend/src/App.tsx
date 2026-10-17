@@ -13,8 +13,10 @@
  * In standalone browser dev the mock in src/wailsjs/App.mock.ts is used.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Container, Grid, Typography, Skeleton, Snackbar, Alert, Dialog, DialogContent, DialogActions, Button } from '@mui/material';
+import { Box, Typography, Skeleton, Snackbar, Alert, Dialog, DialogContent, DialogActions, Button } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import AddIcon from '@mui/icons-material/AddRounded';
+import { useZoom } from './utils/zoom';
 
 import TopBar from './components/TopBar';
 import LocalDeviceCard from './components/LocalDeviceCard';
@@ -726,20 +728,30 @@ const App: React.FC = () => {
 
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /** Skeleton grid while the first load is in progress */
+  const pairedPeers = filteredPeers.filter((p) => p.paired);
+  const nearbyPeers = filteredPeers.filter((p) => !p.paired);
+
+  /** Skeleton cards while the first load is in progress */
   const renderSkeletons = () =>
-    Array.from({ length: 3 }).map((_, i) => (
-      <Grid item xs={12} sm={6} md={4} key={i}>
-        <Skeleton
-          variant="rounded"
-          height={172}
-          sx={{ borderRadius: '12px', backgroundColor: beacon.surface, transform: 'none' }}
-          animation="wave"
-        />
-      </Grid>
+    Array.from({ length: 2 }).map((_, i) => (
+      <Skeleton
+        key={i}
+        variant="rounded"
+        height={236}
+        sx={{ borderRadius: '24px', backgroundColor: beacon.surface, transform: 'none' }}
+        animation="wave"
+      />
     ));
 
+  const sectionHeader = (title: string, note: string) => (
+    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, mb: 1.5, px: 0.5 }}>
+      <Typography variant="overline" sx={{ color: beacon.textSecondary }}>{title}</Typography>
+      <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textFaint }}>{note}</Typography>
+    </Box>
+  );
+
   const tabs = ['Devices', 'History'];
+  const { zoom, zoomIn, zoomOut, resetZoom } = useZoom();
 
   return (
     <Box
@@ -761,6 +773,10 @@ const App: React.FC = () => {
         onUpdateClick={() => setUpdateDialogOpen(true)}
         relayStatus={relayStatus}
         onRelayClick={() => setRelayOpen(true)}
+        zoom={zoom}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onZoomReset={resetZoom}
       />
 
       <PairingDialog
@@ -847,108 +863,103 @@ const App: React.FC = () => {
           onSetSetting={handleSetSetting}
         />
       ) : (
-      /* ── Main content (offset for AppBar + StatusBar) ───────────────────── */
-      <Container maxWidth="lg" component="main" sx={{ pt: 12, pb: 8, flex: 1 }}>
-        <LocalDeviceCard device={localDevice} broadcasting />
+      /* ── Home (offset for AppBar + StatusBar) ───────────────────────────── */
+      <Box component="main" sx={{ width: '100%', maxWidth: 1440, mx: 'auto', px: { xs: 2, sm: 4 }, pt: 11, pb: 8, flex: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 3.5 }}>
+          <Box sx={{ flex: '1 1 360px', minWidth: 0 }}>
+            <LocalDeviceCard device={localDevice} broadcasting />
+          </Box>
 
-        {/* ── Segmented tabs ─────────────────────────────────────────────── */}
-        <Box
-          sx={{
-            display: 'inline-flex',
-            gap: 0.5,
-            p: 0.5,
-            mb: 3,
-            borderRadius: 999,
-            backgroundColor: beacon.surface,
-            border: `1px solid ${beacon.hairline}`,
-          }}
-          role="tablist"
-        >
-          {tabs.map((label, i) => (
-            <Box
-              key={label}
-              component="button"
-              role="tab"
-              aria-selected={currentTab === i}
-              onClick={() => setCurrentTab(i)}
-              sx={{
-                border: 'none',
-                cursor: 'pointer',
-                px: 2.5,
-                py: 0.9,
-                borderRadius: 999,
-                fontFamily: fonts.body,
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                lineHeight: 1,
-                transition: 'background-color 150ms, color 150ms',
-                backgroundColor: currentTab === i ? beacon.surfaceRaised : 'transparent',
-                color: currentTab === i ? beacon.text : beacon.textSecondary,
-                boxShadow: currentTab === i ? `inset 0 0 0 1px ${beacon.hairline}` : 'none',
-                '&:hover': { color: beacon.text },
-              }}
-            >
-              {label}
-              {i === 0 && peers.length > 0 && (
-                <Box
-                  component="span"
-                  sx={{
-                    ml: 1,
-                    fontFamily: fonts.mono,
-                    fontSize: '0.7rem',
-                    color: currentTab === i ? beacon.accent : beacon.textFaint,
-                  }}
-                >
-                  {peers.length}
-                </Box>
-              )}
-            </Box>
-          ))}
+          {/* ── Segmented tabs ───────────────────────────────────────────── */}
+          <Box
+            sx={{
+              display: 'inline-flex',
+              gap: 0.5,
+              p: 0.5,
+              borderRadius: 999,
+              backgroundColor: beacon.surface,
+            }}
+            role="tablist"
+          >
+            {tabs.map((label, i) => (
+              <Box
+                key={label}
+                component="button"
+                role="tab"
+                aria-selected={currentTab === i}
+                onClick={() => setCurrentTab(i)}
+                sx={{
+                  border: 'none',
+                  cursor: 'pointer',
+                  px: 2.75,
+                  py: 1.1,
+                  borderRadius: 999,
+                  fontFamily: fonts.body,
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  lineHeight: 1,
+                  transition: 'background-color 150ms, color 150ms',
+                  backgroundColor: currentTab === i ? beacon.surfaceRaised : 'transparent',
+                  color: currentTab === i ? beacon.text : beacon.textSecondary,
+                  '&:hover': { color: beacon.text },
+                }}
+              >
+                {label}
+              </Box>
+            ))}
+          </Box>
         </Box>
 
         {currentTab === 0 ? (
           <>
-            {/* Drop hint appears while dragging files over the window */}
-            {dragActive && filteredPeers.length > 0 && (
-              <Box
-                sx={{
-                  mb: 2,
-                  px: 2,
-                  py: 1,
-                  borderRadius: '8px',
-                  border: `1px dashed ${alpha(beacon.accent, 0.5)}`,
-                  backgroundColor: alpha(beacon.accent, 0.05),
-                }}
-              >
-                <Typography sx={{ fontSize: '0.8rem', color: beacon.accent, fontWeight: 500 }}>
-                  Drop files on a device to send them
-                </Typography>
-              </Box>
-            )}
-
             {loading && peers.length === 0 ? (
-              <Grid container spacing={2}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 2 }}>
                 {renderSkeletons()}
-              </Grid>
+              </Box>
             ) : filteredPeers.length > 0 ? (
-              <Grid container spacing={2}>
-                {filteredPeers.map((peer) => (
-                  <Grid item xs={12} sm={peer.paired ? 12 : 6} md={peer.paired ? 6 : 4} key={peer.id}>
-                    <PeerCard
-                      peer={peer}
-                      alias={aliases[peer.deviceName]}
-                      dragActive={dragActive}
-                      onSendFile={handleSendFile}
-                      onRename={setRenamingPeer}
-                      onOpen={setOpenPeer}
-                      status={deviceStatus[peer.deviceName]}
-                      onRing={handleRing}
-                      onPing={handlePing}
-                      onClipboard={handleSendClipboard}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              <>
+                {pairedPeers.length > 0 && (
+                  <>
+                    {sectionHeader('Your devices', `${pairedPeers.length} connected`)}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 2, mb: 4 }}>
+                      {pairedPeers.map((peer) => (
+                        <PeerCard
+                          key={peer.id}
+                          peer={peer}
+                          alias={aliases[peer.deviceName]}
+                          dragActive={dragActive}
+                          onSendFile={handleSendFile}
+                          onRename={setRenamingPeer}
+                          onOpen={setOpenPeer}
+                          status={deviceStatus[peer.deviceName]}
+                          playing={!!peerMedia.states[peer.deviceName]?.players?.some((p) => p.playing)}
+                          onRing={handleRing}
+                          onPing={handlePing}
+                          onClipboard={handleSendClipboard}
+                        />
+                      ))}
+                    </Box>
+                  </>
+                )}
+                {nearbyPeers.length > 0 && (
+                  <>
+                    {sectionHeader('Nearby', 'not paired')}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 1.25, mb: 4 }}>
+                      {nearbyPeers.map((peer) => (
+                        <PeerCard
+                          key={peer.id}
+                          peer={peer}
+                          alias={aliases[peer.deviceName]}
+                          dragActive={dragActive}
+                          onSendFile={handleSendFile}
+                          onRename={setRenamingPeer}
+                          onOpen={setOpenPeer}
+                        />
+                      ))}
+                    </Box>
+                  </>
+                )}
+              </>
             ) : (
               <EmptyState
                 loading={loading}
@@ -956,11 +967,38 @@ const App: React.FC = () => {
                 onRefresh={handleRefresh}
               />
             )}
+
+            {/* ── Pair a new device ──────────────────────────────────────── */}
+            <Box
+              component="button"
+              onClick={() => setRelayOpen(true)}
+              sx={{
+                width: '100%',
+                height: 56,
+                mt: 1,
+                borderRadius: '18px',
+                border: `1.5px dashed ${beacon.hairline}`,
+                background: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                fontFamily: fonts.body,
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                color: beacon.textSecondary,
+                transition: 'border-color 150ms, color 150ms',
+                '&:hover': { borderColor: beacon.accent, color: beacon.accent },
+              }}
+            >
+              <AddIcon sx={{ fontSize: 20 }} /> Pair a new device
+            </Box>
           </>
         ) : (
           <HistoryView history={history} onClear={handleClearHistory} />
         )}
-      </Container>
+      </Box>
       )}
 
       <StatusBar

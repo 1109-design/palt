@@ -4,7 +4,7 @@
  * Ink surface with a hairline underline:
  *   - Beacon mark + PALT wordmark on the left.
  *   - Centered search field for filtering peers.
- *   - Update chip, live device count, refresh on the right.
+ *   - Update chip, zoom, live device count, pairing, refresh on the right.
  */
 import React from 'react';
 import {
@@ -21,6 +21,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import { alpha } from '@mui/material/styles';
 import LinkIcon from '@mui/icons-material/Link';
+import AddIcon from '@mui/icons-material/AddRounded';
+import RemoveIcon from '@mui/icons-material/RemoveRounded';
 import UpdateBanner from './UpdateBanner';
 import { relayStatusColor } from './PairingDialog';
 import type { RelayStatus } from './PairingDialog';
@@ -37,6 +39,10 @@ interface TopBarProps {
   onUpdateClick?: () => void;
   relayStatus?: RelayStatus | null;
   onRelayClick?: () => void;
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onZoomReset: () => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({
@@ -50,7 +56,12 @@ const TopBar: React.FC<TopBarProps> = ({
   onUpdateClick,
   relayStatus,
   onRelayClick,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
 }) => {
+  const zoomButton = { width: 26, height: 26, color: beacon.textSecondary, '&:hover': { color: beacon.text } };
   return (
     <AppBar
       position="fixed"
@@ -148,6 +159,48 @@ const TopBar: React.FC<TopBarProps> = ({
           {updateAvailable && latestVersion && onUpdateClick && (
             <UpdateBanner latestVersion={latestVersion} onClick={onUpdateClick} />
           )}
+
+          {/* Zoom: − 100% + (Ctrl −, Ctrl 0, Ctrl +) */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              height: 30,
+              px: 0.25,
+              borderRadius: 999,
+              border: `1px solid ${beacon.hairline}`,
+            }}
+          >
+            <Tooltip title="Zoom out (Ctrl −)">
+              <IconButton aria-label="zoom out" onClick={onZoomOut} sx={zoomButton}>
+                <RemoveIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Reset zoom (Ctrl 0)">
+              <Box
+                component="button"
+                onClick={onZoomReset}
+                sx={{
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  width: 42,
+                  fontFamily: fonts.mono,
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  color: zoom === 1 ? beacon.textSecondary : beacon.accent,
+                  '&:hover': { color: beacon.text },
+                }}
+              >
+                {Math.round(zoom * 100)}%
+              </Box>
+            </Tooltip>
+            <Tooltip title="Zoom in (Ctrl +)">
+              <IconButton aria-label="zoom in" onClick={onZoomIn} sx={zoomButton}>
+                <AddIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
 
           {/* Live device count readout */}
           <Tooltip title={`${peerCount} device${peerCount !== 1 ? 's' : ''} reachable`}>

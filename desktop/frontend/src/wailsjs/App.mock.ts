@@ -93,7 +93,20 @@ export const RingDevice = (name: string): Promise<void> => Promise.resolve();
 export const PingDevice = (name: string): Promise<void> => Promise.resolve();
 export const ShareWifi = (name: string): Promise<void> => Promise.resolve();
 export const ShareInternet = (name: string): Promise<void> => Promise.resolve();
-export const GetPeerMedia = (): Promise<Record<string, any>> => Promise.resolve({});
+export const GetPeerMedia = (): Promise<Record<string, any>> =>
+  Promise.resolve({
+    'Pixel 8': {
+      players: [
+        {
+          id: 'spotify', name: 'Spotify', title: 'Midnight City', artist: 'M83', album: 'Hurry Up, We\'re Dreaming',
+          art: 'https://picsum.photos/seed/m83/300/300', playing: true, canNext: true, canPrev: true, canSeek: true,
+          canControl: true, position: 84_000, length: 243_000,
+        },
+      ],
+      volume: { level: 62, muted: false },
+      at: Date.now(),
+    },
+  });
 export const GetConversations = (device: string): Promise<any[]> => Promise.resolve([]);
 export const GetThread = (device: string, threadId: number, before: number): Promise<any[]> => Promise.resolve([]);
 export const SendSMS = (device: string, address: string, body: string): Promise<void> => Promise.resolve();

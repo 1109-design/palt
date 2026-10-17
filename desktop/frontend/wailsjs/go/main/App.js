@@ -150,6 +150,10 @@ export function GetThread(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetThread'](arg1, arg2, arg3);
 }
 
+export function GetZoom() {
+  return window['go']['main']['App']['GetZoom']();
+}
+
 export function InstallClipboardHelper() {
   return window['go']['main']['App']['InstallClipboardHelper']();
 }
@@ -252,6 +256,10 @@ export function SetDeviceSetting(arg1, arg2, arg3) {
 
 export function SetRelayServer(arg1) {
   return window['go']['main']['App']['SetRelayServer'](arg1);
+}
+
+export function SetZoom(arg1) {
+  return window['go']['main']['App']['SetZoom'](arg1);
 }
 
 export function ShareInternet(arg1) {

@@ -76,3 +76,33 @@ func (a *App) SetDeviceSetting(device, key string, on bool) error {
 	}
 	return os.WriteFile(deviceSettingsFile(), data, 0o644)
 }
+
+func zoomFile() string {
+	dir, err := configDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "zoom")
+}
+
+// GetZoom returns the window's saved zoom (1 = 100%).
+func (a *App) GetZoom() float64 {
+	data, err := os.ReadFile(zoomFile())
+	if err != nil {
+		return 1
+	}
+	var z float64
+	if json.Unmarshal(data, &z) != nil || z < 0.5 || z > 2 {
+		return 1
+	}
+	return z
+}
+
+// SetZoom saves the window's zoom and applies it as real page zoom where the
+// platform allows; false means the page must zoom itself (CSS zoom).
+func (a *App) SetZoom(z float64) bool {
+	if data, err := json.Marshal(z); err == nil {
+		_ = os.WriteFile(zoomFile(), data, 0o644)
+	}
+	return setNativeZoom(z)
+}

@@ -553,13 +553,25 @@ func (a *App) GetPeers() []models.Peer {
 	return a.mergedPeers()
 }
 
+// lanIP is the address other devices on the network reach this one at: the
+// source address of the default route. Nothing is sent; falls back to
+// loopback when offline.
+func lanIP() string {
+	conn, err := net.Dial("udp4", "192.0.2.1:9")
+	if err != nil {
+		return "127.0.0.1"
+	}
+	defer conn.Close()
+	return conn.LocalAddr().(*net.UDPAddr).IP.String()
+}
+
 // GetLocalDevice returns metadata about this device for display in the UI.
 func (a *App) GetLocalDevice() models.Peer {
 	hostname, _ := os.Hostname()
 	return models.Peer{
 		ID:         "local",
 		DeviceName: hostname,
-		IPAddress:  "127.0.0.1",
+		IPAddress:  lanIP(),
 		Port:       paltPort,
 		OS:         runtime.GOOS,
 		DeviceID:   a.pairing().DeviceID,
