@@ -81,9 +81,11 @@ object MediaSessions {
         poke()
     }
 
+    // Skips PALT's own session (RemoteMedia): it shows a computer's player.
     private fun controllers(context: Context): List<MediaController> = try {
         (manager ?: context.getSystemService(MediaSessionManager::class.java))
             .getActiveSessions(listener(context))
+            .filter { it.packageName != context.packageName }
     } catch (_: SecurityException) {
         emptyList()
     }

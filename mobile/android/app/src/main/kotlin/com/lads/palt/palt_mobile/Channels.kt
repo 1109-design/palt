@@ -226,6 +226,27 @@ object Channels {
         }
         MediaSessions.onChange = { sessions.invokeMethod("changed", null) }
 
+        // palt/remotemedia: a computer's player in this phone's media controls
+        // (lib/features/media.dart). Presses come back as "action".
+        val remote = MethodChannel(messenger, "palt/remotemedia")
+        remote.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "update" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    RemoteMedia.update(app, call.arguments as Map<String, Any?>)
+                    result.success(null)
+                }
+                "clear" -> {
+                    RemoteMedia.clear(app)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        RemoteMedia.onAction = { action, value ->
+            mainThread.post { remote.invokeMethod("action", mapOf("action" to action, "value" to value)) }
+        }
+
         // palt/messages: contacts and SMS for computers
         // (lib/features/messages.dart). Queries run off the main thread.
         val messages = MethodChannel(messenger, "palt/messages")

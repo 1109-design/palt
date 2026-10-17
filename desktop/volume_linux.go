@@ -29,10 +29,11 @@ func systemVolume() SystemVolume {
 	return v
 }
 
-// setSystemVolume sets the level (0-100), or mute on/off/toggle.
+// setSystemVolume sets the level (0-100), or toggles mute. Phones send
+// "volume" (media.action); "level" is kept for older callers.
 func setSystemVolume(action string, level int) error {
 	switch action {
-	case "level":
+	case "volume", "level":
 		level = max(0, min(level, 150))
 		return exec.Command("pactl", "set-sink-volume", "@DEFAULT_SINK@", fmt.Sprintf("%d%%", level)).Run()
 	case "mute":

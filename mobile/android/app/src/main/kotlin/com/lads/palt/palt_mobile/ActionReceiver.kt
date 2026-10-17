@@ -10,6 +10,7 @@ class ActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             STOP_RING -> Ringer.stop(context)
+            RemoteMedia.ACTION -> RemoteMedia.send(intent.getStringExtra(RemoteMedia.EXTRA_COMMAND) ?: return)
             OPEN_URL -> {
                 val url = intent.getStringExtra(EXTRA_URL) ?: return
                 Notifier.cancel(context, intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0))

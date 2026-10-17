@@ -9,8 +9,9 @@ class DeviceFeature {
   static const clipboardSend = 'clipboard.send'; // this phone's copies go to it
   static const clipboardReceive = 'clipboard.receive'; // its copies land here
   static const notifications = 'notifications'; // this phone's notifications go to it
+  static const mediaControls = 'media.controls'; // its player shows in this phone's media controls
 
-  static const all = [clipboardSend, clipboardReceive, notifications];
+  static const all = [clipboardSend, clipboardReceive, notifications, mediaControls];
 }
 
 /// Feature → device names it is turned off for.

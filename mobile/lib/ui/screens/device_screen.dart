@@ -141,6 +141,8 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
             toggle(DeviceFeature.clipboardSend, 'Send my clipboard', 'What you copy here goes to $name'),
             toggle(DeviceFeature.clipboardReceive, 'Take its clipboard', 'What you copy on $name lands here'),
             toggle(DeviceFeature.notifications, 'Show my notifications', 'This phone\'s notifications appear on $name'),
+            toggle(DeviceFeature.mediaControls, 'Its media in my controls',
+                'What $name plays shows in your quick panel and lock screen'),
             SwitchListTile(
               title: const Text('Copy its messages', style: TextStyle(color: kText)),
               subtitle: const Text('Texts it sends you go to the clipboard',
