@@ -57,6 +57,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
   final _focus = FocusNode();
   bool _sending = false;
   int _tab = 0; // 0 Control, 1 Activity
+  final _pages = PageController();
   String? _sendError;
   late final StateController<String?> _openDevice;
 
@@ -79,6 +80,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     });
     _controller.dispose();
     _focus.dispose();
+    _pages.dispose();
     super.dispose();
   }
 
@@ -197,7 +199,6 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     final paired = peer.paired;
     final status = ref.watch(peerStatusProvider)[peer.deviceName];
     // Unpaired devices only exchange files and text: no Control tab.
-    final control = paired && _tab == 0;
 
     // History is newest-first, which is exactly what a reversed list wants.
     final thread = _groupTransfers(ref
@@ -217,6 +218,35 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         : tooLong
             ? 'Too long for a message (${(draftBytes / 1024).toStringAsFixed(1)} of ${kMaxTextBytes ~/ 1024} KB). Send it as a file instead.'
             : _sendError;
+
+    final Widget threadView = thread.isEmpty && progress == null
+        ? _EmptyThread(online: online)
+        : ListView.builder(
+            reverse: true,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            itemCount: thread.length + (progress != null ? 1 : 0),
+            itemBuilder: (context, i) {
+              if (progress != null) {
+                if (i == 0) return _ProgressBubble(progress: progress);
+                i--;
+              }
+              final entry = thread[i];
+              // Reversed list: the day header sits above the oldest entry of
+              // each day, i.e. when the next (older) item is from a
+              // different day.
+              final older = i + 1 < thread.length ? thread[i + 1] : null;
+              final showDay = older == null ||
+                  _dayLabel(older.timestamp) != _dayLabel(entry.timestamp);
+              return Column(
+                // Stretch so each bubble can align left/right.
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (showDay) _DayDivider(label: _dayLabel(entry.timestamp)),
+                  _Bubble(entry: entry),
+                ],
+              );
+            },
+          );
 
     return Scaffold(
       appBar: AppBar(
@@ -273,39 +303,18 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
             if (paired)
               _Tabs(
                 selected: _tab,
-                onSelect: (i) => setState(() => _tab = i),
+                onSelect: (i) => _pages.animateToPage(i,
+                    duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic),
               ),
             Expanded(
-              child: control
-                  ? _ControlTab(peer: peer, online: online)
-                  : thread.isEmpty && progress == null
-                      ? _EmptyThread(online: online)
-                      : ListView.builder(
-                          reverse: true,
-                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                          itemCount: thread.length + (progress != null ? 1 : 0),
-                          itemBuilder: (context, i) {
-                            if (progress != null) {
-                              if (i == 0) return _ProgressBubble(progress: progress);
-                              i--;
-                            }
-                            final entry = thread[i];
-                            // Reversed list: the day header sits above the
-                            // oldest entry of each day, i.e. when the next
-                            // (older) item is from a different day.
-                            final older = i + 1 < thread.length ? thread[i + 1] : null;
-                            final showDay = older == null ||
-                                _dayLabel(older.timestamp) != _dayLabel(entry.timestamp);
-                            return Column(
-                              // Stretch so each bubble can align left/right.
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (showDay) _DayDivider(label: _dayLabel(entry.timestamp)),
-                                _Bubble(entry: entry),
-                              ],
-                            );
-                          },
-                        ),
+              // Paired: swipe between Control and Activity.
+              child: paired
+                  ? PageView(
+                      controller: _pages,
+                      onPageChanged: (i) => setState(() => _tab = i),
+                      children: [_ControlTab(peer: peer, online: online), threadView],
+                    )
+                  : threadView,
             ),
             if (notice != null)
               Padding(
