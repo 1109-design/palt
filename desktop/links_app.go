@@ -298,6 +298,7 @@ func (a *App) mergedPeers() []models.Peer {
 			}
 			if ip := l.RemoteIP(); ip != "" {
 				p.IPAddress, p.Port = ip, a.lanPort(ip)
+				p.USB = isUSBAddr(ip)
 			}
 			seenID[l.Peer.ID], seenName[l.Peer.Name] = true, true
 			out = append(out, p)
@@ -309,6 +310,7 @@ func (a *App) mergedPeers() []models.Peer {
 				continue
 			}
 			p.Via = transfer.RouteDirect
+			p.USB = isUSBAddr(p.IPAddress)
 			seenName[p.DeviceName] = true
 			if p.DeviceID != "" {
 				seenID[p.DeviceID] = true

@@ -129,6 +129,10 @@ object Channels {
                     )
                     result.success(null)
                 }
+                "openTetherSettings" -> {
+                    WifiShare.openTetherSettings(app)
+                    result.success(null)
+                }
                 "openWifiSettings" -> {
                     WifiShare.openWifiSettings(app)
                     result.success(null)

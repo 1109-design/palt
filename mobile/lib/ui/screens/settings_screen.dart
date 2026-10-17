@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/clipboard.dart';
@@ -54,6 +55,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
+          Text('USB CABLE', style: overline()),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.usb_rounded, color: kTextSecondary),
+            title: const Text('Connect by USB', style: TextStyle(color: kText)),
+            subtitle: const Text(
+                'No Wi-Fi? Plug in the cable and turn on USB tethering. PALT works over the '
+                'cable, even without mobile data.',
+                style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+            trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: kTextFaint),
+            onTap: () => const MethodChannel('palt/device').invokeMethod('openTetherSettings'),
+          ),
+          const SizedBox(height: 16),
           Text('CLIPBOARD', style: overline()),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

@@ -50,6 +50,20 @@ object WifiShare {
         nm.notify(NOTIFICATION_ID, n)
     }
 
+    /**
+     * Opens the hotspot and tethering settings (no public intent: try the
+     * settings app's own screen, else the network settings).
+     */
+    fun openTetherSettings(context: Context) {
+        val tether = Intent().setClassName("com.android.settings", "com.android.settings.TetherSettings")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(tether)
+        } catch (_: Exception) {
+            context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
     /** Opens the Wi-Fi settings, where the phone's network can be shared as a QR code. */
     fun openWifiSettings(context: Context) {
         context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

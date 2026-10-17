@@ -27,4 +27,7 @@ type Peer struct {
 
 	// Paired is true while an authenticated link to the peer is up.
 	Paired bool `json:"paired"`
+
+	// USB is true when a direct peer is reached over a USB cable (tethering).
+	USB bool `json:"usb"`
 }

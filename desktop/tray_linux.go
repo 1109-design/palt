@@ -242,6 +242,8 @@ func trayPeerLabel(p models.Peer, alias string, st DeviceStatus) string {
 	}
 	if p.Via == transfer.RouteRelay {
 		name += "  · relay"
+	} else if p.USB {
+		name += "  · USB"
 	}
 	return "    " + name
 }

@@ -20,6 +20,8 @@ export interface Peer {
   deviceId?: string;
   /** True while an authenticated link to this paired device is up. */
   paired?: boolean;
+  /** True when a direct peer is reached over a USB cable (tethering). */
+  usb?: boolean;
 }
 
 export type Route = 'direct' | 'relay';

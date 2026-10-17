@@ -113,7 +113,7 @@ const DeviceStatusPanel: React.FC<{ status?: DeviceStatus; peer: Peer; online: b
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <LockIcon sx={{ fontSize: 17, color: relay ? beacon.relay : beacon.ok }} />
           <Typography sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1.02rem', color: beacon.text }}>
-            {!online ? 'Offline' : relay ? 'Via relay' : 'Direct'}
+            {!online ? 'Offline' : relay ? 'Via relay' : peer.usb ? 'USB cable' : 'Direct'}
           </Typography>
         </Box>
       </Tile>
