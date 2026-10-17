@@ -23,7 +23,6 @@ class PaltService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = this
-        ClipboardWatcher.start(this)
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Connection", NotificationManager.IMPORTANCE_MIN).apply {

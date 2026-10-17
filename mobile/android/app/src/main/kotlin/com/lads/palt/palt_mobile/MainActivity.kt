@@ -26,6 +26,13 @@ class MainActivity : FlutterActivity() {
         handleIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Android asks before an app may read other apps' log lines, and only
+        // while it is on screen, so the copy watcher starts from here.
+        ClipboardWatcher.start(this)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)

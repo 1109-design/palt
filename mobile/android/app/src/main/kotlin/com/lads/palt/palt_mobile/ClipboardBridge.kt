@@ -51,6 +51,10 @@ object ClipboardBridge {
  * the read: "Denying clipboard access to <pkg>". PALT keeps a listener
  * registered, watches the log for its own name, and then opens
  * [ClipboardActivity] for a split second to read the new clip.
+ *
+ * Since Android 13 a log reader sees other apps' lines only after the user
+ * allows it in a prompt that appears only while PALT is on screen, so
+ * [start] is called from MainActivity and the reader is kept running.
  */
 object ClipboardWatcher {
     private const val TAG = "PaltClipboard"
@@ -80,6 +84,7 @@ object ClipboardWatcher {
                     // Skip the one old line -T replays, and repeats of a copy.
                     if (!line.contains(needle) || now - started < 500 || now - lastOpen < 700) return@forEachLine
                     lastOpen = now
+                    Log.d(TAG, "Copy seen, reading the clipboard")
                     try {
                         app.startActivity(
                             Intent(app, ClipboardActivity::class.java)
@@ -96,6 +101,7 @@ object ClipboardWatcher {
             }
         }.apply { isDaemon = true; name = "palt-clipboard-log"; start() }
         Log.i(TAG, "Watching for copies")
+
     }
 
     @Synchronized
