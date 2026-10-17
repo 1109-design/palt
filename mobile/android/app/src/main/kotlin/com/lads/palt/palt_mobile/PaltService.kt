@@ -67,6 +67,7 @@ class PaltService : Service() {
             .setOngoing(true)
             .setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
+            .addAction(Notification.Action.Builder(null, "Send clipboard", ClipboardBridge.sendIntent(this)).build())
             .build()
     }
 

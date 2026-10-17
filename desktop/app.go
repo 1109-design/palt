@@ -94,6 +94,7 @@ type App struct {
 	features featureState
 	notes    notificationState
 	calls    callState
+	clip     clipboardState
 	tray     trayState
 }
 
@@ -136,6 +137,7 @@ func (a *App) startup(ctx context.Context) {
 	a.setupFeatures()
 	a.setupNotificationSync()
 	a.setupCalls()
+	a.setupClipboard()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {
@@ -222,7 +224,7 @@ func (a *App) startup(ctx context.Context) {
 		// devices, so an arbitrary LAN peer can't overwrite the clipboard.
 		copied := false
 		if meta.Paired && a.isAutoCopy(meta.SenderName) {
-			if err := wailsruntime.ClipboardSetText(a.ctx, meta.Text); err != nil {
+			if err := a.setClipboard(meta.Text); err != nil {
 				log.Printf("[app] Auto-copy failed: %v", err)
 			} else {
 				copied = true

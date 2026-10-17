@@ -13,6 +13,7 @@ import '../providers/link_provider.dart';
 import '../providers/peer_provider.dart';
 import '../providers/relay_provider.dart';
 import '../features/calls.dart';
+import '../features/clipboard.dart';
 import '../features/notification_sync.dart';
 import '../features/phone_features.dart';
 import '../services/link/link.dart';
@@ -54,6 +55,7 @@ void startCore(ProviderContainer c) {
   setupPhoneFeatures(c);
   setupNotificationSync(c);
   setupCalls(c);
+  setupClipboard(c);
 
   // Keep the notification saying who is connected.
   void showLinks(List<Link> links) {

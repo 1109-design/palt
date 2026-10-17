@@ -1,18 +1,27 @@
 /**
- * PhoneNotificationsDrawer.tsx — a paired phone's current notifications,
- * with dismiss, their action buttons and reply.
+ * PhoneNotificationsDrawer.tsx — side panel for a paired device: its current
+ * notifications (dismiss, action buttons, reply) and the clipboard history.
  */
 import React, { useState } from 'react';
-import { Box, Drawer, IconButton, Typography, Button, InputBase, Tooltip } from '@mui/material';
+import { Box, Drawer, IconButton, Typography, Button, InputBase, Tooltip, Tabs, Tab } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { beacon, fonts } from '../theme/theme';
-import type { PhoneNotification } from '../types/peer';
+import type { ClipboardEntry, ClipboardHelper, PhoneNotification } from '../types/peer';
+
+export type DrawerTab = 'notifications' | 'clipboard';
 
 interface Props {
   open: boolean;
+  tab: DrawerTab;
+  onTab: (t: DrawerTab) => void;
   device: string;
   items: PhoneNotification[];
+  clipboard: ClipboardEntry[];
+  helper: ClipboardHelper | null;
+  onInstallHelper: () => Promise<void>;
+  onCopy: (text: string) => void;
   onClose: () => void;
   onDismiss: (n: PhoneNotification) => void;
   onAction: (n: PhoneNotification, index: number) => void;
@@ -104,7 +113,86 @@ const Item: React.FC<{ n: PhoneNotification } & Pick<Props, 'onDismiss' | 'onAct
   );
 };
 
-const PhoneNotificationsDrawer: React.FC<Props> = ({ open, device, items, onClose, ...actions }) => (
+const ClipboardPanel: React.FC<Pick<Props, 'clipboard' | 'helper' | 'onInstallHelper' | 'onCopy' | 'device'>> = ({
+  clipboard,
+  helper,
+  onInstallHelper,
+  onCopy,
+  device,
+}) => {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  return (
+    <>
+      {helper && !helper.running && (
+        <Box sx={{ p: 1.5, borderRadius: '10px', border: `1px solid ${beacon.accent}55`, backgroundColor: `${beacon.accent}10` }}>
+          <Typography sx={{ fontSize: '0.84rem', fontWeight: 600, color: beacon.text }}>Turn on clipboard sync</Typography>
+          <Typography sx={{ fontSize: '0.78rem', color: beacon.textSecondary, mt: 0.5 }}>
+            GNOME only lets the app you're using touch the clipboard. A tiny GNOME helper lets PALT sync it
+            in the background.{' '}
+            {helper.installed || done ? 'It is installed — log out and back in once to start it.' : ''}
+          </Typography>
+          {!helper.installed && !done && (
+            <Button
+              size="small"
+              variant="contained"
+              disabled={busy}
+              sx={{ mt: 1 }}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await onInstallHelper();
+                  setDone(true);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Install helper
+            </Button>
+          )}
+        </Box>
+      )}
+      {clipboard.length === 0 ? (
+        <Typography sx={{ fontSize: '0.84rem', color: beacon.textFaint, px: 0.5 }}>
+          Copy something here or on {device} and it shows up on the other side, and in this list.
+        </Typography>
+      ) : (
+        clipboard.map((c, i) => (
+          <Box key={i} sx={{ p: 1.5, borderRadius: '10px', border: `1px solid ${beacon.hairline}`, backgroundColor: beacon.surface, display: 'flex', gap: 1 }}>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography sx={{ fontSize: '0.72rem', color: beacon.textSecondary }}>
+                {c.from ? `from ${c.from}` : 'copied here'} · {timeAgo(c.time)}
+              </Typography>
+              <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.78rem', color: beacon.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 96, overflow: 'hidden' }}>
+                {c.text}
+              </Typography>
+            </Box>
+            <Tooltip title="Copy again">
+              <IconButton size="small" onClick={() => onCopy(c.text)} sx={{ color: beacon.textFaint, alignSelf: 'flex-start' }}>
+                <ContentCopyIcon sx={{ fontSize: 15 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ))
+      )}
+    </>
+  );
+};
+
+const PhoneNotificationsDrawer: React.FC<Props> = ({
+  open,
+  tab,
+  onTab,
+  device,
+  items,
+  clipboard,
+  helper,
+  onInstallHelper,
+  onCopy,
+  onClose,
+  ...actions
+}) => (
   <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: 380, maxWidth: '90vw', backgroundColor: beacon.bg } }}>
     <Box sx={{ p: 2.5, pb: 1.5, display: 'flex', alignItems: 'center' }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -112,15 +200,21 @@ const PhoneNotificationsDrawer: React.FC<Props> = ({ open, device, items, onClos
           {device}
         </Typography>
         <Typography sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1.15rem', color: beacon.text }}>
-          Notifications
+          Activity
         </Typography>
       </Box>
       <IconButton onClick={onClose} sx={{ color: beacon.textSecondary }}>
         <CloseIcon />
       </IconButton>
     </Box>
+    <Tabs value={tab} onChange={(_, v) => onTab(v)} sx={{ px: 2, mb: 1.5, minHeight: 36 }}>
+      <Tab value="notifications" label={`Notifications${items.length ? ` · ${items.length}` : ''}`} sx={{ minHeight: 36, textTransform: 'none' }} />
+      <Tab value="clipboard" label="Clipboard" sx={{ minHeight: 36, textTransform: 'none' }} />
+    </Tabs>
     <Box sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
-      {items.length === 0 ? (
+      {tab === 'clipboard' ? (
+        <ClipboardPanel clipboard={clipboard} helper={helper} onInstallHelper={onInstallHelper} onCopy={onCopy} device={device} />
+      ) : items.length === 0 ? (
         <Typography sx={{ fontSize: '0.84rem', color: beacon.textFaint, px: 0.5 }}>
           Nothing new. Notifications from the phone show up here and as desktop notifications.
         </Typography>

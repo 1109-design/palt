@@ -11,6 +11,8 @@ export function ClearHistory():Promise<void>;
 
 export function ConnectByIP(arg1:string):Promise<void>;
 
+export function CopyFromHistory(arg1:string):Promise<void>;
+
 export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
 
 export function DismissPhoneNotification(arg1:string,arg2:string):Promise<void>;
@@ -20,6 +22,10 @@ export function GetAliases():Promise<Record<string, string>>;
 export function GetAppVersion():Promise<string>;
 
 export function GetAutoCopyDevices():Promise<Array<string>>;
+
+export function GetClipboardHelper():Promise<main.ClipboardHelper>;
+
+export function GetClipboardHistory():Promise<Array<main.ClipboardEntry>>;
 
 export function GetDeviceSettings(arg1:string):Promise<Record<string, boolean>>;
 
@@ -40,6 +46,8 @@ export function GetPeers():Promise<Array<models.Peer>>;
 export function GetPhoneNotifications(arg1:string):Promise<Array<main.PhoneNotification>>;
 
 export function GetRelayStatus():Promise<main.RelayStatus>;
+
+export function InstallClipboardHelper():Promise<void>;
 
 export function JoinPairing(arg1:string):Promise<void>;
 

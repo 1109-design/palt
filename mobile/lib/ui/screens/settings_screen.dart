@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/clipboard.dart';
 import '../../features/notification_sync.dart';
 import '../../theme/app_theme.dart';
 
@@ -43,6 +44,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
   @override
   Widget build(BuildContext context) {
     final sync = ref.watch(notificationSyncProvider);
+    final clip = ref.watch(clipboardSettingsProvider);
     final notifier = ref.read(notificationSyncProvider.notifier);
     final apps = sync.apps.entries.toList()
       ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
@@ -52,6 +54,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
+          Text('CLIPBOARD', style: overline()),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Take the computer\'s clipboard', style: TextStyle(color: kText)),
+            subtitle: const Text('Copy on the computer, paste here',
+                style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+            value: clip.receive,
+            onChanged: ref.read(clipboardSettingsProvider.notifier).setReceive,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Send this phone\'s clipboard', style: TextStyle(color: kText)),
+            subtitle: const Text(
+                'When you open PALT, from the "Send clipboard" button on its notification, '
+                'or the Quick Settings tile (add it from the tile editor)',
+                style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+            value: clip.send,
+            onChanged: ref.read(clipboardSettingsProvider.notifier).setSend,
+          ),
+          const SizedBox(height: 18),
           Text('NOTIFICATIONS ON YOUR COMPUTER', style: overline()),
           const SizedBox(height: 8),
           if (!_access)

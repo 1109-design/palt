@@ -18,6 +18,10 @@ export function ConnectByIP(arg1) {
   return window['go']['main']['App']['ConnectByIP'](arg1);
 }
 
+export function CopyFromHistory(arg1) {
+  return window['go']['main']['App']['CopyFromHistory'](arg1);
+}
+
 export function DeleteHistoryEntry(arg1, arg2) {
   return window['go']['main']['App']['DeleteHistoryEntry'](arg1, arg2);
 }
@@ -36,6 +40,14 @@ export function GetAppVersion() {
 
 export function GetAutoCopyDevices() {
   return window['go']['main']['App']['GetAutoCopyDevices']();
+}
+
+export function GetClipboardHelper() {
+  return window['go']['main']['App']['GetClipboardHelper']();
+}
+
+export function GetClipboardHistory() {
+  return window['go']['main']['App']['GetClipboardHistory']();
 }
 
 export function GetDeviceSettings(arg1) {
@@ -76,6 +88,10 @@ export function GetPhoneNotifications(arg1) {
 
 export function GetRelayStatus() {
   return window['go']['main']['App']['GetRelayStatus']();
+}
+
+export function InstallClipboardHelper() {
+  return window['go']['main']['App']['InstallClipboardHelper']();
 }
 
 export function JoinPairing(arg1) {

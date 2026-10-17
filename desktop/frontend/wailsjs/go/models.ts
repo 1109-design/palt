@@ -1,5 +1,35 @@
 export namespace main {
 	
+	export class ClipboardEntry {
+	    text: string;
+	    from: string;
+	    time: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClipboardEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.from = source["from"];
+	        this.time = source["time"];
+	    }
+	}
+	export class ClipboardHelper {
+	    running: boolean;
+	    installed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClipboardHelper(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.installed = source["installed"];
+	    }
+	}
 	export class MediaPreview {
 	    url: string;
 	    video: boolean;

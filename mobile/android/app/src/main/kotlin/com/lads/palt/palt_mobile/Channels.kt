@@ -152,6 +152,20 @@ object Channels {
         }
         NotificationForwarder.sink = { kind, m -> mainThread.post { notes.invokeMethod(kind, m) } }
 
+        // palt/clipboard: clipboard sync (lib/features/clipboard.dart).
+        val clip = MethodChannel(messenger, "palt/clipboard")
+        clip.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "set" -> {
+                    ClipboardBridge.set(app, call.argument<String>("text") ?: "")
+                    result.success(null)
+                }
+                "get" -> result.success(ClipboardBridge.get(app))
+                else -> result.notImplemented()
+            }
+        }
+        ClipboardBridge.onSend = { text -> mainThread.post { clip.invokeMethod("send", text) } }
+
         // palt/calls: incoming calls for computers (lib/features/calls.dart).
         val calls = MethodChannel(messenger, "palt/calls")
         calls.setMethodCallHandler { call, result ->

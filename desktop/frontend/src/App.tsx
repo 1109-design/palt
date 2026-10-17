@@ -34,8 +34,9 @@ import PairingDialog from './components/PairingDialog';
 import type { PairingInfo, RelayStatus } from './components/PairingDialog';
 import { beacon, fonts } from './theme/theme';
 
-import type { DeviceStatus, Peer, PhoneNotification } from './types/peer';
+import type { ClipboardEntry, ClipboardHelper, DeviceStatus, Peer, PhoneNotification } from './types/peer';
 import PhoneNotificationsDrawer from './components/PhoneNotificationsDrawer';
+import type { DrawerTab } from './components/PhoneNotificationsDrawer';
 import type { HistoryEntry, HistoryFile } from './types/history';
 
 // ── Wails bindings ────────────────────────────────────────────────────────────
@@ -84,6 +85,10 @@ const DismissPhoneNotification = isWails ? (WailsApp as any).DismissPhoneNotific
 const RunPhoneNotificationAction = isWails ? (WailsApp as any).RunPhoneNotificationAction : MockApp.RunPhoneNotificationAction;
 const GetDeviceSettings    = isWails ? (WailsApp as any).GetDeviceSettings    : MockApp.GetDeviceSettings;
 const SetDeviceSetting     = isWails ? (WailsApp as any).SetDeviceSetting     : MockApp.SetDeviceSetting;
+const GetClipboardHistory  = isWails ? (WailsApp as any).GetClipboardHistory  : MockApp.GetClipboardHistory;
+const GetClipboardHelper   = isWails ? (WailsApp as any).GetClipboardHelper   : MockApp.GetClipboardHelper;
+const InstallClipboardHelper = isWails ? (WailsApp as any).InstallClipboardHelper : MockApp.InstallClipboardHelper;
+const CopyFromHistory      = isWails ? (WailsApp as any).CopyFromHistory      : MockApp.CopyFromHistory;
 const RescanPeers          = isWails ? (WailsApp as any).RescanPeers          : () => Promise.resolve();
 const GetMediaPreview      = isWails ? (WailsApp as any).GetMediaPreview      : MockApp.GetMediaPreview;
 const DeleteHistoryEntry   = isWails ? (WailsApp as any).DeleteHistoryEntry   : MockApp.DeleteHistoryEntry;
@@ -130,6 +135,9 @@ const App: React.FC = () => {
   /** The open device's mirrored notifications and switches. */
   const [phoneNotes, setPhoneNotes] = useState<PhoneNotification[]>([]);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>('notifications');
+  const [clipHistory, setClipHistory] = useState<ClipboardEntry[]>([]);
+  const [clipHelper, setClipHelper] = useState<ClipboardHelper | null>(null);
   const [deviceSettings, setDeviceSettings] = useState<Record<string, boolean>>({});
 
   // ── Update state ───────────────────────────────────────────────────────────
@@ -302,6 +310,12 @@ const App: React.FC = () => {
 
   const noteError = (e: any) => setErrorMsg(String(e?.message || e));
 
+  useEffect(() => {
+    if (!notesOpen) return;
+    Promise.resolve().then(() => GetClipboardHistory()).then((h: ClipboardEntry[]) => setClipHistory(h || [])).catch(() => {});
+    Promise.resolve().then(() => GetClipboardHelper()).then(setClipHelper).catch(() => {});
+  }, [notesOpen]);
+
   const handleRing = useCallback(async (peer: Peer) => {
     try {
       await RingDevice(peer.deviceName);
@@ -385,6 +399,8 @@ const App: React.FC = () => {
       setRingingFrom(data.on ? data.from || 'A device' : null);
     });
 
+    win.runtime.EventsOn('clipboard_history', (data: ClipboardEntry[]) => setClipHistory(data || []));
+
     win.runtime.EventsOn('phone_notifications', (data: { device: string; items: PhoneNotification[] }) => {
       if (openPeerNameRef.current === data.device) setPhoneNotes(data.items || []);
     });
@@ -393,6 +409,7 @@ const App: React.FC = () => {
     win.runtime.EventsOn('notification_reply', (n: PhoneNotification) => {
       const peer = peersRef.current.find((p) => p.deviceName === n.device);
       if (peer) setOpenPeer(peer);
+      setDrawerTab('notifications');
       setNotesOpen(true);
     });
 
@@ -428,6 +445,7 @@ const App: React.FC = () => {
       win.runtime.EventsOff('ringing');
       win.runtime.EventsOff('phone_notifications');
       win.runtime.EventsOff('notification_reply');
+      win.runtime.EventsOff('clipboard_history');
     };
   }, []);
 
@@ -663,6 +681,18 @@ const App: React.FC = () => {
         open={notesOpen && !!openPeer}
         device={openPeer?.deviceName || ''}
         items={phoneNotes}
+        tab={drawerTab}
+        onTab={setDrawerTab}
+        clipboard={clipHistory.filter((c) => !c.from || c.from === openPeer?.deviceName)}
+        helper={clipHelper}
+        onInstallHelper={async () => {
+          try {
+            await InstallClipboardHelper();
+          } catch (e: any) {
+            noteError(e);
+          }
+        }}
+        onCopy={(text) => CopyFromHistory(text).then(() => setErrorMsg('Copied')).catch(noteError)}
         onClose={() => setNotesOpen(false)}
         onDismiss={(n) => DismissPhoneNotification(n.device, n.id).catch(noteError)}
         onAction={(n, i) => RunPhoneNotificationAction(n.device, n.id, i).catch(noteError)}
@@ -703,7 +733,10 @@ const App: React.FC = () => {
           onRing={handleRing}
           onPing={handlePing}
           notificationCount={phoneNotes.length}
-          onShowNotifications={() => setNotesOpen(true)}
+          onShowNotifications={() => {
+            setDrawerTab('notifications');
+            setNotesOpen(true);
+          }}
           settings={deviceSettings}
           onSetSetting={handleSetSetting}
         />

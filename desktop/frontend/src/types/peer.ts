@@ -54,3 +54,17 @@ export interface PhoneNotification {
   /** local icon file path */
   icon?: string;
 }
+
+/** One clipboard history item (Go ClipboardEntry). */
+export interface ClipboardEntry {
+  text: string;
+  /** device name, "" for this computer */
+  from: string;
+  time: number;
+}
+
+/** State of the GNOME clipboard helper extension. */
+export interface ClipboardHelper {
+  running: boolean;
+  installed: boolean;
+}

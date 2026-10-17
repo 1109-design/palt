@@ -122,6 +122,10 @@ jobs:
           # Nautilus "Send with PALT" menu (active when python3-nautilus is installed)
           cp packaging/palt-nautilus.py build/deb/usr/share/nautilus-python/extensions/
 
+          # GNOME Shell helper that lets PALT sync the clipboard in the background
+          mkdir -p build/deb/usr/share/gnome-shell/extensions
+          cp -r "packaging/palt-clipboard@palt" build/deb/usr/share/gnome-shell/extensions/
+
           # Create control file
           cat <<EOF > build/deb/DEBIAN/control
           Package: palt

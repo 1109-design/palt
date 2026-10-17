@@ -301,7 +301,14 @@ func (a *App) PingDevice(name string) error {
 
 // SendClipboard sends this computer's clipboard text to a device.
 func (a *App) SendClipboard(name string) error {
-	text, err := wailsruntime.ClipboardGetText(a.ctx)
+	// In the background only the clipboard helper sees the clipboard.
+	a.clip.mu.Lock()
+	text := a.clip.last
+	a.clip.mu.Unlock()
+	var err error
+	if !clipboardHelperRunning() {
+		text, err = wailsruntime.ClipboardGetText(a.ctx)
+	}
 	if err != nil || strings.TrimSpace(text) == "" {
 		return fmt.Errorf("the clipboard has no text")
 	}

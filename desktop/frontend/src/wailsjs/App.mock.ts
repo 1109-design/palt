@@ -101,6 +101,14 @@ export const ReplyToNotification = (device: string, id: string, text: string): P
 export const DismissPhoneNotification = (device: string, id: string): Promise<void> => Promise.resolve();
 export const RunPhoneNotificationAction = (device: string, id: string, index: number): Promise<void> => Promise.resolve();
 const mockSettings: Record<string, boolean> = { notifications: true, clipboardSend: true, clipboardReceive: true, pauseOnCall: true };
+export const GetClipboardHistory = () =>
+  Promise.resolve([
+    { text: 'https://example.com/recipe', from: 'Pixel 8', time: Date.now() - 60000 },
+    { text: 'ssh uriel@192.168.1.10', from: '', time: Date.now() - 900000 },
+  ]);
+export const GetClipboardHelper = () => Promise.resolve({ running: false, installed: false });
+export const InstallClipboardHelper = (): Promise<void> => Promise.resolve();
+export const CopyFromHistory = (text: string): Promise<void> => Promise.resolve();
 export const GetDeviceSettings = (device: string) => Promise.resolve({ ...mockSettings });
 export const SetDeviceSetting = (device: string, key: string, on: boolean): Promise<void> => {
   mockSettings[key] = on;
