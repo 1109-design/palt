@@ -97,7 +97,7 @@ object Messages {
 
     private val smsColumns = arrayOf(
         Telephony.Sms._ID, Telephony.Sms.THREAD_ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
-        Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.READ,
+        Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.READ, Telephony.Sms.SUBSCRIPTION_ID,
     )
 
     private fun message(c: android.database.Cursor): Map<String, Any?> = mapOf(
@@ -109,6 +109,7 @@ object Messages {
         // 1 received; 2 sent; 4 outbox, 5 failed, 6 queued count as sent
         "type" to c.getInt(5),
         "read" to (c.getInt(6) != 0),
+        "subscription" to c.getInt(7), // SIM subscription id, -1 unknown
     )
 
     /** Newest message of each conversation, newest first, with unread counts. */
@@ -155,14 +156,15 @@ object Messages {
         0L
     }
 
-    /** Sends a text; throws with a reason when it can't. */
-    fun send(context: Context, address: String, body: String) {
+    /** Sends a text from SIM [subscriptionId] (0 = default); throws with a reason when it can't. */
+    fun send(context: Context, address: String, body: String, subscriptionId: Int) {
         if (!allowed(context, Manifest.permission.SEND_SMS)) throw SecurityException("PALT isn't allowed to send SMS")
         val sms = if (Build.VERSION.SDK_INT >= 31) {
-            context.getSystemService(SmsManager::class.java)
+            val base = context.getSystemService(SmsManager::class.java)
+            if (subscriptionId > 0) base.createForSubscriptionId(subscriptionId) else base
         } else {
             @Suppress("DEPRECATION")
-            SmsManager.getDefault()
+            if (subscriptionId > 0) SmsManager.getSmsManagerForSubscriptionId(subscriptionId) else SmsManager.getDefault()
         }
         val parts = sms.divideMessage(body)
         if (parts.size == 1) {

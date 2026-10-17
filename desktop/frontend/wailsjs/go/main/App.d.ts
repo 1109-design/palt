@@ -5,6 +5,8 @@ import {models} from '../models';
 
 export function AcceptOffer(arg1:string):Promise<void>;
 
+export function AnswerCall(arg1:string):Promise<void>;
+
 export function AskForInternet(arg1:string):Promise<void>;
 
 export function CheckForUpdate():Promise<main.UpdateInfo>;
@@ -13,11 +15,17 @@ export function ClearHistory():Promise<void>;
 
 export function ConnectByIP(arg1:string):Promise<void>;
 
+export function ContactPhotos(arg1:string):Promise<Record<string, string>>;
+
 export function CopyFromHistory(arg1:string):Promise<void>;
 
 export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
 
 export function DismissPhoneNotification(arg1:string,arg2:string):Promise<void>;
+
+export function EndCall(arg1:string):Promise<void>;
+
+export function GetActiveCalls():Promise<Array<main.ActiveCall>>;
 
 export function GetAliases():Promise<Record<string, string>>;
 
@@ -25,9 +33,15 @@ export function GetAppVersion():Promise<string>;
 
 export function GetAutoCopyDevices():Promise<Array<string>>;
 
+export function GetCallLog(arg1:string,arg2:number):Promise<Array<main.CallLogEntry>>;
+
 export function GetClipboardHelper():Promise<main.ClipboardHelper>;
 
 export function GetClipboardHistory():Promise<Array<main.ClipboardEntry>>;
+
+export function GetContacts(arg1:string):Promise<Array<main.Contact>>;
+
+export function GetConversations(arg1:string):Promise<Array<main.SMSMessage>>;
 
 export function GetCurrentWifi():Promise<string>;
 
@@ -57,9 +71,17 @@ export function GetRelayStatus():Promise<main.RelayStatus>;
 
 export function GetReleaseNotes(arg1:string):Promise<string>;
 
+export function GetSIMs(arg1:string):Promise<Array<main.SIM>>;
+
+export function GetStartupError():Promise<string>;
+
+export function GetThread(arg1:string,arg2:number,arg3:number):Promise<Array<main.SMSMessage>>;
+
 export function InstallClipboardHelper():Promise<void>;
 
 export function JoinPairing(arg1:string):Promise<void>;
+
+export function MuteRinger(arg1:string):Promise<void>;
 
 export function OpenDownloadFolder():Promise<void>;
 
@@ -70,6 +92,8 @@ export function OpenURL(arg1:string):Promise<void>;
 export function PeerMediaAction(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
 
 export function PingDevice(arg1:string):Promise<void>;
+
+export function PlaceCall(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function RejectOffer(arg1:string):Promise<void>;
 
@@ -92,6 +116,8 @@ export function SendClipboard(arg1:string):Promise<void>;
 export function SendFile(arg1:string,arg2:number,arg3:string):Promise<void>;
 
 export function SendFilePaths(arg1:string,arg2:number,arg3:string,arg4:Array<string>):Promise<void>;
+
+export function SendSMS(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
 
 export function SendText(arg1:string,arg2:number,arg3:string,arg4:string):Promise<void>;
 

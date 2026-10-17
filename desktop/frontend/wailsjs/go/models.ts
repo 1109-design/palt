@@ -1,5 +1,51 @@
 export namespace main {
 	
+	export class ActiveCall {
+	    device: string;
+	    state: string;
+	    direction: string;
+	    number: string;
+	    name: string;
+	    photo: string;
+	    since: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActiveCall(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.device = source["device"];
+	        this.state = source["state"];
+	        this.direction = source["direction"];
+	        this.number = source["number"];
+	        this.name = source["name"];
+	        this.photo = source["photo"];
+	        this.since = source["since"];
+	    }
+	}
+	export class CallLogEntry {
+	    number: string;
+	    name: string;
+	    type: string;
+	    date: number;
+	    duration: number;
+	    sim: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CallLogEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.number = source["number"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.date = source["date"];
+	        this.duration = source["duration"];
+	        this.sim = source["sim"];
+	    }
+	}
 	export class ClipboardEntry {
 	    text: string;
 	    from: string;
@@ -28,6 +74,24 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.running = source["running"];
 	        this.installed = source["installed"];
+	    }
+	}
+	export class Contact {
+	    id: string;
+	    name: string;
+	    numbers: string[];
+	    photo: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Contact(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.numbers = source["numbers"];
+	        this.photo = source["photo"];
 	    }
 	}
 	export class MediaPreview {
@@ -112,6 +176,54 @@ export namespace main {
 	        this.server = source["server"];
 	        this.code = source["code"];
 	        this.peers = source["peers"];
+	    }
+	}
+	export class SIM {
+	    id: number;
+	    slot: number;
+	    name: string;
+	    carrier: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SIM(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.slot = source["slot"];
+	        this.name = source["name"];
+	        this.carrier = source["carrier"];
+	    }
+	}
+	export class SMSMessage {
+	    id: number;
+	    threadId: number;
+	    address: string;
+	    body: string;
+	    date: number;
+	    type: number;
+	    read: boolean;
+	    name: string;
+	    unread?: number;
+	    subscription: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SMSMessage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.threadId = source["threadId"];
+	        this.address = source["address"];
+	        this.body = source["body"];
+	        this.date = source["date"];
+	        this.type = source["type"];
+	        this.read = source["read"];
+	        this.name = source["name"];
+	        this.unread = source["unread"];
+	        this.subscription = source["subscription"];
 	    }
 	}
 	export class UpdateInfo {

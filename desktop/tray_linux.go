@@ -221,6 +221,11 @@ func (a *App) trayDeviceMenu(device *systray.MenuItem, p models.Peer) {
 				wailsruntime.EventsEmit(a.ctx, "open_messages", map[string]any{"device": name})
 				return nil
 			})
+			on("Calls", func() error {
+				a.showWindow()
+				wailsruntime.EventsEmit(a.ctx, "open_messages", map[string]any{"device": name, "tab": "calls"})
+				return nil
+			})
 		}
 		on("Share Wi-Fi", func() error { return a.ShareWifi(name) })
 		if hotspotActive() {

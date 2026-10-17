@@ -41,6 +41,7 @@ import WavingHandIcon from '@mui/icons-material/WavingHand';
 import WifiIcon from '@mui/icons-material/Wifi';
 import RouterIcon from '@mui/icons-material/Router';
 import SmsIcon from '@mui/icons-material/SmsOutlined';
+import CallIcon from '@mui/icons-material/CallOutlined';
 import DeviceStatusPanel from './DeviceStatusPanel';
 import PeerMediaCard from './PeerMediaCard';
 import { beacon, fonts } from '../theme/theme';
@@ -79,6 +80,7 @@ interface DevicePageProps {
   onShareWifi: (peer: Peer) => void;
   onShareInternet: (peer: Peer) => void;
   onShowMessages: () => void;
+  onShowCalls: () => void;
   hotspotOn: boolean;
   media?: MediaState;
   mediaReceivedAt?: number;
@@ -518,6 +520,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onShareWifi,
   onShareInternet,
   onShowMessages,
+  onShowCalls,
   hotspotOn,
   media,
   mediaReceivedAt,
@@ -726,6 +729,13 @@ const DevicePage: React.FC<DevicePageProps> = ({
                 <Tooltip title="Messages (SMS)">
                   <IconButton onClick={onShowMessages} aria-label="messages" sx={{ color: beacon.textSecondary }}>
                     <SmsIcon sx={{ fontSize: 19 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {peer.os === 'android' && (
+                <Tooltip title="Calls">
+                  <IconButton onClick={onShowCalls} aria-label="calls" sx={{ color: beacon.textSecondary }}>
+                    <CallIcon sx={{ fontSize: 19 }} />
                   </IconButton>
                 </Tooltip>
               )}

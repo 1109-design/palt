@@ -8,7 +8,7 @@
 /// and are answered by "<type>.reply" with the same id.
 ///   sms.conversations  computer → phone  {limit} → {threads: [message + unread, name]}
 ///   sms.thread         computer → phone  {threadId, before, limit} → {messages}
-///   sms.send           computer → phone  {address, body} → {ok, error}
+///   sms.send           computer → phone  {address, body, sim} → {ok, error}
 ///   sms.received       phone → computer  message {id, threadId, address, body, date, type, read, name}
 ///   sms.changed        phone → computer  {} the SMS store changed (sent, read, …)
 ///   contacts           computer → phone  {version} → {version, parts} then
@@ -68,7 +68,7 @@ void setupMessages(ProviderContainer c) {
     final address = b['address'] as String? ?? '';
     final body = b['body'] as String? ?? '';
     if (address.isEmpty || body.isEmpty) return {'ok': false, 'error': 'Nothing to send'};
-    await _channel.invokeMethod('send', {'address': address, 'body': body});
+    await _channel.invokeMethod('send', {'address': address, 'body': body, 'sim': (b['sim'] as num?)?.toInt() ?? 0});
     return {'ok': true};
   });
 

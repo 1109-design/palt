@@ -98,6 +98,12 @@ export const GetConversations = (device: string): Promise<any[]> => Promise.reso
 export const GetThread = (device: string, threadId: number, before: number): Promise<any[]> => Promise.resolve([]);
 export const SendSMS = (device: string, address: string, body: string): Promise<void> => Promise.resolve();
 export const GetContacts = (device: string): Promise<any[]> => Promise.resolve([]);
+export const GetCallLog = (device: string, before: number): Promise<any[]> => Promise.resolve([]);
+export const GetSIMs = (device: string): Promise<any[]> => Promise.resolve([]);
+export const PlaceCall = (device: string, number: string, sim: number): Promise<void> => Promise.resolve();
+export const AnswerCall = (device: string): Promise<void> => Promise.resolve();
+export const EndCall = (device: string): Promise<void> => Promise.resolve();
+export const GetActiveCalls = (): Promise<any[]> => Promise.resolve([]);
 export const PeerMediaAction = (name: string, player: string, action: string, value: number): Promise<void> => Promise.resolve();
 export const StopSharingInternet = (): Promise<void> => Promise.resolve();
 export const GetHotspotActive = (): Promise<boolean> => Promise.resolve(false);

@@ -45,6 +45,7 @@ type SMSMessage struct {
 	Read     bool   `json:"read"`
 	Name     string `json:"name"`             // contact name, "" unknown
 	Unread   int    `json:"unread,omitempty"` // conversations only
+	SubID    int    `json:"subscription"`     // SIM subscription id, -1 unknown
 }
 
 // Contact is one of the phone's contacts with a number.
@@ -317,8 +318,8 @@ func (a *App) GetThread(device string, threadID, before int64) ([]SMSMessage, er
 	return r.Messages, nil
 }
 
-// SendSMS sends a text from the phone.
-func (a *App) SendSMS(device, address, body string) error {
+// SendSMS sends a text from the phone, from SIM simID (0 = phone's default).
+func (a *App) SendSMS(device, address, body string, simID int) error {
 	if strings.TrimSpace(address) == "" || strings.TrimSpace(body) == "" {
 		return errors.New("nothing to send")
 	}
@@ -326,7 +327,7 @@ func (a *App) SendSMS(device, address, body string) error {
 	if err != nil {
 		return err
 	}
-	p, err := l.Request("sms.send", map[string]string{"address": address, "body": body}, smsRequestTimeout)
+	p, err := l.Request("sms.send", map[string]any{"address": address, "body": body, "sim": simID}, smsRequestTimeout)
 	if err != nil {
 		return err
 	}

@@ -114,6 +114,8 @@ export interface SMSMessage {
   read: boolean;
   name: string;
   unread?: number;
+  /** SIM subscription id it came in on / went out from, -1 unknown */
+  subscription?: number;
 }
 
 /** A phone contact with numbers (Go Contact). */
@@ -122,4 +124,41 @@ export interface Contact {
   name: string;
   numbers: string[];
   photo: string;
+}
+
+/** A call in progress on a paired phone (Go ActiveCall). */
+export interface ActiveCall {
+  device: string;
+  /** ringing | talking */
+  state: string;
+  /** incoming | outgoing */
+  direction: string;
+  number: string;
+  name: string;
+  /** data: URL or '' */
+  photo: string;
+  /** unix ms picked up / dialled; 0 while ringing */
+  since: number;
+}
+
+/** One call in a phone's call log (Go CallLogEntry). */
+export interface CallLogEntry {
+  number: string;
+  name: string;
+  /** incoming outgoing missed rejected blocked voicemail */
+  type: string;
+  date: number;
+  /** seconds */
+  duration: number;
+  /** SIM slot, 0 unknown */
+  sim: number;
+}
+
+/** One of a phone's SIMs (Go SIM). */
+export interface SIM {
+  /** subscription id, used to pick it */
+  id: number;
+  slot: number;
+  name: string;
+  carrier: string;
 }

@@ -76,9 +76,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Texts on paired computers. Asked once, after the status permissions.
   Future<void> _askSmsPermission() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool('palt_asked_sms_perms') == true) return;
-    await prefs.setBool('palt_asked_sms_perms', true);
-    await [Permission.sms, Permission.contacts].request();
+    if (prefs.getBool('palt_asked_sms_calls_perms') == true) return;
+    await prefs.setBool('palt_asked_sms_calls_perms', true);
+    // Phone covers calling, answering and the call log.
+    await [Permission.sms, Permission.contacts, Permission.phone].request();
   }
 
   void _handleIntake(Map<String, dynamic> m) {

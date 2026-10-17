@@ -255,7 +255,9 @@ object Channels {
                         call.argument<Int>("limit") ?: 50,
                     )
                 }
-                "send" -> bg { Messages.send(app, call.argument<String>("address") ?: "", call.argument<String>("body") ?: "") }
+                "send" -> bg {
+                    Messages.send(app, call.argument<String>("address") ?: "", call.argument<String>("body") ?: "", call.argument<Int>("sim") ?: 0)
+                }
                 "contacts" -> bg { Messages.contacts(app) }
                 else -> result.notImplemented()
             }
@@ -270,6 +272,34 @@ object Channels {
                 "mute" -> {
                     CallWatcher.mute(app)
                     result.success(null)
+                }
+                "current" -> result.success(CallWatcher.current(app))
+                "sims" -> result.success(PhoneCalls.sims(app))
+                "log" -> worker.execute {
+                    val out = try {
+                        Result.success(
+                            PhoneCalls.log(
+                                app,
+                                (call.argument<Number>("before") ?: 0).toLong(),
+                                call.argument<Int>("limit") ?: 80,
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    mainThread.post {
+                        out.fold({ result.success(it) }, { result.error("calls", it.message ?: it.toString(), null) })
+                    }
+                }
+                "place", "answer", "end" -> try {
+                    when (call.method) {
+                        "place" -> PhoneCalls.place(app, call.argument<String>("number") ?: "", call.argument<Int>("sim") ?: 0)
+                        "answer" -> PhoneCalls.answer(app)
+                        else -> PhoneCalls.end(app)
+                    }
+                    result.success(null)
+                } catch (e: Exception) {
+                    result.error("calls", e.message ?: e.toString(), null)
                 }
                 else -> result.notImplemented()
             }

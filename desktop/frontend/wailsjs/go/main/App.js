@@ -6,6 +6,10 @@ export function AcceptOffer(arg1) {
   return window['go']['main']['App']['AcceptOffer'](arg1);
 }
 
+export function AnswerCall(arg1) {
+  return window['go']['main']['App']['AnswerCall'](arg1);
+}
+
 export function AskForInternet(arg1) {
   return window['go']['main']['App']['AskForInternet'](arg1);
 }
@@ -22,6 +26,10 @@ export function ConnectByIP(arg1) {
   return window['go']['main']['App']['ConnectByIP'](arg1);
 }
 
+export function ContactPhotos(arg1) {
+  return window['go']['main']['App']['ContactPhotos'](arg1);
+}
+
 export function CopyFromHistory(arg1) {
   return window['go']['main']['App']['CopyFromHistory'](arg1);
 }
@@ -32,6 +40,14 @@ export function DeleteHistoryEntry(arg1, arg2) {
 
 export function DismissPhoneNotification(arg1, arg2) {
   return window['go']['main']['App']['DismissPhoneNotification'](arg1, arg2);
+}
+
+export function EndCall(arg1) {
+  return window['go']['main']['App']['EndCall'](arg1);
+}
+
+export function GetActiveCalls() {
+  return window['go']['main']['App']['GetActiveCalls']();
 }
 
 export function GetAliases() {
@@ -46,12 +62,24 @@ export function GetAutoCopyDevices() {
   return window['go']['main']['App']['GetAutoCopyDevices']();
 }
 
+export function GetCallLog(arg1, arg2) {
+  return window['go']['main']['App']['GetCallLog'](arg1, arg2);
+}
+
 export function GetClipboardHelper() {
   return window['go']['main']['App']['GetClipboardHelper']();
 }
 
 export function GetClipboardHistory() {
   return window['go']['main']['App']['GetClipboardHistory']();
+}
+
+export function GetContacts(arg1) {
+  return window['go']['main']['App']['GetContacts'](arg1);
+}
+
+export function GetConversations(arg1) {
+  return window['go']['main']['App']['GetConversations'](arg1);
 }
 
 export function GetCurrentWifi() {
@@ -110,12 +138,28 @@ export function GetReleaseNotes(arg1) {
   return window['go']['main']['App']['GetReleaseNotes'](arg1);
 }
 
+export function GetSIMs(arg1) {
+  return window['go']['main']['App']['GetSIMs'](arg1);
+}
+
+export function GetStartupError() {
+  return window['go']['main']['App']['GetStartupError']();
+}
+
+export function GetThread(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetThread'](arg1, arg2, arg3);
+}
+
 export function InstallClipboardHelper() {
   return window['go']['main']['App']['InstallClipboardHelper']();
 }
 
 export function JoinPairing(arg1) {
   return window['go']['main']['App']['JoinPairing'](arg1);
+}
+
+export function MuteRinger(arg1) {
+  return window['go']['main']['App']['MuteRinger'](arg1);
 }
 
 export function OpenDownloadFolder() {
@@ -136,6 +180,10 @@ export function PeerMediaAction(arg1, arg2, arg3, arg4) {
 
 export function PingDevice(arg1) {
   return window['go']['main']['App']['PingDevice'](arg1);
+}
+
+export function PlaceCall(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PlaceCall'](arg1, arg2, arg3);
 }
 
 export function RejectOffer(arg1) {
@@ -180,6 +228,10 @@ export function SendFile(arg1, arg2, arg3) {
 
 export function SendFilePaths(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SendFilePaths'](arg1, arg2, arg3, arg4);
+}
+
+export function SendSMS(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SendSMS'](arg1, arg2, arg3, arg4);
 }
 
 export function SendText(arg1, arg2, arg3, arg4) {

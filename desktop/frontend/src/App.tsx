@@ -27,7 +27,8 @@ import { ProgressSnack } from './components/ProgressSnack';
 import type { TransferProgress } from './components/ProgressSnack';
 import UpdateDialog from './components/UpdateDialog';
 import ChangelogDialog from './components/ChangelogDialog';
-import MessagesDialog, { type MessagesApi } from './components/MessagesDialog';
+import MessagesDialog, { type MessagesApi, type PhoneTab } from './components/MessagesDialog';
+import CallBar from './components/CallBar';
 import HistoryView from './components/HistoryView';
 import RenameDialog from './components/RenameDialog';
 import DevicePage from './components/DevicePage';
@@ -35,7 +36,7 @@ import PairingDialog from './components/PairingDialog';
 import type { PairingInfo, RelayStatus } from './components/PairingDialog';
 import { beacon, fonts } from './theme/theme';
 
-import type { ClipboardEntry, ClipboardHelper, DeviceStatus, MediaState, Peer, PhoneNotification } from './types/peer';
+import type { ActiveCall, ClipboardEntry, ClipboardHelper, DeviceStatus, MediaState, Peer, PhoneNotification } from './types/peer';
 import PhoneNotificationsDrawer from './components/PhoneNotificationsDrawer';
 import type { DrawerTab } from './components/PhoneNotificationsDrawer';
 import type { HistoryEntry, HistoryFile } from './types/history';
@@ -82,11 +83,18 @@ const PingDevice           = isWails ? (WailsApp as any).PingDevice           : 
 const ShareWifi            = isWails ? (WailsApp as any).ShareWifi            : MockApp.ShareWifi;
 const ShareInternet        = isWails ? (WailsApp as any).ShareInternet        : MockApp.ShareInternet;
 const GetPeerMedia         = isWails ? (WailsApp as any).GetPeerMedia         : MockApp.GetPeerMedia;
+const AnswerCall           = isWails ? (WailsApp as any).AnswerCall           : MockApp.AnswerCall;
+const EndCall              = isWails ? (WailsApp as any).EndCall              : MockApp.EndCall;
+const GetActiveCalls       = isWails ? (WailsApp as any).GetActiveCalls       : MockApp.GetActiveCalls;
+const MuteRinger           = isWails ? (WailsApp as any).MuteRinger           : () => Promise.resolve();
 const messagesApi: MessagesApi = {
   getConversations: isWails ? (WailsApp as any).GetConversations : MockApp.GetConversations,
   getThread: isWails ? (WailsApp as any).GetThread : MockApp.GetThread,
   send: isWails ? (WailsApp as any).SendSMS : MockApp.SendSMS,
   getContacts: isWails ? (WailsApp as any).GetContacts : MockApp.GetContacts,
+  getCallLog: isWails ? (WailsApp as any).GetCallLog : MockApp.GetCallLog,
+  getSims: isWails ? (WailsApp as any).GetSIMs : MockApp.GetSIMs,
+  placeCall: isWails ? (WailsApp as any).PlaceCall : MockApp.PlaceCall,
   copy: (text: string) => navigator.clipboard?.writeText(text).catch(() => {}),
 };
 const PeerMediaAction      = isWails ? (WailsApp as any).PeerMediaAction      : MockApp.PeerMediaAction;
@@ -361,7 +369,13 @@ const App: React.FC = () => {
   }, []);
 
   // SMS window: which phone, which conversation to open, refresh on news.
-  const [messages, setMessages] = useState<{ device: string; focus: { threadId: number; address: string; reply: boolean } | null } | null>(null);
+  const [messages, setMessages] = useState<{ device: string; focus: { threadId: number; address: string; reply: boolean } | null; tab?: PhoneTab } | null>(null);
+  const [activeCalls, setActiveCalls] = useState<ActiveCall[]>([]);
+  useEffect(() => {
+    Promise.resolve().then(() => GetActiveCalls()).then((c: ActiveCall[]) => setActiveCalls(c || [])).catch(() => {});
+  }, []);
+  const callAction = (fn: (device: string) => Promise<void>, device: string) =>
+    Promise.resolve().then(() => fn(device)).catch((e: any) => setErrorMsg(String(e?.message || e)));
   const [smsRefresh, setSmsRefresh] = useState(0);
 
   const [hotspotOn, setHotspotOn] = useState(false);
@@ -433,10 +447,11 @@ const App: React.FC = () => {
     if (!win.runtime) return;
 
     win.runtime.EventsOn('hotspot', (on: boolean) => setHotspotOn(!!on));
+    win.runtime.EventsOn('active_calls', (c: ActiveCall[]) => setActiveCalls(c || []));
     win.runtime.EventsOn('sms_received', () => setSmsRefresh((n) => n + 1));
     win.runtime.EventsOn('sms_changed', () => setSmsRefresh((n) => n + 1));
-    win.runtime.EventsOn('open_messages', (d: { device: string; threadId: number; address: string; reply: boolean }) =>
-      setMessages({ device: d.device, focus: d.threadId ? { threadId: d.threadId, address: d.address, reply: d.reply } : null }),
+    win.runtime.EventsOn('open_messages', (d: { device: string; threadId: number; address: string; reply: boolean; tab?: PhoneTab }) =>
+      setMessages({ device: d.device, focus: d.threadId ? { threadId: d.threadId, address: d.address, reply: d.reply } : null, tab: d.tab }),
     );
     win.runtime.EventsOn('peer_media', (m: Record<string, MediaState>) => setPeerMedia({ states: m || {}, receivedAt: Date.now() }));
 
@@ -818,6 +833,7 @@ const App: React.FC = () => {
           onShareWifi={handleShareWifi}
           onShareInternet={handleShareInternet}
           onShowMessages={() => setMessages({ device: openPeer.deviceName, focus: null })}
+          onShowCalls={() => setMessages({ device: openPeer.deviceName, focus: null, tab: 'calls' })}
           media={peerMedia.states[openPeer.deviceName]}
           mediaReceivedAt={peerMedia.receivedAt}
           onMediaAction={(player: string, action: string, value?: number) => handleMediaAction(openPeer.deviceName, player, action, value)}
@@ -1013,13 +1029,24 @@ const App: React.FC = () => {
         />
       )}
 
+      {activeCalls.map((c) => (
+        <CallBar
+          key={c.device}
+          call={c}
+          onAnswer={() => callAction(AnswerCall, c.device)}
+          onEnd={() => callAction(EndCall, c.device)}
+          onSilence={() => callAction(MuteRinger, c.device)}
+        />
+      ))}
+
       {messages && (
         <MessagesDialog
           open
           device={messages.device}
           focus={messages.focus}
-          refreshKey={smsRefresh}
+          refreshKey={smsRefresh + activeCalls.length}
           api={messagesApi}
+          tab={messages.tab}
           onClose={() => setMessages(null)}
         />
       )}

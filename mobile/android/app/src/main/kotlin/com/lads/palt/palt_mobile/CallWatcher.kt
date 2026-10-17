@@ -20,12 +20,28 @@ import java.io.ByteArrayOutputStream
  * and note missed calls. Needs READ_PHONE_STATE and READ_CALL_LOG (for the
  * number), and READ_CONTACTS for the name and photo.
  *
- * Events: "ringing", "talking", "missed", "ended" with {number, name, photo?}.
+ * Events: "ringing", "talking", "missed", "ended" with {number, name,
+ * photo?, direction (incoming|outgoing), since (ms the call was picked up
+ * or dialled, 0 while ringing)}.
  */
 object CallWatcher {
     private var state = TelephonyManager.EXTRA_STATE_IDLE
     private var number = ""
     private var muted = false
+    private var direction = "incoming"
+    private var since = 0L
+    private var dialled = ""
+
+    /** PhoneCalls is about to dial: Android doesn't tell apps the number. */
+    fun outgoing(n: String) {
+        dialled = n
+    }
+
+    /** The call in progress, for computers that link up mid-call; null if none. */
+    fun current(context: Context): Map<String, Any?>? {
+        if (state == TelephonyManager.EXTRA_STATE_IDLE) return null
+        return describe(context, if (state == TelephonyManager.EXTRA_STATE_RINGING) "ringing" else "talking")
+    }
 
     var sink: ((Map<String, Any?>) -> Unit)? = null
 
@@ -41,6 +57,20 @@ object CallWatcher {
                 if (s == state && n.isNullOrEmpty()) return
                 val prev = state
                 state = s
+                when (s) {
+                    TelephonyManager.EXTRA_STATE_RINGING -> {
+                        direction = "incoming"
+                        since = 0L
+                    }
+                    TelephonyManager.EXTRA_STATE_OFFHOOK -> if (prev != s) {
+                        // From idle it's a call being dialled; from ringing, one answered.
+                        if (prev == TelephonyManager.EXTRA_STATE_IDLE) {
+                            direction = "outgoing"
+                            if (number.isEmpty()) number = dialled
+                        }
+                        since = System.currentTimeMillis()
+                    }
+                }
                 val event = when (s) {
                     // Without call-log access no number ever comes: announce it anyway.
                     TelephonyManager.EXTRA_STATE_RINGING ->
@@ -52,14 +82,25 @@ object CallWatcher {
                 }
                 if (event == "ended" || event == "missed" || event == "talking") unmute(app)
                 emit(app, event)
-                if (s == TelephonyManager.EXTRA_STATE_IDLE) number = ""
+                if (s == TelephonyManager.EXTRA_STATE_IDLE) {
+                    number = ""
+                    dialled = ""
+                    since = 0L
+                }
             }
         }, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
     }
 
-    private fun emit(context: Context, event: String) {
+    private fun describe(context: Context, event: String): Map<String, Any?> {
         val (name, photo) = lookup(context, number)
-        sink?.invoke(mapOf("event" to event, "number" to number, "name" to name, "photo" to photo))
+        return mapOf(
+            "event" to event, "number" to number, "name" to name, "photo" to photo,
+            "direction" to direction, "since" to since,
+        )
+    }
+
+    private fun emit(context: Context, event: String) {
+        sink?.invoke(describe(context, event))
     }
 
     /** Silences the ringer for the current call (restored when it ends). */
