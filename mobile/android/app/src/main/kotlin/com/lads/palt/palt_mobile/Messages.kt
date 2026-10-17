@@ -85,7 +85,9 @@ object Messages {
             app.contentResolver.registerContentObserver(
                 ContactsContract.Contacts.CONTENT_URI, true,
                 object : ContentObserver(main) {
-                    override fun onChange(selfChange: Boolean) = onChanged?.invoke("contacts")
+                    override fun onChange(selfChange: Boolean) {
+                        onChanged?.invoke("contacts")
+                    }
                 }
             )
         }
