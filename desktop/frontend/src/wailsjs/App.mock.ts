@@ -87,6 +87,11 @@ export const GetPairing = () => Promise.resolve(mockPairing());
 export const JoinPairing = (code: string): Promise<void> =>
   code.startsWith('palt2:') || code.startsWith('palt1:') ? Promise.resolve() : Promise.reject('pairing code must start with palt2:');
 export const ResetPairing = (): Promise<void> => Promise.resolve();
+export const GetDeviceStatus = () =>
+  Promise.resolve({ 'Pixel 8': { battery: 82, charging: true, network: '5G', signal: 3 } });
+export const RingDevice = (name: string): Promise<void> => Promise.resolve();
+export const PingDevice = (name: string): Promise<void> => Promise.resolve();
+export const StopRinging = (): Promise<void> => Promise.resolve();
 export const ConnectByIP = (addr: string): Promise<void> =>
   new Promise((_, reject) => setTimeout(() => reject('could not connect: timeout'), 400));
 export const SetRelayServer = (addr: string): Promise<void> => {

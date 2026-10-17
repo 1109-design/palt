@@ -13,7 +13,7 @@
  * In standalone browser dev the mock in src/wailsjs/App.mock.ts is used.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Container, Grid, Typography, Skeleton, Snackbar, Alert } from '@mui/material';
+import { Box, Container, Grid, Typography, Skeleton, Snackbar, Alert, Dialog, DialogContent, DialogActions, Button } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
 import TopBar from './components/TopBar';
@@ -34,7 +34,7 @@ import PairingDialog from './components/PairingDialog';
 import type { PairingInfo, RelayStatus } from './components/PairingDialog';
 import { beacon, fonts } from './theme/theme';
 
-import type { Peer } from './types/peer';
+import type { DeviceStatus, Peer } from './types/peer';
 import type { HistoryEntry, HistoryFile } from './types/history';
 
 // ── Wails bindings ────────────────────────────────────────────────────────────
@@ -73,6 +73,10 @@ const JoinPairing          = isWails ? (WailsApp as any).JoinPairing          : 
 const ResetPairing         = isWails ? (WailsApp as any).ResetPairing         : MockApp.ResetPairing;
 const SetRelayServer       = isWails ? (WailsApp as any).SetRelayServer       : MockApp.SetRelayServer;
 const ConnectByIP          = isWails ? (WailsApp as any).ConnectByIP          : MockApp.ConnectByIP;
+const GetDeviceStatus      = isWails ? (WailsApp as any).GetDeviceStatus      : MockApp.GetDeviceStatus;
+const RingDevice           = isWails ? (WailsApp as any).RingDevice           : MockApp.RingDevice;
+const PingDevice           = isWails ? (WailsApp as any).PingDevice           : MockApp.PingDevice;
+const StopRinging          = isWails ? (WailsApp as any).StopRinging          : MockApp.StopRinging;
 const RescanPeers          = isWails ? (WailsApp as any).RescanPeers          : () => Promise.resolve();
 const GetMediaPreview      = isWails ? (WailsApp as any).GetMediaPreview      : MockApp.GetMediaPreview;
 const DeleteHistoryEntry   = isWails ? (WailsApp as any).DeleteHistoryEntry   : MockApp.DeleteHistoryEntry;
@@ -113,6 +117,9 @@ const App: React.FC = () => {
   const [relayStatus, setRelayStatus] = useState<RelayStatus | null>(null);
   const [relayOpen, setRelayOpen] = useState(false);
   const [pairing, setPairing] = useState<PairingInfo | null>(null);
+  const [deviceStatus, setDeviceStatus] = useState<Record<string, DeviceStatus>>({});
+  /** Set while this computer rings because a paired device is looking for it. */
+  const [ringingFrom, setRingingFrom] = useState<string | null>(null);
 
   // ── Update state ───────────────────────────────────────────────────────────
   const [appVersion, setAppVersion] = useState('');
@@ -256,6 +263,27 @@ const App: React.FC = () => {
     await fetchRelayStatus();
   }, [fetchRelayStatus]);
 
+  useEffect(() => {
+    GetDeviceStatus().then((s: Record<string, DeviceStatus>) => setDeviceStatus(s || {})).catch(() => {});
+  }, []);
+
+  const handleRing = useCallback(async (peer: Peer) => {
+    try {
+      await RingDevice(peer.deviceName);
+      setErrorMsg(`Ringing ${peer.deviceName}…`);
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+  }, []);
+
+  const handlePing = useCallback(async (peer: Peer) => {
+    try {
+      await PingDevice(peer.deviceName);
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     fetchLocalDevice();
@@ -314,6 +342,14 @@ const App: React.FC = () => {
       setRelayStatus(data);
     });
 
+    win.runtime.EventsOn('device_status', (data: Record<string, DeviceStatus>) => {
+      setDeviceStatus(data || {});
+    });
+
+    win.runtime.EventsOn('ringing', (data: { from?: string; on: boolean }) => {
+      setRingingFrom(data.on ? data.from || 'A device' : null);
+    });
+
     win.runtime.EventsOn('history_updated', (data: HistoryEntry[]) => {
       setHistory(data);
     });
@@ -342,6 +378,8 @@ const App: React.FC = () => {
       win.runtime.EventsOff('text_received');
       win.runtime.EventsOff('relay_status');
       win.runtime.EventsOff('tray_open_device');
+      win.runtime.EventsOff('device_status');
+      win.runtime.EventsOff('ringing');
     };
   }, []);
 
@@ -573,6 +611,19 @@ const App: React.FC = () => {
         onConnectIP={ConnectByIP}
       />
 
+      <Dialog open={!!ringingFrom} onClose={() => StopRinging()} maxWidth="xs" fullWidth>
+        <DialogContent sx={{ pt: 3.5, textAlign: 'center' }}>
+          <Typography sx={{ fontSize: '2.2rem', lineHeight: 1 }}>🔔</Typography>
+          <Typography sx={{ fontWeight: 700, fontSize: '1.15rem', mt: 1.5 }}>This computer is ringing</Typography>
+          <Typography sx={{ fontSize: '0.86rem', opacity: 0.7, mt: 0.5 }}>{ringingFrom} is looking for it.</Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button variant="contained" fullWidth onClick={() => StopRinging()}>
+            Found it
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {openPeer ? (
         <DevicePage
           peer={livePeer ?? openPeer}
@@ -590,6 +641,9 @@ const App: React.FC = () => {
           onFileAction={handleFileAction}
           loadPreview={GetMediaPreview}
           onDeleteEntry={handleDeleteEntry}
+          status={deviceStatus[openPeer.deviceName]}
+          onRing={handleRing}
+          onPing={handlePing}
         />
       ) : (
       /* ── Main content (offset for AppBar + StatusBar) ───────────────────── */
@@ -686,6 +740,7 @@ const App: React.FC = () => {
                       onSendFile={handleSendFile}
                       onRename={setRenamingPeer}
                       onOpen={setOpenPeer}
+                      status={deviceStatus[peer.deviceName]}
                     />
                   </Grid>
                 ))}

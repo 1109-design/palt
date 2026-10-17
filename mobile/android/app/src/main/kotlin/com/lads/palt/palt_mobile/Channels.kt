@@ -21,6 +21,12 @@ import java.util.concurrent.Executors
 object Channels {
     private val worker = Executors.newSingleThreadExecutor()
     private val mainThread = Handler(Looper.getMainLooper())
+    private var intentChannel: MethodChannel? = null
+
+    /** Tells Dart there is a share or open-device request to take. */
+    fun intentReady() {
+        intentChannel?.invokeMethod("ready", null)
+    }
 
     fun register(context: Context, engine: FlutterEngine) {
         val app = context.applicationContext
@@ -81,6 +87,55 @@ object Channels {
                 else -> result.notImplemented()
             }
         }
+
+        // palt/device: battery, signal, find my phone, notifications
+        // (lib/features/). Battery changes and "Found it" are pushed to Dart.
+        val device = MethodChannel(messenger, "palt/device")
+        device.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "battery" -> result.success(DeviceInfo.battery(app))
+                "connectivity" -> result.success(DeviceInfo.connectivity(app))
+                "ring" -> {
+                    Ringer.start(app, call.argument<String>("from") ?: "Your computer")
+                    result.success(null)
+                }
+                "stopRing" -> {
+                    Ringer.stop(app)
+                    result.success(null)
+                }
+                "notify" -> {
+                    Notifier.show(
+                        app,
+                        call.argument<Int>("id") ?: 0,
+                        call.argument<String>("title") ?: "PALT",
+                        call.argument<String>("text") ?: "",
+                        call.argument<String>("device"),
+                        call.argument<String>("url"),
+                    )
+                    result.success(null)
+                }
+                "cancel" -> {
+                    Notifier.cancel(app, call.argument<Int>("id") ?: 0)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        DeviceInfo.watchBattery(app) { b -> mainThread.post { device.invokeMethod("battery", b) } }
+        Ringer.onStopped = { mainThread.post { device.invokeMethod("ringStopped", null) } }
+
+        // palt/intent: shares and notification taps (lib/features/intake.dart).
+        val intake = MethodChannel(messenger, "palt/intent")
+        intake.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "take" -> {
+                    result.success(Intake.pending)
+                    Intake.pending = null
+                }
+                else -> result.notImplemented()
+            }
+        }
+        intentChannel = intake
 
         val cm = app.getSystemService(ConnectivityManager::class.java)
         cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {

@@ -9,9 +9,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:io';
 import 'dart:math';
+
+import '../../features/phone_features.dart';
 
 import '../../providers/peer_provider.dart';
 import '../../providers/update_provider.dart';
@@ -45,7 +49,96 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowChangelog());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowChangelog();
+      // Things that happened before this screen existed (app opened from
+      // a notification or the share menu).
+      final offer = ref.read(activeOfferProvider);
+      if (offer != null) _showOfferSheet(offer);
+      final intake = ref.read(intakeProvider);
+      if (intake != null) _handleIntake(intake);
+      _askPhonePermission();
+    });
+  }
+
+  /// Mobile network type for the computer's status readout. Asked once.
+  Future<void> _askPhonePermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('palt_asked_phone') == true) return;
+    await prefs.setBool('palt_asked_phone', true);
+    await Permission.phone.request();
+  }
+
+  void _handleIntake(Map<String, dynamic> m) {
+    ref.read(intakeProvider.notifier).state = null;
+    final peers = ref.read(peerListProvider).valueOrNull ?? const <Peer>[];
+    final open = m['openDevice'] as String?;
+    if (open != null) {
+      final peer = peers.where((p) => p.deviceName == open).firstOrNull;
+      if (peer != null) {
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        Navigator.push(context, MaterialPageRoute(builder: (_) => DeviceScreen(peer: peer)));
+      }
+      return;
+    }
+    final paths = ((m['paths'] as List?) ?? const []).whereType<String>().toList();
+    final text = m['text'] as String?;
+    if (paths.isEmpty && (text == null || text.trim().isEmpty)) return;
+    _showSendToSheet(paths, text);
+  }
+
+  /// "Send to…" for things shared from other apps.
+  void _showSendToSheet(List<String> paths, String? text) {
+    final what = paths.isNotEmpty
+        ? (paths.length == 1 ? paths.first.split('/').last : '${paths.length} files')
+        : (text!.length > 60 ? '${text.substring(0, 60)}…' : text);
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Consumer(builder: (ctx, ref, _) {
+        final peers = [...?ref.watch(peerListProvider).valueOrNull]
+          ..sort((a, b) => (b.paired ? 1 : 0) - (a.paired ? 1 : 0));
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('SEND TO', style: overline()),
+                const SizedBox(height: 4),
+                Text(what, style: const TextStyle(color: kTextSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 12),
+                if (peers.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No devices connected right now.', style: TextStyle(color: kTextFaint)),
+                  ),
+                for (final p in peers)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(p.paired ? Icons.link_rounded : Icons.devices_other_rounded,
+                        color: p.paired ? kOk : kTextSecondary),
+                    title: Text(p.deviceName, style: const TextStyle(color: kText)),
+                    trailing: RouteBadge(route: p.via),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      final svc = ref.read(transferServiceProvider);
+                      final send = paths.isNotEmpty
+                          ? svc.sendFiles(p, [for (final x in paths) File(x)])
+                          : svc.sendText(p, text!);
+                      send.catchError((Object e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
   }
 
   Future<void> _maybeShowChangelog() async {
@@ -98,6 +191,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final progress = ref.watch(transferProgressProvider);
     final updateAsync = ref.watch(updateProvider);
     final updateInfo = updateAsync.valueOrNull;
+
+    ref.listen<Map<String, dynamic>?>(intakeProvider, (_, next) {
+      if (next != null) _handleIntake(next);
+    });
 
     ref.listen<OfferData?>(activeOfferProvider, (previous, next) {
       if (next != null) _showOfferSheet(next);

@@ -23,3 +23,14 @@ export interface Peer {
 }
 
 export type Route = 'direct' | 'relay';
+
+/** What a paired device reports about itself (Go DeviceStatus). */
+export interface DeviceStatus {
+  /** 0-100, -1 unknown */
+  battery: number;
+  charging: boolean;
+  /** "5G", "LTE", "Wi-Fi", … */
+  network: string;
+  /** 0-4, -1 unknown */
+  signal: number;
+}

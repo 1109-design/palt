@@ -20,6 +20,7 @@ import '../../models/history_entry.dart';
 import '../../models/peer.dart';
 import '../../providers/alias_provider.dart';
 import '../../providers/auto_copy_provider.dart';
+import '../../providers/link_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/peer_provider.dart';
 import '../../services/transfer_service.dart';
@@ -101,6 +102,22 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     await _send(peer, text, clearDraft: false);
   }
 
+  /// Sends a feature packet (ring, ping) over the device's link.
+  Future<void> _sendPacket(Peer peer, String type) async {
+    final link = ref.read(linkManagerProvider).byName(peer.deviceName);
+    final messenger = ScaffoldMessenger.of(context);
+    if (link == null) {
+      messenger.showSnackBar(SnackBar(content: Text('${peer.deviceName} isn\'t connected')));
+      return;
+    }
+    if (!link.supports(type)) {
+      messenger.showSnackBar(SnackBar(content: Text('Update PALT on ${peer.deviceName} for this')));
+      return;
+    }
+    await link.send(type, body: {});
+    messenger.showSnackBar(SnackBar(content: Text(type == 'ring' ? 'Ringing ${peer.deviceName}…' : 'Pinged')));
+  }
+
   Future<void> _toggleAutoCopy(String name, bool paired, bool enabled) async {
     if (!enabled && !paired) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -169,6 +186,16 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
       appBar: AppBar(
         titleSpacing: 0,
         actions: [
+          if (online && paired)
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              icon: const Icon(Icons.more_vert_rounded, color: kTextSecondary),
+              onSelected: (v) => _sendPacket(peer, v),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'ring', child: Text('Ring — find this device')),
+                PopupMenuItem(value: 'user_ping', child: Text('Ping')),
+              ],
+            ),
           IconButton(
             tooltip: autoCopy ? 'Auto-copy on' : 'Auto-copy off',
             icon: Icon(

@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -83,7 +84,13 @@ type App struct {
 
 	// trayEnabled is set before startup when a tray host is running.
 	trayEnabled bool
-	tray        trayState
+	// windowHidden is true while the window sits in the tray; quitting
+	// lets the close handler through.
+	windowHidden atomic.Bool
+	quitting     atomic.Bool
+
+	features featureState
+	tray         trayState
 }
 
 // NewApp constructs an App instance. Wails calls this during startup.
@@ -122,6 +129,7 @@ func (a *App) startup(ctx context.Context) {
 	// Initialize Custom TCP Transfer Server
 	a.transferServer = transfer.NewServer(paltPort)
 	a.setupLinks()
+	a.setupFeatures()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {
@@ -234,6 +242,7 @@ func (a *App) startup(ctx context.Context) {
 			"copied":     copied,
 			"route":      meta.Route,
 		})
+		a.notifyText(meta.SenderName, meta.Text, copied)
 	}
 
 	a.transferServer.OnProgress = func(meta transfer.Metadata, written int64, total int64, sentItems int, totalItems int, currentFile string) {
@@ -274,6 +283,9 @@ func (a *App) startup(ctx context.Context) {
 	a.startTray()
 
 	log.Println("[app] PALT started successfully.")
+	if wd, err := os.Getwd(); err == nil {
+		a.handleArgs(os.Args[1:], wd)
+	}
 }
 
 // shutdown is called by Wails when the window is closed.
@@ -375,8 +387,20 @@ func (a *App) CheckForUpdate() UpdateInfo {
 
 // showWindow brings the window back from the tray or a minimised state.
 func (a *App) showWindow() {
+	a.windowHidden.Store(false)
 	wailsruntime.WindowShow(a.ctx)
 	wailsruntime.WindowUnminimise(a.ctx)
+}
+
+func (a *App) hideWindow() {
+	a.windowHidden.Store(true)
+	wailsruntime.WindowHide(a.ctx)
+}
+
+// quit ends PALT, past the close-to-tray handler.
+func (a *App) quit() {
+	a.quitting.Store(true)
+	wailsruntime.Quit(a.ctx)
 }
 
 // OpenURL opens a URL in the system's default browser.

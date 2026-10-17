@@ -186,6 +186,15 @@ final transferProgressProvider = StateProvider<TransferProgress?>((ref) => null)
 
 final incomingTextProvider = StateProvider<IncomingText?>((ref) => null);
 
+/// Files that just finished arriving, for a notification while in the background.
+class ReceivedFiles {
+  final String senderName;
+  final List<String> names;
+  const ReceivedFiles(this.senderName, this.names);
+}
+
+final receivedFilesProvider = StateProvider<ReceivedFiles?>((ref) => null);
+
 // ── Core Service ─────────────────────────────────────────────────────────────
 
 class TransferService {
@@ -356,6 +365,8 @@ class TransferService {
               route: route,
             ));
       }
+      ref.read(receivedFilesProvider.notifier).state =
+          ReceivedFiles(offer.senderName, [for (final f in hFiles) f.name]);
       ref.read(transferProgressProvider.notifier).state = TransferProgress(
           offer.transferId, totalWritten, offer.totalSize,
           sentItems: totalFiles,

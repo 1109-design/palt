@@ -1,6 +1,7 @@
 package com.lads.palt.palt_mobile
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -22,5 +23,23 @@ class MainActivity : FlutterActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         PaltService.start(this)
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        Thread {
+            if (Intake.accept(applicationContext, intent)) {
+                runOnUiThread { Channels.intentReady() }
+            }
+        }.start()
+    }
+
+    companion object {
+        const val EXTRA_OPEN_DEVICE = "palt.openDevice"
     }
 }

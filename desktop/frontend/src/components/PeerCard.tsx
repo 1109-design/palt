@@ -14,11 +14,12 @@ import SendIcon from '@mui/icons-material/NorthEast';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import DownloadIcon from '@mui/icons-material/SouthWest';
-import type { Peer } from '../types/peer';
+import type { DeviceStatus, Peer } from '../types/peer';
 import { getOsInfo } from '../utils/osHelpers';
 import { alpha } from '@mui/material/styles';
 import { beacon, fonts } from '../theme/theme';
 import RouteBadge from './RouteBadge';
+import DeviceStatusChip from './DeviceStatusChip';
 
 interface PeerCardProps {
   peer: Peer;
@@ -28,6 +29,8 @@ interface PeerCardProps {
   onSendFile?: (peer: Peer) => void;
   onRename?: (peer: Peer) => void;
   onOpen?: (peer: Peer) => void;
+  /** Battery and signal reported by a paired device. */
+  status?: DeviceStatus;
 }
 
 const PeerCard: React.FC<PeerCardProps> = ({
@@ -37,6 +40,7 @@ const PeerCard: React.FC<PeerCardProps> = ({
   onSendFile,
   onRename,
   onOpen,
+  status,
 }) => {
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
@@ -176,6 +180,7 @@ const PeerCard: React.FC<PeerCardProps> = ({
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1, minHeight: 24 }}>
             <RouteBadge route={peer.via} />
+            {peer.paired && <DeviceStatusChip status={status} />}
             {peer.via !== 'relay' && (
             <>
             <Typography

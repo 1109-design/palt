@@ -109,10 +109,14 @@ func (a *App) refreshTray() {
 
 	labels := make([]string, len(peers))
 	for i, p := range peers {
-		labels[i] = trayPeerLabel(p, aliases[p.DeviceName])
+		labels[i] = trayPeerLabel(p, aliases[p.DeviceName], a.statusOf(p.DeviceName))
 	}
 	autostart := autostartEnabled()
-	signature := fmt.Sprintf("%q %v", labels, autostart)
+	paired := make([]bool, len(peers))
+	for i, p := range peers {
+		paired[i] = p.Paired
+	}
+	signature := fmt.Sprintf("%q %v %v", labels, paired, autostart)
 
 	a.tray.mu.Lock()
 	defer a.tray.mu.Unlock()
@@ -138,14 +142,8 @@ func (a *App) refreshTray() {
 		none.Disable()
 	}
 	for i, p := range peers {
-		item := systray.AddMenuItem(labels[i], "Open chat with "+p.DeviceName)
-		name := p.DeviceName
-		go func() {
-			for range item.ClickedCh {
-				a.showWindow()
-				wailsruntime.EventsEmit(a.ctx, "tray_open_device", name)
-			}
-		}()
+		device := systray.AddMenuItem(labels[i], "")
+		a.trayDeviceMenu(device, p)
 	}
 
 	systray.AddSeparator()
@@ -168,15 +166,50 @@ func (a *App) refreshTray() {
 	}()
 	go func() {
 		for range quit.ClickedCh {
-			wailsruntime.Quit(a.ctx)
+			a.quit()
 		}
 	}()
 }
 
-func trayPeerLabel(p models.Peer, alias string) string {
+// trayDeviceMenu fills a device's submenu.
+func (a *App) trayDeviceMenu(device *systray.MenuItem, p models.Peer) {
+	name := p.DeviceName
+	on := func(label string, fn func() error) {
+		item := device.AddSubMenuItem(label, "")
+		go func() {
+			for range item.ClickedCh {
+				if err := fn(); err != nil {
+					notify(Notification{Title: "PALT", Body: err.Error(), Icon: "dialog-warning"})
+				}
+			}
+		}()
+	}
+	on("Open chat", func() error {
+		a.showWindow()
+		wailsruntime.EventsEmit(a.ctx, "tray_open_device", name)
+		return nil
+	})
+	on("Send files…", func() error {
+		a.showWindow()
+		return a.SendFile(p.IPAddress, p.Port, name)
+	})
+	on("Send clipboard", func() error { return a.SendClipboard(name) })
+	if p.Paired {
+		on("Ring", func() error { return a.RingDevice(name) })
+		on("Ping", func() error { return a.PingDevice(name) })
+	}
+}
+
+func trayPeerLabel(p models.Peer, alias string, st DeviceStatus) string {
 	name := p.DeviceName
 	if alias != "" {
 		name = alias
+	}
+	if st.Battery >= 0 {
+		name += fmt.Sprintf("  · %d%%", st.Battery)
+		if st.Charging {
+			name += " ⚡"
+		}
 	}
 	if p.Via == transfer.RouteRelay {
 		name += "  · relay"

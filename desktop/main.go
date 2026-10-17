@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"os"
 	"slices"
@@ -36,7 +37,9 @@ func main() {
 	// With a tray to come back from, closing the window keeps PALT running,
 	// and the login entry starts it straight in the tray.
 	app.trayEnabled = trayAvailable()
-	startHidden := app.trayEnabled && slices.Contains(os.Args[1:], startHiddenFlag)
+	cliCommand := len(os.Args) > 1 && (os.Args[1] == "--send" || os.Args[1] == "--ring")
+	startHidden := app.trayEnabled && (slices.Contains(os.Args[1:], startHiddenFlag) || cliCommand)
+	app.windowHidden.Store(startHidden)
 
 	err := wails.Run(&options.App{
 		Title:     "PALT — Local File Transfer",
@@ -48,16 +51,29 @@ func main() {
 			Assets: assets,
 		},
 		// Deep ink — matches Beacon background.default in theme.ts
-		BackgroundColour:  &options.RGBA{R: 12, G: 18, B: 32, A: 1},
-		OnStartup:         app.startup,
-		OnShutdown:        app.shutdown,
-		StartHidden:       startHidden,
-		HideWindowOnClose: app.trayEnabled,
+		BackgroundColour: &options.RGBA{R: 12, G: 18, B: 32, A: 1},
+		OnStartup:        app.startup,
+		OnShutdown:       app.shutdown,
+		StartHidden:      startHidden,
+		// With a tray, closing the window only hides it.
+		OnBeforeClose: func(ctx context.Context) bool {
+			if app.trayEnabled && !app.quitting.Load() {
+				app.hideWindow()
+				return true
+			}
+			return false
+		},
 		// Launching PALT again (or from the menu while it sits in the tray)
 		// brings up the running window instead of fighting it for the port.
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               instanceID,
-			OnSecondInstanceLaunch: func(options.SecondInstanceData) { app.showWindow() },
+			OnSecondInstanceLaunch: func(d options.SecondInstanceData) {
+				if len(d.Args) > 0 && (d.Args[0] == "--send" || d.Args[0] == "--ring") {
+					app.handleArgs(d.Args, d.WorkingDirectory)
+					return
+				}
+				app.showWindow()
+			},
 		},
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop: true,

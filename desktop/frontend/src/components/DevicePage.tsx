@@ -30,9 +30,12 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FolderOpenIcon from '@mui/icons-material/FolderOpenOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import PlayArrowIcon from '@mui/icons-material/PlayArrowRounded';
-import type { Peer } from '../types/peer';
+import type { DeviceStatus, Peer } from '../types/peer';
 import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import WavingHandIcon from '@mui/icons-material/WavingHand';
+import DeviceStatusChip from './DeviceStatusChip';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
 import RouteBadge, { routeLabel } from './RouteBadge';
@@ -62,6 +65,10 @@ interface DevicePageProps {
   loadPreview: (path: string, name: string) => Promise<MediaPreview>;
   /** Removes one message/transfer from local history (files stay on disk). */
   onDeleteEntry: (entry: HistoryEntry) => void;
+  /** Battery and signal reported by a paired device. */
+  status?: DeviceStatus;
+  onRing: (peer: Peer) => void;
+  onPing: (peer: Peer) => void;
 }
 
 /** Received files fall back to the download folder by name; sent files need a recorded path. */
@@ -477,6 +484,9 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onFileAction,
   loadPreview,
   onDeleteEntry,
+  status,
+  onRing,
+  onPing,
 }) => {
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
@@ -638,6 +648,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
                   · {paired ? 'paired' : 'not paired'}
                 </Typography>
               )}
+              {online && paired && <DeviceStatusChip status={status} />}
             </Box>
           </Box>
 
@@ -677,6 +688,20 @@ const DevicePage: React.FC<DevicePageProps> = ({
             </Box>
           </Tooltip>
 
+          {online && paired && (
+            <>
+              <Tooltip title="Ring — plays a loud sound, even on silent">
+                <IconButton onClick={() => onRing(peer)} aria-label="ring device" sx={{ color: beacon.textSecondary }}>
+                  <NotificationsActiveIcon sx={{ fontSize: 19 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Ping">
+                <IconButton onClick={() => onPing(peer)} aria-label="ping device" sx={{ color: beacon.textSecondary }}>
+                  <WavingHandIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
           <Button
             variant="outlined"
             startIcon={<AttachFileIcon sx={{ fontSize: 17 }} />}

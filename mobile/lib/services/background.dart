@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/link_provider.dart';
 import '../providers/peer_provider.dart';
 import '../providers/relay_provider.dart';
+import '../features/phone_features.dart';
 import '../services/link/link.dart';
 import 'transfer_service.dart';
 
@@ -48,6 +49,7 @@ void startCore(ProviderContainer c) {
   c.read(discoveryServiceProvider);
   c.read(relayClientProvider);
   c.read(connectorProvider);
+  setupPhoneFeatures(c);
 
   // Keep the notification saying who is connected.
   void showLinks(List<Link> links) {
