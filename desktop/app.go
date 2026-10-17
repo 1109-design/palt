@@ -45,7 +45,7 @@ import (
 
 // AppVersion is the canonical version string for this build.
 // Bump this manually to match the git tag when cutting a release.
-const AppVersion = "v1.5.0"
+const AppVersion = "v2.0.0"
 
 // UpdateInfo is returned by CheckForUpdate and passed to the React frontend.
 type UpdateInfo struct {
@@ -291,10 +291,11 @@ func (a *App) startup(ctx context.Context) {
 	a.startTray()
 
 	// A terminate signal (logout, shutdown, kill) really quits, past the
-	// close-to-tray handler.
+	// close-to-tray handler. Not SIGHUP: catching it would also undo the
+	// "ignore hangups" of a launcher, and a closing terminal would quit PALT.
 	go func() {
 		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
 		<-sig
 		a.quit()
 	}()

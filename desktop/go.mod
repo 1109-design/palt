@@ -15,6 +15,8 @@ require (
 	golang.org/x/image v0.24.0
 )
 
+require github.com/makiuchi-d/gozxing v0.1.1
+
 require (
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
@@ -44,4 +46,5 @@ require (
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 )
