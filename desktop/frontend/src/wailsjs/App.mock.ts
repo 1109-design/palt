@@ -92,6 +92,7 @@ export const GetDeviceStatus = () =>
 export const RingDevice = (name: string): Promise<void> => Promise.resolve();
 export const PingDevice = (name: string): Promise<void> => Promise.resolve();
 export const StopRinging = (): Promise<void> => Promise.resolve();
+export const SendClipboard = (name: string): Promise<void> => Promise.resolve();
 export const GetPhoneNotifications = (device: string) =>
   Promise.resolve([
     { id: 'n1', device, app: 'WhatsApp', appId: 'com.whatsapp', title: 'Mum', text: 'Are you coming for dinner?', time: Date.now() - 120000, actions: ['Mark as read'], replyable: true },

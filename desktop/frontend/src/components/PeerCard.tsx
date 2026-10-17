@@ -20,6 +20,9 @@ import { alpha } from '@mui/material/styles';
 import { beacon, fonts } from '../theme/theme';
 import RouteBadge from './RouteBadge';
 import DeviceStatusChip from './DeviceStatusChip';
+import ContentPasteGoIcon from '@mui/icons-material/ContentPasteGo';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import WavingHandIcon from '@mui/icons-material/WavingHand';
 
 interface PeerCardProps {
   peer: Peer;
@@ -31,6 +34,10 @@ interface PeerCardProps {
   onOpen?: (peer: Peer) => void;
   /** Battery and signal reported by a paired device. */
   status?: DeviceStatus;
+  /** Quick actions, paired devices only. */
+  onRing?: (peer: Peer) => void;
+  onPing?: (peer: Peer) => void;
+  onClipboard?: (peer: Peer) => void;
 }
 
 const PeerCard: React.FC<PeerCardProps> = ({
@@ -41,6 +48,9 @@ const PeerCard: React.FC<PeerCardProps> = ({
   onRename,
   onOpen,
   status,
+  onRing,
+  onPing,
+  onClipboard,
 }) => {
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
@@ -174,14 +184,16 @@ const PeerCard: React.FC<PeerCardProps> = ({
             )}
           </Box>
 
-          <Typography sx={{ fontSize: '0.78rem', color: beacon.textFaint, mt: 0.25 }}>
-            {osInfo.label}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+            {peer.paired && <Box sx={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: beacon.ok, flexShrink: 0 }} />}
+            <Typography sx={{ fontSize: '0.78rem', color: peer.paired ? beacon.textSecondary : beacon.textFaint }}>
+              {peer.paired ? `Paired · ${osInfo.label}` : osInfo.label}
+            </Typography>
+          </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1, minHeight: 24 }}>
             <RouteBadge route={peer.via} />
-            {peer.paired && <DeviceStatusChip status={status} compact />}
-            {peer.via !== 'relay' && (
+            {peer.via !== 'relay' && !peer.paired && (
             <>
             <Typography
               noWrap
@@ -213,8 +225,31 @@ const PeerCard: React.FC<PeerCardProps> = ({
         </Box>
       </Box>
 
+      {/* Live status of a paired device */}
+      {peer.paired && (
+        <Box
+          sx={{
+            mt: 2,
+            px: 1.5,
+            py: 1,
+            minHeight: 38,
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: '8px',
+            border: `1px solid ${beacon.hairline}`,
+            backgroundColor: beacon.bg,
+          }}
+        >
+          {status ? (
+            <DeviceStatusChip status={status} />
+          ) : (
+            <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textFaint }}>waiting for status…</Typography>
+          )}
+        </Box>
+      )}
+
       {/* Action row */}
-      <Box sx={{ mt: 2.5 }}>
+      <Box sx={{ mt: peer.paired ? 1.5 : 2.5, display: 'flex', gap: 1, alignItems: 'center' }}>
         {highlighted ? (
           <Box
             sx={{
@@ -253,6 +288,36 @@ const PeerCard: React.FC<PeerCardProps> = ({
           >
             Send files
           </Button>
+        )}
+        {peer.paired && !highlighted && (
+          <>
+            {[
+              { title: 'Send my clipboard', icon: <ContentPasteGoIcon sx={{ fontSize: 18 }} />, fn: onClipboard },
+              { title: 'Ring — find it', icon: <NotificationsActiveIcon sx={{ fontSize: 18 }} />, fn: onRing },
+              { title: 'Ping', icon: <WavingHandIcon sx={{ fontSize: 17 }} />, fn: onPing },
+            ].map((a) => (
+              <Tooltip key={a.title} title={a.title}>
+                <IconButton
+                  aria-label={a.title}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    a.fn?.(peer);
+                  }}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    flexShrink: 0,
+                    borderRadius: '8px',
+                    border: `1px solid ${beacon.hairline}`,
+                    color: beacon.textSecondary,
+                    '&:hover': { color: beacon.text, borderColor: beacon.textFaint },
+                  }}
+                >
+                  {a.icon}
+                </IconButton>
+              </Tooltip>
+            ))}
+          </>
         )}
       </Box>
     </Box>

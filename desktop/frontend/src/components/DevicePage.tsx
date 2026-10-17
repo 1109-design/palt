@@ -38,7 +38,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import TuneIcon from '@mui/icons-material/Tune';
 import { Badge } from '@mui/material';
 import WavingHandIcon from '@mui/icons-material/WavingHand';
-import DeviceStatusChip from './DeviceStatusChip';
+import DeviceStatusPanel from './DeviceStatusPanel';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
 import RouteBadge, { routeLabel } from './RouteBadge';
@@ -658,57 +658,17 @@ const DevicePage: React.FC<DevicePageProps> = ({
                   flexShrink: 0,
                 }}
               />
+              <Typography sx={{ fontSize: '0.8rem', color: online ? beacon.textSecondary : beacon.textFaint }} noWrap>
+                {!online ? 'Offline' : paired ? 'Paired' : 'Not paired'} · {osInfo.label}
+              </Typography>
               {online && <RouteBadge route={peer.via} />}
-              <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary }} noWrap>
-                {!online ? 'offline' : peer.via === 'relay' ? 'through relay server' : `${peer.ipAddress}:${peer.port}`}
-              </Typography>
-              <Typography sx={{ fontSize: '0.74rem', color: beacon.textFaint }} noWrap>
-                · {osInfo.label}
-              </Typography>
-              {online && (
-                <Typography sx={{ fontSize: '0.74rem', color: paired ? beacon.ok : beacon.textFaint }} noWrap>
-                  · {paired ? 'paired' : 'not paired'}
+              {online && !paired && (
+                <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary }} noWrap>
+                  {peer.via === 'relay' ? 'through relay server' : `${peer.ipAddress}:${peer.port}`}
                 </Typography>
               )}
-              {online && paired && <DeviceStatusChip status={status} />}
             </Box>
           </Box>
-
-          <Tooltip
-            title={
-              paired
-                ? 'Copy messages from this device to the clipboard as they arrive'
-                : 'Auto-copy works for paired devices only'
-            }
-          >
-            <Box
-              component="label"
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.25,
-                pl: 1.25,
-                pr: 0.25,
-                height: 38,
-                borderRadius: '8px',
-                border: `1px solid ${beacon.hairline}`,
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              <ContentPasteIcon sx={{ fontSize: 16, color: autoCopy ? beacon.accent : beacon.textSecondary }} />
-              <Typography sx={{ fontSize: '0.8rem', color: beacon.textSecondary, ml: 0.75, display: { xs: 'none', sm: 'block' } }}>
-                Auto-copy
-              </Typography>
-              <Switch
-                size="small"
-                checked={autoCopy && paired}
-                disabled={!paired}
-                onChange={(e) => onToggleAutoCopy(peer, e.target.checked)}
-                inputProps={{ 'aria-label': 'auto-copy messages from this device' }}
-              />
-            </Box>
-          </Tooltip>
 
           {online && paired && (
             <>
@@ -735,6 +695,10 @@ const DevicePage: React.FC<DevicePageProps> = ({
                 </IconButton>
               </Tooltip>
               <Menu anchorEl={settingsAnchor} open={!!settingsAnchor} onClose={() => setSettingsAnchor(null)}>
+                <MenuItem onClick={() => onToggleAutoCopy(peer, !autoCopy)} sx={{ gap: 1.5 }}>
+                  <Switch size="small" checked={autoCopy} />
+                  <Typography sx={{ fontSize: '0.86rem' }}>Copy its messages to my clipboard</Typography>
+                </MenuItem>
                 {SETTING_LABELS.map(([key, label]) => (
                   <MenuItem key={key} onClick={() => onSetSetting(key, !settings[key])} sx={{ gap: 1.5 }}>
                     <Switch size="small" checked={!!settings[key]} />
@@ -754,6 +718,11 @@ const DevicePage: React.FC<DevicePageProps> = ({
             Send files
           </Button>
         </Box>
+        {paired && (
+          <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 3 }, pb: 2, mt: -1 }}>
+            <DeviceStatusPanel status={status} peer={peer} online={online} />
+          </Box>
+        )}
       </Box>
 
       {/* ── Thread ───────────────────────────────────────────────────────── */}

@@ -7,10 +7,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/phone_features.dart';
+import '../../providers/link_provider.dart';
 import '../../providers/peer_provider.dart';
+import 'device_status.dart';
 import '../../theme/app_theme.dart';
 import 'beacon_pulse.dart';
-import 'dart:io';
 
 class LocalDeviceCard extends ConsumerWidget {
   const LocalDeviceCard({super.key});
@@ -19,8 +21,9 @@ class LocalDeviceCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ipAsync = ref.watch(localIpProvider);
     final ipAddress = ipAsync.valueOrNull ?? '…';
-    final hostname =
-        Platform.localHostname.isNotEmpty ? Platform.localHostname : 'palt-android';
+    // The name paired devices see this phone as.
+    final hostname = ref.watch(localNameProvider).valueOrNull ?? '…';
+    final status = ref.watch(localStatusProvider);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -74,6 +77,10 @@ class LocalDeviceCard extends ConsumerWidget {
                     ),
                   ],
                 ),
+                if (status != null) ...[
+                  const SizedBox(height: 10),
+                  StatusLine(status: status),
+                ],
               ],
             ),
           ),

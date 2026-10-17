@@ -20,7 +20,9 @@ import '../../models/history_entry.dart';
 import '../../models/peer.dart';
 import '../../providers/alias_provider.dart';
 import '../../providers/auto_copy_provider.dart';
-import '../../providers/link_provider.dart';
+import '../../features/device_actions.dart';
+import '../../features/phone_features.dart';
+import '../widgets/device_status.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/peer_provider.dart';
 import '../../services/transfer_service.dart';
@@ -102,22 +104,6 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     await _send(peer, text, clearDraft: false);
   }
 
-  /// Sends a feature packet (ring, ping) over the device's link.
-  Future<void> _sendPacket(Peer peer, String type) async {
-    final link = ref.read(linkManagerProvider).byName(peer.deviceName);
-    final messenger = ScaffoldMessenger.of(context);
-    if (link == null) {
-      messenger.showSnackBar(SnackBar(content: Text('${peer.deviceName} isn\'t connected')));
-      return;
-    }
-    if (!link.supports(type)) {
-      messenger.showSnackBar(SnackBar(content: Text('Update PALT on ${peer.deviceName} for this')));
-      return;
-    }
-    await link.send(type, body: {});
-    messenger.showSnackBar(SnackBar(content: Text(type == 'ring' ? 'Ringing ${peer.deviceName}…' : 'Pinged')));
-  }
-
   Future<void> _toggleAutoCopy(String name, bool paired, bool enabled) async {
     if (!enabled && !paired) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -185,17 +171,32 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
+        // Paired devices get a status panel and quick actions under the title.
+        bottom: paired
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(186),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Column(
+                    children: [
+                      StatusPanel(
+                        status: ref.watch(peerStatusProvider)[peer.deviceName],
+                        peer: peer,
+                        online: online,
+                      ),
+                      const SizedBox(height: 6),
+                      QuickActions(actions: [
+                        (icon: Icons.attach_file_rounded, label: 'Files', onTap: online ? () => pickAndSendFiles(ref, peer) : null),
+                        (icon: Icons.content_paste_go_rounded, label: 'Clipboard', onTap: online ? () => sendClipboardTo(context, ref, peer) : null),
+                        (icon: Icons.notifications_active_rounded, label: 'Ring', onTap: online ? () => sendDevicePacket(context, ref, peer, 'ring') : null),
+                        (icon: Icons.waving_hand_rounded, label: 'Ping', onTap: online ? () => sendDevicePacket(context, ref, peer, 'user_ping') : null),
+                      ]),
+                    ],
+                  ),
+                ),
+              )
+            : null,
         actions: [
-          if (online && paired)
-            PopupMenuButton<String>(
-              tooltip: 'More',
-              icon: const Icon(Icons.more_vert_rounded, color: kTextSecondary),
-              onSelected: (v) => _sendPacket(peer, v),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'ring', child: Text('Ring — find this device')),
-                PopupMenuItem(value: 'user_ping', child: Text('Ping')),
-              ],
-            ),
           IconButton(
             tooltip: autoCopy ? 'Auto-copy on' : 'Auto-copy off',
             icon: Icon(

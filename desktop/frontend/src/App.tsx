@@ -79,6 +79,7 @@ const GetDeviceStatus      = isWails ? (WailsApp as any).GetDeviceStatus      : 
 const RingDevice           = isWails ? (WailsApp as any).RingDevice           : MockApp.RingDevice;
 const PingDevice           = isWails ? (WailsApp as any).PingDevice           : MockApp.PingDevice;
 const StopRinging          = isWails ? (WailsApp as any).StopRinging          : MockApp.StopRinging;
+const SendClipboard        = isWails ? (WailsApp as any).SendClipboard        : MockApp.SendClipboard;
 const GetPhoneNotifications = isWails ? (WailsApp as any).GetPhoneNotifications : MockApp.GetPhoneNotifications;
 const ReplyToNotification  = isWails ? (WailsApp as any).ReplyToNotification  : MockApp.ReplyToNotification;
 const DismissPhoneNotification = isWails ? (WailsApp as any).DismissPhoneNotification : MockApp.DismissPhoneNotification;
@@ -320,6 +321,15 @@ const App: React.FC = () => {
     try {
       await RingDevice(peer.deviceName);
       setErrorMsg(`Ringing ${peer.deviceName}…`);
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+  }, []);
+
+  const handleSendClipboard = useCallback(async (peer: Peer) => {
+    try {
+      await SendClipboard(peer.deviceName);
+      setErrorMsg(`Clipboard sent to ${peer.deviceName}`);
     } catch (e: any) {
       setErrorMsg(String(e?.message || e));
     }
@@ -827,7 +837,7 @@ const App: React.FC = () => {
             ) : filteredPeers.length > 0 ? (
               <Grid container spacing={2}>
                 {filteredPeers.map((peer) => (
-                  <Grid item xs={12} sm={6} md={4} key={peer.id}>
+                  <Grid item xs={12} sm={peer.paired ? 12 : 6} md={peer.paired ? 6 : 4} key={peer.id}>
                     <PeerCard
                       peer={peer}
                       alias={aliases[peer.deviceName]}
@@ -836,6 +846,9 @@ const App: React.FC = () => {
                       onRename={setRenamingPeer}
                       onOpen={setOpenPeer}
                       status={deviceStatus[peer.deviceName]}
+                      onRing={handleRing}
+                      onPing={handlePing}
+                      onClipboard={handleSendClipboard}
                     />
                   </Grid>
                 ))}

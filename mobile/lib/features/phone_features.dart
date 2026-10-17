@@ -59,6 +59,9 @@ class DeviceStatus {
       };
 }
 
+/// This phone's own status, as last sent.
+final localStatusProvider = StateProvider<DeviceStatus?>((ref) => null);
+
 /// Status reported by each linked device, by device name.
 final peerStatusProvider = StateProvider<Map<String, DeviceStatus>>((ref) => const {});
 
@@ -132,6 +135,7 @@ void setupPhoneFeatures(ProviderContainer c) {
 
   Future<void> send({Link? only}) async {
     final st = await current();
+    c.read(localStatusProvider.notifier).state = DeviceStatus.fromJson(st);
     final key = st.toString();
     if (only != null) {
       if (only.supports('status')) only.send('status', body: st).catchError((_) {});

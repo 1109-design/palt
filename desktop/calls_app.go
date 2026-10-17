@@ -78,15 +78,21 @@ func (a *App) onCall(l *link.Link, p link.Packet) {
 	ringing := a.calls.notif[device]
 	a.calls.mu.Unlock()
 
+	// Any call, incoming or one you make, pauses what's playing here.
+	pause := func() {
+		if !a.setting(device, "pauseOnCall") {
+			return
+		}
+		if paused := pausePlaying(); len(paused) > 0 {
+			a.calls.mu.Lock()
+			a.calls.paused[device] = append(a.calls.paused[device], paused...)
+			a.calls.mu.Unlock()
+		}
+	}
+
 	switch b.Event {
 	case "ringing":
-		if a.setting(device, "pauseOnCall") {
-			if paused := pausePlaying(); len(paused) > 0 {
-				a.calls.mu.Lock()
-				a.calls.paused[device] = append(a.calls.paused[device], paused...)
-				a.calls.mu.Unlock()
-			}
-		}
+		pause()
 		body := device + " is ringing"
 		if b.Name != "" && b.Number != "" {
 			body = b.Number + " · " + body
@@ -115,6 +121,7 @@ func (a *App) onCall(l *link.Link, p link.Packet) {
 
 	case "talking":
 		closeNotification(ringing)
+		pause() // outgoing calls start here; a no-op if already paused
 
 	case "missed", "ended":
 		closeNotification(ringing)
