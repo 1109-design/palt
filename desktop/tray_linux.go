@@ -24,7 +24,6 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"palt/internal/models"
-	"palt/internal/transfer"
 )
 
 //go:embed trayicon.png
@@ -240,10 +239,8 @@ func trayPeerLabel(p models.Peer, alias string, st DeviceStatus) string {
 	case "cellular":
 		name += "  · mobile data"
 	}
-	if p.Via == transfer.RouteRelay {
-		name += "  · relay"
-	} else if p.USB {
-		name += "  · USB"
+	if label := pathLabel(p.Path); label != "" {
+		name += "  · " + label
 	}
 	return "    " + name
 }

@@ -243,7 +243,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                       ),
                       const SizedBox(width: 6),
                       if (online) ...[
-                        RouteBadge(route: peer.via),
+                        RouteBadge(route: peer.via, ip: peer.ipAddress),
                         const SizedBox(width: 6),
                       ],
                       Flexible(

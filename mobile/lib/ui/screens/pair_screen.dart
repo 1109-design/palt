@@ -198,7 +198,7 @@ class _PairScreenState extends ConsumerState<PairScreen> {
                           style: const TextStyle(fontSize: 14, color: kText),
                           overflow: TextOverflow.ellipsis),
                     ),
-                    RouteBadge(route: l.route),
+                    RouteBadge(route: l.route, ip: l.remoteIp),
                   ],
                 ),
               ),

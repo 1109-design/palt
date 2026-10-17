@@ -122,7 +122,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     leading: Icon(p.paired ? Icons.link_rounded : Icons.devices_other_rounded,
                         color: p.paired ? kOk : kTextSecondary),
                     title: Text(p.deviceName, style: const TextStyle(color: kText)),
-                    trailing: RouteBadge(route: p.via),
+                    trailing: RouteBadge(route: p.via, ip: p.ipAddress),
                     onTap: () {
                       Navigator.pop(ctx);
                       final svc = ref.read(transferServiceProvider);

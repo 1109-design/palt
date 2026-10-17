@@ -2,6 +2,4 @@
 
 package main
 
-func isUSBAddr(string) bool { return false }
-
-func (a *App) watchUSBTether() {}
+func (a *App) watchNetwork() {}

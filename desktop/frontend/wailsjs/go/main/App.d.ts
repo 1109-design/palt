@@ -27,6 +27,8 @@ export function GetClipboardHelper():Promise<main.ClipboardHelper>;
 
 export function GetClipboardHistory():Promise<Array<main.ClipboardEntry>>;
 
+export function GetCurrentWifi():Promise<string>;
+
 export function GetDeviceSettings(arg1:string):Promise<Record<string, boolean>>;
 
 export function GetDeviceStatus():Promise<Record<string, main.DeviceStatus>>;
@@ -90,5 +92,7 @@ export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;
 export function SetDeviceSetting(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function SetRelayServer(arg1:string):Promise<void>;
+
+export function ShareWifi(arg1:string):Promise<void>;
 
 export function StopRinging():Promise<void>;

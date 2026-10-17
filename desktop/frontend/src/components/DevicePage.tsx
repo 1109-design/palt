@@ -664,7 +664,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
               <Typography sx={{ fontSize: '0.8rem', color: online ? beacon.textSecondary : beacon.textFaint }} noWrap>
                 {!online ? 'Offline' : paired ? 'Paired' : 'Not paired'} · {osInfo.label}
               </Typography>
-              {online && <RouteBadge route={peer.via} />}
+              {online && <RouteBadge route={peer.path || peer.via} />}
               {online && !paired && (
                 <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.72rem', color: beacon.textSecondary }} noWrap>
                   {peer.via === 'relay' ? 'through relay server' : `${peer.ipAddress}:${peer.port}`}

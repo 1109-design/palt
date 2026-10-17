@@ -26,6 +26,7 @@ import (
 	"net"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -72,6 +73,9 @@ type Identity struct {
 	Version string `json:"version"`
 	// Handles lists the packet types this device understands.
 	Handles []string `json:"handles"`
+	// Prio is the dialer's preference for this link over others to the
+	// same device (0 = none); a faster path is dialed with a higher one.
+	Prio int `json:"prio,omitempty"`
 }
 
 // Link is an open channel to one paired device.
@@ -81,11 +85,41 @@ type Link struct {
 
 	conn      net.Conn
 	initiator string // device ID of the side that dialed
+	prio      int    // the dialer's Identity.Prio
 	since     time.Time
+	lastRecv  atomic.Int64 // unix nanos of the last packet read
 
 	wmu    sync.Mutex
 	closed chan struct{}
 	once   sync.Once
+}
+
+// Prio is the dialer's preference for this link (see Identity.Prio).
+func (l *Link) Prio() int { return l.prio }
+
+// Probe pings the peer and reports whether anything came back within
+// timeout. Used after a network change to drop a dead link in seconds
+// rather than waiting for the read deadline.
+func (l *Link) Probe(timeout time.Duration) bool {
+	start := time.Now().UnixNano()
+	if l.Send(TypePing, nil) != nil {
+		return false
+	}
+	deadline := time.After(timeout)
+	t := time.NewTicker(50 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-l.closed:
+			return false
+		case <-deadline:
+			return false
+		case <-t.C:
+			if l.lastRecv.Load() >= start {
+				return true
+			}
+		}
+	}
 }
 
 // Since is when the link came up.
@@ -272,8 +306,17 @@ func (m *Manager) CloseAll() {
 // that dialed. It returns once the link is registered or has failed; the
 // link then runs in the background.
 func (m *Manager) Run(conn net.Conn, route string, initiator bool) (*Link, error) {
+	return m.RunPrio(conn, route, initiator, 0)
+}
+
+// RunPrio is Run for a dialer that prefers this link over others to the
+// same device by prio (see Identity.Prio).
+func (m *Manager) RunPrio(conn net.Conn, route string, initiator bool, prio int) (*Link, error) {
 	self := m.self()
 	self.Handles = m.HandledTypes()
+	if initiator {
+		self.Prio = prio
+	}
 	l := &Link{conn: conn, Route: route, closed: make(chan struct{}), since: time.Now()}
 	if err := l.Send(TypeIdentity, self); err != nil {
 		conn.Close()
@@ -290,9 +333,9 @@ func (m *Manager) Run(conn net.Conn, route string, initiator bool) (*Link, error
 		return nil, errors.New("bad identity from peer")
 	}
 	if initiator {
-		l.initiator = self.ID
+		l.initiator, l.prio = self.ID, prio
 	} else {
-		l.initiator = l.Peer.ID
+		l.initiator, l.prio = l.Peer.ID, l.Peer.Prio
 	}
 
 	if !m.register(l, self.ID) {
@@ -340,6 +383,9 @@ func better(a, b *Link, selfID string) bool {
 	if a.Route != b.Route {
 		return a.Route == RouteDirect
 	}
+	if a.prio != b.prio {
+		return a.prio > b.prio
+	}
 	low := min(selfID, a.Peer.ID)
 	if (a.initiator == low) != (b.initiator == low) {
 		return a.initiator == low
@@ -385,6 +431,7 @@ func (m *Manager) serve(l *Link) {
 		if err != nil {
 			return
 		}
+		l.lastRecv.Store(time.Now().UnixNano())
 		switch p.T {
 		case TypePing:
 			l.Send(TypePong, nil)

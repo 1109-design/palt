@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../features/phone_features.dart';
 import '../../models/peer.dart';
 import '../../theme/app_theme.dart';
+import 'route_badge.dart';
 
 bool _low(DeviceStatus s) => s.battery >= 0 && s.battery <= 15 && !s.charging;
 
@@ -22,6 +23,7 @@ String networkLabel(DeviceStatus s) => switch (s.network) {
       'wifi' => s.ssid.isEmpty ? 'Wi-Fi' : s.ssid,
       'cellular' => s.cellular.isEmpty ? 'Mobile data' : 'Mobile data · ${s.cellular}',
       'ethernet' => 'Ethernet',
+      'usb' => 'USB cable only',
       _ => '',
     };
 
@@ -29,6 +31,7 @@ IconData networkIcon(DeviceStatus s) => switch (s.network) {
       'wifi' => Icons.wifi_rounded,
       'cellular' => Icons.signal_cellular_alt_rounded,
       'ethernet' => Icons.settings_ethernet_rounded,
+      'usb' => Icons.usb_rounded,
       _ => Icons.signal_wifi_off_rounded,
     };
 
@@ -200,8 +203,8 @@ class StatusPanel extends StatelessWidget {
                 ? 'offline'
                 : peer.viaRelay
                     ? 'via relay · encrypted'
-                    : 'direct · ${peer.ipAddress}',
-            footerColor: peer.viaRelay ? kRelay : null,
+                    : '${routeLabel(peer.via, peer.ipAddress)} · ${peer.ipAddress}',
+            footerColor: online ? routeColor(peer.via, peer.ipAddress) : null,
           ),
         ),
       ],

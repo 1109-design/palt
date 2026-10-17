@@ -220,6 +220,18 @@ object Channels {
                 mainThread.post { service.invokeMethod("networkChanged", null) }
             }
         })
+        // USB tethering on or off doesn't change the default network.
+        val tether = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                mainThread.post { service.invokeMethod("networkChanged", null) }
+            }
+        }
+        val tetherFilter = android.content.IntentFilter("android.net.conn.TETHER_STATE_CHANGED")
+        if (Build.VERSION.SDK_INT >= 33) {
+            app.registerReceiver(tether, tetherFilter, Context.RECEIVER_EXPORTED)
+        } else {
+            app.registerReceiver(tether, tetherFilter)
+        }
     }
 
     private fun hasNotificationAccess(context: Context): Boolean {

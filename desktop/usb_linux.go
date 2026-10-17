@@ -10,9 +10,8 @@ package main
 import (
 	"log"
 	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -31,44 +30,30 @@ var usbTetherDrivers = map[string]bool{
 // usbTetherIfaces returns the network interfaces backed by a phone's USB
 // tethering.
 func usbTetherIfaces() []net.Interface {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
+	ifaces, _ := net.Interfaces()
 	var out []net.Interface
 	for _, ifc := range ifaces {
-		target, err := os.Readlink(filepath.Join("/sys/class/net", ifc.Name, "device/driver"))
-		if err == nil && usbTetherDrivers[filepath.Base(target)] {
+		if isUSBIface(ifc.Name) {
 			out = append(out, ifc)
 		}
 	}
 	return out
 }
 
-// isUSBAddr reports whether ip is reached over a USB tether.
-func isUSBAddr(ip string) bool {
-	addr := net.ParseIP(ip)
-	if addr == nil {
-		return false
-	}
-	for _, ifc := range usbTetherIfaces() {
-		addrs, _ := ifc.Addrs()
-		for _, a := range addrs {
-			if n, ok := a.(*net.IPNet); ok && n.Contains(addr) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// watchUSBTether keeps tether connections from taking over the laptop's
-// internet route, and wakes the connector when a cable is plugged in.
-func (a *App) watchUSBTether() {
+// watchNetwork follows this computer's network interfaces: tether
+// connections are kept from taking over the internet route, and any change
+// (cable in or out, Wi-Fi on or off) re-checks links at once.
+func (a *App) watchNetwork() {
 	tuned := map[string]bool{}
-	t := time.NewTicker(3 * time.Second)
+	last := networkFingerprint()
+	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	for {
+		if fp := networkFingerprint(); fp != last {
+			last = fp
+			log.Printf("[net] Network changed: %s", fp)
+			a.onNetworkChanged()
+		}
 		seen := map[string]bool{}
 		for _, ifc := range usbTetherIfaces() {
 			seen[ifc.Name] = true
@@ -92,6 +77,25 @@ func (a *App) watchUSBTether() {
 		case <-t.C:
 		}
 	}
+}
+
+// networkFingerprint lists the IPv4 addresses of the interfaces that are up.
+func networkFingerprint() string {
+	var out []string
+	ifaces, _ := net.Interfaces()
+	for _, ifc := range ifaces {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if n, ok := a.(*net.IPNet); ok && n.IP.To4() != nil {
+				out = append(out, ifc.Name+"="+n.IP.String())
+			}
+		}
+	}
+	sort.Strings(out)
+	return strings.Join(out, " ")
 }
 
 // tuneUSBTether sets the route metric of the connection on iface; false

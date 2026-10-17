@@ -288,7 +288,7 @@ func (a *App) startup(ctx context.Context) {
 	a.startRelay()
 	go a.runLANProbe()
 	go a.runConnector()
-	go a.watchUSBTether()
+	go a.watchNetwork()
 
 	ensureAutostart()
 	a.startTray()

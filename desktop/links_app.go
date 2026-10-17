@@ -14,6 +14,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sort"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -28,6 +29,8 @@ import (
 )
 
 const (
+	// probeLinkTimeout is how long a link has to answer after a network change.
+	probeLinkTimeout = 3 * time.Second
 	connectInterval = 5 * time.Second
 	// Backoff caps for a device that doesn't answer: short while it is being
 	// seen on the LAN right now, long for a remembered address.
@@ -107,10 +110,40 @@ func (a *App) kickConnector() {
 }
 
 type linkCandidate struct {
-	lanIP   string
-	lanPort int
-	seen    bool // the LAN address is from a live sighting, not memory
-	relay   bool
+	lan   []lanAddr // fastest first
+	seen  bool      // a LAN address is from a live sighting, not memory
+	relay bool
+}
+
+// lanAddr is one LAN address of a device and how fast this computer
+// reaches it (pathSpeed, also the link's priority when dialed).
+type lanAddr struct {
+	ip    string
+	port  int
+	speed int
+}
+
+func (c *linkCandidate) addLAN(ip string, port int) {
+	for _, a := range c.lan {
+		if a.ip == ip {
+			return
+		}
+	}
+	c.lan = append(c.lan, lanAddr{ip, port, pathSpeed(ip)})
+	sort.SliceStable(c.lan, func(i, j int) bool { return c.lan[i].speed > c.lan[j].speed })
+}
+
+// switchTo returns the LAN addresses worth moving a direct link l to: those
+// clearly faster than its current path, which the peer will also prefer.
+func (c *linkCandidate) switchTo(l *link.Link) []lanAddr {
+	cur := pathSpeed(l.RemoteIP())
+	var out []lanAddr
+	for _, a := range c.lan {
+		if a.ip != l.RemoteIP() && a.speed > l.Prio() && a.speed*2 > cur*3 {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // runConnector opens links to paired devices until ctx is done.
@@ -140,7 +173,8 @@ func (a *App) runConnector() {
 			for _, p := range a.discovery.GetPeers() {
 				if p.DeviceID != "" && p.DeviceID != self {
 					c := get(p.DeviceID)
-					c.lanIP, c.lanPort, c.seen = p.IPAddress, p.Port, true
+					c.addLAN(p.IPAddress, p.Port)
+					c.seen = true
 				}
 			}
 		}
@@ -151,15 +185,22 @@ func (a *App) runConnector() {
 		}
 		for id, d := range a.loadKnownDevices() {
 			if d.LastIP != "" && id != self {
-				if c := get(id); c.lanIP == "" {
-					c.lanIP, c.lanPort = d.LastIP, paltPort
+				if c := get(id); len(c.lan) == 0 {
+					c.addLAN(d.LastIP, paltPort)
 				}
 			}
 		}
 
 		for id, c := range cands {
 			l := a.links.Get(id)
-			if l != nil && (l.Route == link.RouteDirect || c.lanIP == "") {
+			switch {
+			case l == nil:
+			case l.Route == link.RouteDirect:
+				// Move to a clearly faster path (a USB cable or Wi-Fi).
+				if c.lan = c.switchTo(l); len(c.lan) == 0 {
+					continue
+				}
+			case len(c.lan) == 0:
 				continue
 			}
 			mu.Lock()
@@ -214,14 +255,14 @@ func (a *App) runConnector() {
 	}
 }
 
-// connect opens a link to a device, LAN first. haveLink means a relay link
-// is already up and only the LAN is worth trying.
+// connect opens a link to a device, fastest LAN address first. haveLink
+// means a link is already up and only the LAN addresses are worth trying.
 func (a *App) connect(id string, c linkCandidate, haveLink bool) error {
 	p := a.pairing()
 	var lanErr error
-	if c.lanIP != "" {
-		dial := transfer.SecureDialer(transfer.DirectDialer(c.lanIP, c.lanPort, directDialTimeout), p.DeviceID, p.Keys())
-		if lanErr = a.openLink(dial, transfer.RouteDirect); lanErr == nil {
+	for _, addr := range c.lan {
+		dial := transfer.SecureDialer(transfer.DirectDialer(addr.ip, addr.port, directDialTimeout), p.DeviceID, p.Keys())
+		if lanErr = a.openLink(dial, transfer.RouteDirect, addr.speed); lanErr == nil {
 			return nil
 		}
 		if errors.Is(lanErr, secure.ErrHandshake) {
@@ -238,11 +279,12 @@ func (a *App) connect(id string, c linkCandidate, haveLink bool) error {
 	if rc == nil {
 		return errors.New("relay is off")
 	}
-	return a.openLink(func() (net.Conn, error) { return rc.Dial(id) }, transfer.RouteRelay)
+	return a.openLink(func() (net.Conn, error) { return rc.Dial(id) }, transfer.RouteRelay, 0)
 }
 
 // openLink dials, asks for a link and hands it to the link manager.
-func (a *App) openLink(dial transfer.Dialer, route string) error {
+// prio is the link's priority over others to the same device.
+func (a *App) openLink(dial transfer.Dialer, route string, prio int) error {
 	conn, err := dial()
 	if err != nil {
 		return err
@@ -261,7 +303,7 @@ func (a *App) openLink(dial transfer.Dialer, route string) error {
 		conn.Close()
 		return err
 	}
-	_, err = a.links.Run(conn, route, true)
+	_, err = a.links.RunPrio(conn, route, true, prio)
 	return err
 }
 
@@ -295,10 +337,11 @@ func (a *App) mergedPeers() []models.Peer {
 				DeviceID:   l.Peer.ID,
 				Paired:     true,
 				IPAddress:  relayPeerIP,
+				Path:       l.Route,
 			}
 			if ip := l.RemoteIP(); ip != "" {
 				p.IPAddress, p.Port = ip, a.lanPort(ip)
-				p.USB = isUSBAddr(ip)
+				p.Path = pathKind(ip)
 			}
 			seenID[l.Peer.ID], seenName[l.Peer.Name] = true, true
 			out = append(out, p)
@@ -310,7 +353,7 @@ func (a *App) mergedPeers() []models.Peer {
 				continue
 			}
 			p.Via = transfer.RouteDirect
-			p.USB = isUSBAddr(p.IPAddress)
+			p.Path = pathKind(p.IPAddress)
 			seenName[p.DeviceName] = true
 			if p.DeviceID != "" {
 				seenID[p.DeviceID] = true
@@ -329,6 +372,7 @@ func (a *App) mergedPeers() []models.Peer {
 				IPAddress:  relayPeerIP,
 				OS:         p.OS,
 				Via:        transfer.RouteRelay,
+				Path:       transfer.RouteRelay,
 				DeviceID:   p.ID,
 			})
 		}
@@ -403,11 +447,58 @@ func (a *App) ConnectByIP(addr string) error {
 	}
 	pr := a.pairing()
 	dial := transfer.SecureDialer(transfer.DirectDialer(ip, port, directDialTimeout), pr.DeviceID, pr.Keys())
-	if err := a.openLink(dial, transfer.RouteDirect); err != nil {
+	if err := a.openLink(dial, transfer.RouteDirect, pathSpeed(ip)); err != nil {
 		if errors.Is(err, secure.ErrHandshake) {
 			return errors.New("that device isn't paired with this one — scan the code on it first")
 		}
 		return fmt.Errorf("could not connect: %v", err)
 	}
 	return nil
+}
+
+// pathLabel names a peer's Path for people: how PALT reaches it.
+func pathLabel(path string) string {
+	switch path {
+	case "usb":
+		return "USB cable"
+	case "wifi":
+		return "same Wi-Fi"
+	case "lan":
+		return "same network"
+	case transfer.RouteRelay:
+		return "via relay"
+	}
+	return ""
+}
+
+// onNetworkChanged drops links that no longer answer, then looks for
+// devices again, so PALT moves to the new path (Wi-Fi back, a USB cable)
+// within seconds instead of waiting for the dead link to time out.
+func (a *App) onNetworkChanged() {
+	if a.discovery != nil {
+		a.discovery.Rescan()
+	}
+	go func() {
+		a.probeLinks()
+		a.kickConnector()
+	}()
+}
+
+// probeLinks closes direct links that don't answer a ping in a few seconds.
+func (a *App) probeLinks() {
+	var wg sync.WaitGroup
+	for _, l := range a.links.Links() {
+		if l.Route != link.RouteDirect {
+			continue
+		}
+		wg.Add(1)
+		go func(l *link.Link) {
+			defer wg.Done()
+			if !l.Probe(probeLinkTimeout) {
+				log.Printf("[link] %s stopped answering; reconnecting", l.Peer.Name)
+				l.Close()
+			}
+		}(l)
+	}
+	wg.Wait()
 }

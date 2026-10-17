@@ -55,12 +55,18 @@ class LinkIdentity {
   /// Packet types this device understands.
   final List<String> handles;
 
+  /// The dialer's preference for this link over others to the same device
+  /// (0 = none); computers dial a faster path (USB cable, Wi-Fi) with a
+  /// higher one.
+  final int prio;
+
   const LinkIdentity({
     required this.id,
     required this.name,
     required this.os,
     this.version = '',
     this.handles = const [],
+    this.prio = 0,
   });
 
   factory LinkIdentity.fromJson(Map<String, dynamic> j) => LinkIdentity(
@@ -69,6 +75,7 @@ class LinkIdentity {
         os: j['os'] as String? ?? '',
         version: j['version'] as String? ?? '',
         handles: ((j['handles'] as List?) ?? const []).whereType<String>().toList(),
+        prio: (j['prio'] as num?)?.toInt() ?? 0,
       );
 
   Map<String, dynamic> toJson() =>
@@ -86,6 +93,8 @@ class Link {
   final DateTime since = DateTime.now();
   late final LinkIdentity peer;
   late final String _initiator;
+  late final int _prio; // the dialer's LinkIdentity.prio
+  DateTime _lastRecv = DateTime.now();
 
   Future<void> _writeChain = Future.value();
   final _done = Completer<void>();
@@ -106,6 +115,23 @@ class Link {
   }
 
   bool supports(String t) => peer.handles.contains(t);
+
+  /// Pings the peer and reports whether anything came back within
+  /// [timeout]. Used after a network change to drop a dead link in seconds.
+  Future<bool> probe([Duration timeout = const Duration(seconds: 3)]) async {
+    final start = DateTime.now();
+    try {
+      await send('ping');
+    } catch (_) {
+      return false;
+    }
+    final end = start.add(timeout);
+    while (!_closed && DateTime.now().isBefore(end)) {
+      if (!_lastRecv.isBefore(start)) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    return false;
+  }
 
   /// Writes one packet. Writes are queued, so calls may overlap.
   Future<void> send(String t, {Map<String, dynamic>? body, String? id}) {
@@ -212,6 +238,7 @@ class LinkManager {
       rethrow;
     }
     l._initiator = initiator ? me.id : l.peer.id;
+    l._prio = initiator ? 0 : l.peer.prio;
 
     final old = _links[l.peer.id];
     if (old != null && !old.isClosed && !_better(l, old, me.id)) {
@@ -229,6 +256,7 @@ class LinkManager {
 
   static bool _better(Link a, Link b, String selfId) {
     if (a.route != b.route) return a.route == Route.direct;
+    if (a._prio != b._prio) return a._prio > b._prio;
     final low = selfId.compareTo(a.peer.id) < 0 ? selfId : a.peer.id;
     if ((a._initiator == low) != (b._initiator == low)) return a._initiator == low;
     return false;
@@ -242,6 +270,7 @@ class LinkManager {
       while (!l.isClosed) {
         final p = await l._read();
         if (p == null) break;
+        l._lastRecv = DateTime.now();
         switch (p.t) {
           case 'ping':
             l.send('pong').catchError((Object _) {});

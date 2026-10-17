@@ -136,3 +136,34 @@ func TestDirectReplacesRelay(t *testing.T) {
 		t.Fatal("direct link did not replace relay link")
 	}
 }
+
+func TestFasterPathReplacesLink(t *testing.T) {
+	a, b := manager("aaaa"), manager("bbbb")
+	// a has the lower ID, so its plain link wins any tie...
+	first, _, _, _ := connect(t, a, b, RouteDirect)
+	if first == nil {
+		t.Fatal("first link failed")
+	}
+	// ...but b dialing a faster path with a priority replaces it on both ends.
+	ca, cb := tcpPair(t)
+	done := make(chan *Link, 1)
+	go func() {
+		l, _ := a.Run(ca, RouteDirect, false)
+		done <- l
+	}()
+	fast, err := b.RunPrio(cb, RouteDirect, true, 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := <-done
+	if b.Get("aaaa") != fast || a.Get("bbbb") != other || other.Prio() != 300 {
+		t.Fatal("faster link did not replace the first on both ends")
+	}
+	if !fast.Probe(time.Second) {
+		t.Fatal("probe got no answer")
+	}
+	// A plain link no longer beats it.
+	if l, _, errA, _ := connect(t, a, b, RouteDirect); errA == nil && a.Get("bbbb") == l {
+		t.Fatal("plain link replaced the faster one")
+	}
+}

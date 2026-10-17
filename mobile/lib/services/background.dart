@@ -6,6 +6,8 @@
 /// from Android so discovery and links react at once.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,7 +19,9 @@ import '../features/clipboard.dart';
 import '../features/notification_sync.dart';
 import '../features/phone_features.dart';
 import '../services/link/link.dart';
+import '../services/palt_conn.dart';
 import 'transfer_service.dart';
+import 'usb_path.dart';
 
 const _channel = MethodChannel('palt/service');
 
@@ -52,6 +56,7 @@ void startCore(ProviderContainer c) {
   c.read(discoveryServiceProvider);
   c.read(relayClientProvider);
   c.read(connectorProvider);
+  unawaited(refreshUsbPrefixes());
   setupPhoneFeatures(c);
   setupNotificationSync(c);
   setupCalls(c);
@@ -71,7 +76,17 @@ void startCore(ProviderContainer c) {
   _channel.setMethodCallHandler((call) async {
     if (call.method == 'networkChanged') {
       c.read(discoveryServiceProvider).rescan();
+      unawaited(refreshUsbPrefixes());
       (await c.read(relayClientProvider.future))?.reconnectNow();
+      // Drop direct links that died with the old network, so the connector
+      // moves to the new path now rather than after the read timeout.
+      await Future.wait([
+        for (final l in c.read(linkManagerProvider).links)
+          if (l.route == Route.direct)
+            l.probe().then((ok) {
+              if (!ok) l.close();
+            }),
+      ]);
       c.read(connectorProvider).kick();
       refreshPhoneStatus();
     }

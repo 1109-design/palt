@@ -1,17 +1,32 @@
 /**
  * RouteBadge.tsx — how a peer or transfer travels (Beacon)
  *
- * DIRECT: same local network, point-to-point. RELAY: through the palt-relay
- * server (end-to-end encrypted). Direct is always preferred.
+ * USB: over the cable (USB tethering). WI-FI / NETWORK: same local network,
+ * point-to-point. RELAY: through the palt-relay server (end-to-end
+ * encrypted). DIRECT: same network, path unknown (transfers).
+ *
+ * `route` takes a transfer route ("direct" | "relay") or a peer's path
+ * ("usb" | "wifi" | "lan" | "relay").
  */
 import React from 'react';
 import { Box, Tooltip } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { beacon, fonts } from '../theme/theme';
 
-export const routeColor = (route?: string) => (route === 'relay' ? beacon.relay : beacon.textSecondary);
+const PATHS: Record<string, { short: string; label: string; tip: string }> = {
+  usb: { short: 'USB', label: 'USB cable', tip: 'Over the USB cable — works without Wi-Fi or data' },
+  wifi: { short: 'Wi-Fi', label: 'same Wi-Fi', tip: 'Same Wi-Fi — sent device to device' },
+  lan: { short: 'Network', label: 'same network', tip: 'Same network — sent device to device' },
+  relay: { short: 'Relay', label: 'via relay', tip: 'Not on this network — goes through your relay server, end-to-end encrypted' },
+  direct: { short: 'Direct', label: 'direct', tip: 'Same network — sent device to device' },
+};
 
-export const routeLabel = (route?: string) => (route === 'relay' ? 'via relay' : 'direct');
+const pathInfo = (route?: string) => PATHS[route || 'direct'] ?? PATHS.direct;
+
+export const routeColor = (route?: string) =>
+  route === 'relay' ? beacon.relay : route === 'usb' ? beacon.ok : beacon.textSecondary;
+
+export const routeLabel = (route?: string) => pathInfo(route).label;
 
 const RouteBadge: React.FC<{ route?: string; size?: 'small' | 'medium' }> = ({
   route = 'direct',
@@ -19,13 +34,7 @@ const RouteBadge: React.FC<{ route?: string; size?: 'small' | 'medium' }> = ({
 }) => {
   const color = routeColor(route);
   return (
-    <Tooltip
-      title={
-        route === 'relay'
-          ? 'Not on this network — goes through your relay server, end-to-end encrypted'
-          : 'Same network — sent device to device'
-      }
-    >
+    <Tooltip title={pathInfo(route).tip}>
       <Box
         component="span"
         sx={{
@@ -49,7 +58,7 @@ const RouteBadge: React.FC<{ route?: string; size?: 'small' | 'medium' }> = ({
         }}
       >
         <Box component="span" sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: color }} />
-        {route === 'relay' ? 'Relay' : 'Direct'}
+        {pathInfo(route).short}
       </Box>
     </Tooltip>
   );

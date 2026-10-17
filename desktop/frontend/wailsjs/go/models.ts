@@ -218,6 +218,7 @@ export namespace models {
 	    via: string;
 	    deviceId: string;
 	    paired: boolean;
+	    path: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Peer(source);
@@ -233,6 +234,7 @@ export namespace models {
 	        this.via = source["via"];
 	        this.deviceId = source["deviceId"];
 	        this.paired = source["paired"];
+	        this.path = source["path"];
 	    }
 	}
 

@@ -73,7 +73,18 @@ object DeviceInfo {
             caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> out["network"] = "cellular"
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> out["network"] = "ethernet"
         }
+        if (out["network"] == "" && usbTethered()) out["network"] = "usb"
         return out
+    }
+
+    /** True while USB tethering is on (an rndis/ncm interface with IPv4 is up). */
+    fun usbTethered(): Boolean = try {
+        java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().any { ni ->
+            ni.isUp && (ni.name.startsWith("rndis") || ni.name.startsWith("ncm") || ni.name.startsWith("usb")) &&
+                ni.inetAddresses.toList().any { it is java.net.Inet4Address }
+        }
+    } catch (_: Exception) {
+        false
     }
 
     // Android hides the Wi-Fi name from apps in the background, so the

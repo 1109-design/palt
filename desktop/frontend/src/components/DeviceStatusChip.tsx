@@ -37,6 +37,8 @@ export const networkLabel = (s: DeviceStatus) =>
     ? `Mobile data${s.cellular ? ` · ${s.cellular}` : ''}`
     : s.network === 'ethernet'
     ? 'Ethernet'
+    : s.network === 'usb'
+    ? 'USB cable only'
     : '';
 
 const DeviceStatusChip: React.FC<{ status?: DeviceStatus; compact?: boolean }> = ({ status, compact }) => {

@@ -50,6 +50,10 @@ export function GetClipboardHistory() {
   return window['go']['main']['App']['GetClipboardHistory']();
 }
 
+export function GetCurrentWifi() {
+  return window['go']['main']['App']['GetCurrentWifi']();
+}
+
 export function GetDeviceSettings(arg1) {
   return window['go']['main']['App']['GetDeviceSettings'](arg1);
 }
@@ -176,6 +180,10 @@ export function SetDeviceSetting(arg1, arg2, arg3) {
 
 export function SetRelayServer(arg1) {
   return window['go']['main']['App']['SetRelayServer'](arg1);
+}
+
+export function ShareWifi(arg1) {
+  return window['go']['main']['App']['ShareWifi'](arg1);
 }
 
 export function StopRinging() {

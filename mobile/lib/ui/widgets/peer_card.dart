@@ -144,7 +144,7 @@ class PeerCard extends ConsumerWidget {
                       const SizedBox(height: 3),
                       Row(
                         children: [
-                          RouteBadge(route: peer.via),
+                          RouteBadge(route: peer.via, ip: peer.ipAddress),
                           if (!peer.viaRelay) ...[
                             const SizedBox(width: 8),
                             Flexible(
@@ -285,7 +285,7 @@ class _PairedCard extends ConsumerWidget {
                               Text('Paired · ${osInfo.label}',
                                   style: const TextStyle(fontSize: 12, color: kTextSecondary)),
                               const SizedBox(width: 8),
-                              RouteBadge(route: peer.via),
+                              RouteBadge(route: peer.via, ip: peer.ipAddress),
                             ],
                           ),
                         ],

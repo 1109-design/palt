@@ -10,6 +10,8 @@ import SignalCellularAltIcon from '@mui/icons-material/SignalCellularAlt';
 import SignalWifiOffIcon from '@mui/icons-material/SignalWifiOff';
 import BoltIcon from '@mui/icons-material/Bolt';
 import LockIcon from '@mui/icons-material/Lock';
+import UsbIcon from '@mui/icons-material/Usb';
+import { routeColor } from './RouteBadge';
 import { beacon, fonts } from '../theme/theme';
 import type { DeviceStatus, Peer } from '../types/peer';
 import { networkLabel } from './DeviceStatusChip';
@@ -63,8 +65,10 @@ const DeviceStatusPanel: React.FC<{ status?: DeviceStatus; peer: Peer; online: b
   const low = s.battery >= 0 && s.battery <= 15 && !s.charging;
   const batColor = low ? beacon.danger : s.charging ? beacon.ok : beacon.text;
   const net = networkLabel(s);
-  const NetIcon = s.network === 'wifi' ? WifiIcon : s.network === 'ethernet' ? CableIcon : s.network === 'cellular' ? SignalCellularAltIcon : SignalWifiOffIcon;
+  const NetIcon = s.network === 'wifi' ? WifiIcon : s.network === 'ethernet' ? CableIcon : s.network === 'usb' ? UsbIcon : s.network === 'cellular' ? SignalCellularAltIcon : SignalWifiOffIcon;
   const relay = peer.via === 'relay';
+  const path = peer.path || peer.via || 'direct';
+  const PathIcon = path === 'usb' ? UsbIcon : path === 'relay' ? LockIcon : path === 'lan' ? CableIcon : WifiIcon;
 
   return (
     <Box sx={{ display: 'flex', gap: 1.25, mt: 2 }}>
@@ -99,7 +103,7 @@ const DeviceStatusPanel: React.FC<{ status?: DeviceStatus; peer: Peer; online: b
 
       <Tile
         label="Network"
-        footer={s.network === 'cellular' ? 'on mobile data' : s.network === 'wifi' ? 'Wi-Fi' : s.network === 'ethernet' ? 'wired' : status ? 'unknown' : 'not reported yet'}
+        footer={s.network === 'cellular' ? 'on mobile data' : s.network === 'wifi' ? 'Wi-Fi' : s.network === 'ethernet' ? 'wired' : s.network === 'usb' ? 'no Wi-Fi or data' : status ? 'unknown' : 'not reported yet'}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
           {s.network === 'cellular' && s.signal >= 0 ? <Bars level={s.signal} /> : <NetIcon sx={{ fontSize: 20, color: net ? beacon.text : beacon.textFaint }} />}
@@ -111,9 +115,9 @@ const DeviceStatusPanel: React.FC<{ status?: DeviceStatus; peer: Peer; online: b
 
       <Tile label="Connection" footer={relay ? 'end-to-end encrypted' : online ? `${peer.ipAddress}:${peer.port}` : 'offline'}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <LockIcon sx={{ fontSize: 17, color: relay ? beacon.relay : beacon.ok }} />
+          <PathIcon sx={{ fontSize: 18, color: online ? routeColor(path) : beacon.textFaint }} />
           <Typography sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1.02rem', color: beacon.text }}>
-            {!online ? 'Offline' : relay ? 'Via relay' : peer.usb ? 'USB cable' : 'Direct'}
+            {!online ? 'Offline' : { usb: 'USB cable', wifi: 'Same Wi-Fi', lan: 'Same network', relay: 'Via relay' }[path] ?? 'Direct'}
           </Typography>
         </Box>
       </Tile>
