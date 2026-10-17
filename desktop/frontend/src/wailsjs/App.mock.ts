@@ -19,6 +19,8 @@ const MOCK_PEERS: Peer[] = [
     ipAddress: '192.168.1.42',
     port: 9876,
     os: 'android',
+    deviceId: 'a1b2c3d4e5f60718',
+    paired: true,
   },
   {
     id: 'macbook-uriel',
@@ -37,16 +39,11 @@ const MOCK_PEERS: Peer[] = [
   },
 ];
 
-let mockTrusted: string[] = ['Pixel 8'];
 let mockAutoCopy: string[] = [];
 
 /** Returns the list of discovered peers. */
 export const RejectOffer = (transferId: string): Promise<void> => Promise.resolve();
 export const AcceptOffer = (transferId: string): Promise<void> => Promise.resolve();
-export const AddTrustedDevice = (name: string): Promise<void> => {
-  if (!mockTrusted.includes(name)) mockTrusted = [...mockTrusted, name];
-  return Promise.resolve();
-};
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 const MOCK_HISTORY = [
   { id: 'h5', partnerName: 'Pixel 8', direction: 'incoming', kind: 'files', status: 'completed', durationMillis: 900, totalSize: 3_500_000, timestamp: ago(2), route: 'relay',
@@ -59,10 +56,8 @@ const MOCK_HISTORY = [
 ];
 export const GetHistory = (): Promise<any[]> => Promise.resolve(MOCK_HISTORY);
 export const ClearHistory = (): Promise<void> => Promise.resolve();
-export const GetTrustedDevices = (): Promise<string[]> => Promise.resolve(mockTrusted);
 export const GetAutoCopyDevices = (): Promise<string[]> => Promise.resolve(mockAutoCopy);
 export const SetAutoCopy = (name: string, enabled: boolean): Promise<void> => {
-  if (enabled && !mockTrusted.includes(name)) return Promise.reject(`${name} must be trusted first`);
   mockAutoCopy = enabled ? [...mockAutoCopy.filter((n) => n !== name), name] : mockAutoCopy.filter((n) => n !== name);
   return Promise.resolve();
 };
@@ -72,23 +67,31 @@ export const OpenHistoryFile = (path: string, name: string): Promise<void> => {
 };
 export const RevealHistoryFile = (path: string, name: string): Promise<void> =>
   Promise.reject(`${name} is no longer at ~/Downloads/PALT`);
-let mockRelayCode = '';
+let mockRelay = '';
+const mockKey = 'bW9ja21vY2ttb2NrbW9ja21vY2ttb2NrbW9ja21vY2s';
+const mockPairing = () => ({
+  deviceId: '0123456789abcdef',
+  code: `palt2:${mockKey}${mockRelay ? '@' + mockRelay : ''}`,
+  relay: mockRelay,
+});
 const mockRelayStatus = () => ({
-  configured: !!mockRelayCode,
-  status: mockRelayCode ? 'online' : 'off',
+  configured: !!mockRelay,
+  status: mockRelay ? 'online' : 'off',
   detail: '',
-  server: mockRelayCode ? mockRelayCode.split(':').slice(1, 3).join(':') : '',
-  code: mockRelayCode,
-  peers: mockRelayCode ? 1 : 0,
+  server: mockRelay,
+  code: mockPairing().code,
+  peers: mockRelay ? 1 : 0,
 });
 export const GetRelayStatus = () => Promise.resolve(mockRelayStatus());
-export const SetRelayCode = (code: string): Promise<void> => {
-  mockRelayCode = code;
+export const GetPairing = () => Promise.resolve(mockPairing());
+export const JoinPairing = (code: string): Promise<void> =>
+  code.startsWith('palt2:') || code.startsWith('palt1:') ? Promise.resolve() : Promise.reject('pairing code must start with palt2:');
+export const ResetPairing = (): Promise<void> => Promise.resolve();
+export const ConnectByIP = (addr: string): Promise<void> =>
+  new Promise((_, reject) => setTimeout(() => reject('could not connect: timeout'), 400));
+export const SetRelayServer = (addr: string): Promise<void> => {
+  mockRelay = addr && !addr.includes(':') ? `${addr}:9877` : addr;
   return Promise.resolve();
-};
-export const GenerateRelayCode = (addr: string): Promise<string> => {
-  mockRelayCode = `palt1:${addr.includes(':') ? addr : addr + ':9877'}:bW9ja21vY2ttb2NrbW9ja21vY2ttb2NrbW9ja21vY2s`;
-  return Promise.resolve(mockRelayCode);
 };
 export const GetMediaPreview = (path: string, name: string) => {
   const video = /\.(mp4|mov|m4v|webm|mkv|avi|3gp)$/i.test(name);

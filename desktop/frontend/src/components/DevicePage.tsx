@@ -6,7 +6,7 @@
  * green) and a composer for text messages and files. The whole page is a
  * file drop target for this peer via the same data-peer-* attributes the
  * cards use. Auto-copy (incoming texts → clipboard) is opt-in per device and
- * only offered for trusted devices; "Send clipboard" is always a manual tap. If the peer drops off the network the thread stays readable
+ * only offered for paired devices; "Send clipboard" is always a manual tap. If the peer drops off the network the thread stays readable
  * but sending is disabled until it comes back.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -51,12 +51,11 @@ interface DevicePageProps {
   onBack: () => void;
   onSendFiles: (peer: Peer) => void;
   onSendText: (peer: Peer, text: string) => Promise<void>;
-  /** Device is on the "Always accept" list; required for auto-copy. */
-  trusted: boolean;
+  /** Device is paired (authenticated link up); required for auto-copy. */
+  paired: boolean;
   /** Incoming texts from this device go straight to the clipboard. */
   autoCopy: boolean;
-  /** trustFirst: add the device to "Always accept" before enabling. */
-  onToggleAutoCopy: (peer: Peer, enabled: boolean, trustFirst: boolean) => void;
+  onToggleAutoCopy: (peer: Peer, enabled: boolean) => void;
   readClipboard: () => Promise<string>;
   onFileAction: (file: HistoryFile, action: 'open' | 'reveal') => void;
   /** Resolves a picture to a small preview (data: URL); rejects when unavailable. */
@@ -471,7 +470,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onBack,
   onSendFiles,
   onSendText,
-  trusted,
+  paired,
   autoCopy,
   onToggleAutoCopy,
   readClipboard,
@@ -486,7 +485,6 @@ const DevicePage: React.FC<DevicePageProps> = ({
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [confirmTrust, setConfirmTrust] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -635,14 +633,19 @@ const DevicePage: React.FC<DevicePageProps> = ({
               <Typography sx={{ fontSize: '0.74rem', color: beacon.textFaint }} noWrap>
                 · {osInfo.label}
               </Typography>
+              {online && (
+                <Typography sx={{ fontSize: '0.74rem', color: paired ? beacon.ok : beacon.textFaint }} noWrap>
+                  · {paired ? 'paired' : 'not paired'}
+                </Typography>
+              )}
             </Box>
           </Box>
 
           <Tooltip
             title={
-              trusted
+              paired
                 ? 'Copy messages from this device to the clipboard as they arrive'
-                : 'Auto-copy requires trusting this device'
+                : 'Auto-copy works for paired devices only'
             }
           >
             <Box
@@ -666,11 +669,9 @@ const DevicePage: React.FC<DevicePageProps> = ({
               </Typography>
               <Switch
                 size="small"
-                checked={autoCopy}
-                onChange={(e) => {
-                  if (e.target.checked && !trusted) setConfirmTrust(true);
-                  else onToggleAutoCopy(peer, e.target.checked, false);
-                }}
+                checked={autoCopy && paired}
+                disabled={!paired}
+                onChange={(e) => onToggleAutoCopy(peer, e.target.checked)}
                 inputProps={{ 'aria-label': 'auto-copy messages from this device' }}
               />
             </Box>
@@ -739,30 +740,6 @@ const DevicePage: React.FC<DevicePageProps> = ({
           </Box>
         )}
       </Box>
-
-      <Dialog open={confirmTrust} onClose={() => setConfirmTrust(false)} maxWidth="xs">
-        <DialogTitle sx={{ fontFamily: fonts.display, fontWeight: 700 }}>Trust {displayName}?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ fontSize: '0.88rem', color: beacon.textSecondary, lineHeight: 1.6 }}>
-            Auto-copy only works for trusted devices. Trusting {displayName} also means files it
-            sends are accepted without asking. Only do this for your own devices.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setConfirmTrust(false)} sx={{ color: beacon.textSecondary }}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              setConfirmTrust(false);
-              onToggleAutoCopy(peer, true, true);
-            }}
-          >
-            Trust &amp; turn on
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* ── Composer ─────────────────────────────────────────────────────── */}
       <Box sx={{ borderTop: `1px solid ${beacon.hairline}` }}>

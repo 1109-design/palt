@@ -20,10 +20,10 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import { alpha } from '@mui/material/styles';
-import PublicIcon from '@mui/icons-material/Public';
+import LinkIcon from '@mui/icons-material/Link';
 import UpdateBanner from './UpdateBanner';
-import { relayStatusColor } from './RelayDialog';
-import type { RelayStatus } from './RelayDialog';
+import { relayStatusColor } from './PairingDialog';
+import type { RelayStatus } from './PairingDialog';
 import { beacon, fonts } from '../theme/theme';
 
 interface TopBarProps {
@@ -186,18 +186,18 @@ const TopBar: React.FC<TopBarProps> = ({
           </Tooltip>
 
           {onRelayClick && (
-            <Tooltip title={`Relay server — ${relayStatus?.configured ? relayStatus.status : 'not set up'}`}>
+            <Tooltip title={`Pair devices · relay ${relayStatus?.configured ? relayStatus.status : 'off'}`}>
               <IconButton
                 id="btn-relay"
                 onClick={onRelayClick}
-                aria-label="relay server settings"
+                aria-label="pair devices and relay settings"
                 sx={{
                   position: 'relative',
                   color: relayStatus?.status === 'online' ? beacon.relay : beacon.textSecondary,
                   '&:hover': { color: beacon.text, backgroundColor: alpha(beacon.text, 0.06) },
                 }}
               >
-                <PublicIcon sx={{ fontSize: 20 }} />
+                <LinkIcon sx={{ fontSize: 20 }} />
                 <Box
                   sx={{
                     position: 'absolute',

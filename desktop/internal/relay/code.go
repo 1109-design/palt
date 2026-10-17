@@ -5,21 +5,20 @@
 // group id derived from it; every relayed stream is end-to-end encrypted with
 // keys only the devices can derive (see securepipe.go).
 //
-// The key derivation and handshake here must stay byte-for-byte identical to
+// The wire format here must stay byte-for-byte identical to
 // mobile/lib/services/relay/.
 package relay
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
+
+	"palt/internal/secure"
 )
 
 const (
@@ -32,12 +31,6 @@ type Code struct {
 	Host string
 	Port int
 	Key  []byte // 32 random bytes shared by all paired devices
-}
-
-// Keys are what a pairing key expands into.
-type Keys struct {
-	GroupID string // sent to the relay; lets it match devices, reveals nothing else
-	AuthKey []byte // never leaves the device
 }
 
 func ParseCode(s string) (Code, error) {
@@ -98,35 +91,6 @@ func NewCode(addr string) (Code, error) {
 	return Code{Host: host, Port: port, Key: key}, nil
 }
 
-func (c Code) Keys() Keys {
-	gid := mac(c.Key, []byte("palt-group-id"))
-	return Keys{
-		GroupID: hex.EncodeToString(gid)[:32],
-		AuthKey: mac(c.Key, []byte("palt-auth")),
-	}
-}
+func (c Code) Keys() secure.Keys { return secure.DeriveKeys(c.Key) }
 
-// PresenceSig authenticates a device's presence entry to the other devices,
-// so the relay can't inject or rename devices.
-func (k Keys) PresenceSig(id, name, os string) string {
-	return hex.EncodeToString(mac(k.AuthKey, []byte("palt-presence|"+id+"|"+name+"|"+os)))
-}
-
-func (k Keys) VerifyPresence(id, name, os, sig string) bool {
-	want := k.PresenceSig(id, name, os)
-	return hmac.Equal([]byte(want), []byte(sig))
-}
-
-func mac(key []byte, parts ...[]byte) []byte {
-	h := hmac.New(sha256.New, key)
-	for _, p := range parts {
-		h.Write(p)
-	}
-	return h.Sum(nil)
-}
-
-func randomHex(n int) string {
-	b := make([]byte, n)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
+func randomHex(n int) string { return secure.RandomHex(n) }

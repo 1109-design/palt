@@ -16,6 +16,10 @@ export interface Peer {
   os: string;
   /** How the peer is reachable: same LAN ("direct") or through the relay. */
   via?: string;
+  /** Stable PALT device ID ("" for builds before 2.0). */
+  deviceId?: string;
+  /** True while an authenticated link to this paired device is up. */
+  paired?: boolean;
 }
 
 export type Route = 'direct' | 'relay';

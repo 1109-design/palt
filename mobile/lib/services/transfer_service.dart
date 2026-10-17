@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
@@ -10,17 +11,17 @@ import 'package:uuid/uuid.dart';
 
 import '../models/history_entry.dart';
 import '../providers/auto_copy_provider.dart';
-import '../providers/trust_provider.dart';
 import '../providers/history_provider.dart';
 import '../models/peer.dart';
-import '../providers/peer_provider.dart';
+import '../providers/link_provider.dart';
+import '../providers/pairing_provider.dart';
 import '../providers/relay_provider.dart';
 import 'discovery_service.dart';
+import 'lan_protocol.dart';
 import 'palt_conn.dart';
 import '../utils/media.dart';
 
-/// Must match MaxOfferSize / MaxTextBytes in desktop/internal/transfer/protocol.go
-const kMaxOfferBytes = 64 * 1024;
+/// Must match MaxTextBytes in desktop/internal/transfer/protocol.go
 const kMaxTextBytes = 16 * 1024;
 
 /// Where received files are saved.
@@ -71,6 +72,10 @@ class OfferData {
   /// How this offer reached us ('direct' or 'relay'). Local only.
   final String route;
 
+  /// The sender proved it holds our pairing key, and its device ID. Local only.
+  final bool paired;
+  final String? senderId;
+
   OfferData({
     this.action = 'offer',
     required this.transferId,
@@ -79,11 +84,15 @@ class OfferData {
     required this.senderName,
     this.text,
     this.route = Route.direct,
+    this.paired = false,
+    this.senderId,
   });
 
   bool get isText => action == 'text';
 
-  factory OfferData.fromJson(Map<String, dynamic> json, {String route = Route.direct}) => OfferData(
+  factory OfferData.fromJson(Map<String, dynamic> json,
+          {String route = Route.direct, bool paired = false, String? senderId}) =>
+      OfferData(
         action: json['action'] ?? 'offer',
         transferId: json['transferId'],
         files: ((json['files'] as List?) ?? [])
@@ -93,6 +102,8 @@ class OfferData {
         senderName: json['senderName'],
         text: json['text'],
         route: route,
+        paired: paired,
+        senderId: senderId,
       );
 
   Map<String, dynamic> toJson() => {
@@ -199,224 +210,185 @@ class TransferService {
     _serverSocket?.close();
   }
 
-  // Parses length-prefixed JSON handshake and streams multiple files sequentially
-  // [conn] is a LAN socket or an encrypted relay pipe.
-  Future<void> handleConnection(PaltConn socket) async {
-    print('[TransferService] Got connection from ${socket.remoteLabel}');
-    final route = socket.route;
-
-    final iterator = StreamIterator(socket.input);
-    BytesBuilder buffer = BytesBuilder();
-    int expectedLength = -1;
-    OfferData? offer;
-    bool handshakeComplete = false;
-
+  /// Serves one connection arriving on the LAN socket: a plain v1 exchange
+  /// from any device, or a v2 encrypted one from a paired device.
+  Future<void> handleConnection(PaltConn conn) async {
+    final reader = ByteReader(conn.input);
     try {
-      // 1. Handshake Phase
-      while (await iterator.moveNext()) {
-        final data = iterator.current;
-        buffer.add(data);
-        final bytes = buffer.toBytes();
-
-        if (expectedLength == -1 && bytes.length >= 4) {
-          expectedLength = ByteData.view(bytes.buffer).getUint32(0, Endian.big);
-          if (expectedLength > kMaxOfferBytes) {
-            socket.destroy();
-            return;
-          }
-        }
-
-        if (expectedLength != -1 && bytes.length >= 4 + expectedLength) {
-          // We have the full JSON
-          final jsonBytes = bytes.sublist(4, 4 + expectedLength);
-          final jsonStr = utf8.decode(jsonBytes);
-          offer = OfferData.fromJson(jsonDecode(jsonStr), route: route);
-
-          // Text messages ride inside the handshake; ack and we're done.
-          if (offer.isText) {
-            await _receiveText(socket, offer);
-            return;
-          }
-
-          // Surface to UI
-          final isTrusted = ref.read(trustProvider.notifier).isTrusted(offer.senderName);
-          bool accepted = false;
-          
-          if (isTrusted) {
-            print('[TransferService] Auto-accepting from trusted sender: ${offer.senderName}');
-            accepted = true;
-          } else {
-            accepted = await ref.read(activeOfferProvider.notifier).presentOffer(offer);
-          }
-
-          if (!accepted) {
-            socket.add([0x00]); // Reject
-            await socket.close();
-            return;
-          }
-
-          // Accepted
-          socket.add([0x01]);
-
-          // Shift overflow bytes left over from the handshake segment
-          buffer.clear();
-          if (bytes.length > 4 + expectedLength) {
-            buffer.add(bytes.sublist(4 + expectedLength));
-          }
-
-          handshakeComplete = true;
-          break; // Exit to data phase
-        }
-      }
-
-      if (!handshakeComplete || offer == null) {
-        socket.destroy();
+      final first = await reader.read(4).timeout(const Duration(seconds: 30));
+      if (first == null) {
+        conn.destroy(); // a bare connect-and-close is a reachability check
         return;
       }
-
-      // 2. Setup download directory
-      final publicDir = Directory(kPaltDownloadDir);
-      if (!await publicDir.exists()) {
-        try {
-          await publicDir.create(recursive: true);
-        } catch (e) {
-          print('[TransferService] Could not create PALT directory: $e');
-        }
+      if (isHelloMagic(first)) {
+        final raw = (conn as SocketConn).socket;
+        final accepted = await secureAccept(raw, reader, ref.read(pairingProvider).keys);
+        await handlePaired(accepted.conn, accepted.from);
+        return;
       }
-      
-      final dirPath = publicDir.path;
-      final stopwatch = Stopwatch()..start();
-
-      // 3. Sequential Multi-file Pipelining
-      int totalWritten = 0;
-      final totalFiles = offer.files.length;
-      List<HistoryFile> hFiles = [];
-      for (var f in offer.files) {
-        hFiles.add(HistoryFile(name: f.name, size: f.size));
+      final json = await readOfferJson(reader, prefix: first);
+      if (json == null) {
+        conn.destroy();
+        return;
       }
+      await _serve(conn, reader, OfferData.fromJson(json, route: conn.route));
+    } catch (e) {
+      print('[TransferService] Connection from ${conn.remoteLabel} failed: $e');
+      conn.destroy();
+    }
+  }
 
+  /// Serves an encrypted connection from a paired device [fromId]: a v2 LAN
+  /// connection after its handshake, or a relay pipe.
+  Future<void> handlePaired(PaltConn conn, String fromId) async {
+    final reader = ByteReader(conn.input);
+    try {
+      final json = await readOfferJson(reader).timeout(const Duration(seconds: 30));
+      if (json == null) {
+        conn.destroy();
+        return;
+      }
+      final offer = OfferData.fromJson(json, route: conn.route, paired: true, senderId: fromId);
+      if (offer.action == 'link') {
+        conn.add([0x01]);
+        await conn.flush();
+        await ref.read(linkManagerProvider).run(conn, reader, conn.route, initiator: false);
+        return;
+      }
+      await _serve(conn, reader, offer);
+    } catch (e) {
+      print('[TransferService] Paired connection from $fromId failed: $e');
+      conn.destroy();
+    }
+  }
+
+  /// Runs a text or file exchange whose offer has been read.
+  Future<void> _serve(PaltConn socket, ByteReader reader, OfferData offer) async {
+    final route = offer.route;
+    if (offer.isText) {
+      await _receiveText(socket, offer);
+      return;
+    }
+    if (offer.action != 'offer') {
+      print('[TransferService] Unknown action: ${offer.action}');
+      socket.destroy();
+      return;
+    }
+
+    // Paired devices proved they hold our key: their files come straight in.
+    final accepted = offer.paired || await ref.read(activeOfferProvider.notifier).presentOffer(offer);
+    if (!accepted) {
+      socket.add([0x00]);
+      await socket.close();
+      return;
+    }
+    socket.add([0x01]);
+    await socket.flush();
+
+    final publicDir = Directory(kPaltDownloadDir);
+    if (!await publicDir.exists()) {
+      try {
+        await publicDir.create(recursive: true);
+      } catch (e) {
+        print('[TransferService] Could not create PALT directory: $e');
+      }
+    }
+    final dirPath = publicDir.path;
+    final stopwatch = Stopwatch()..start();
+    final totalFiles = offer.files.length;
+    final hFiles = [for (final f in offer.files) HistoryFile(name: f.name, size: f.size)];
+    final data = StreamIterator(reader.rest());
+    var pending = Uint8List(0);
+    var totalWritten = 0;
+
+    try {
       for (int i = 0; i < totalFiles; i++) {
         final fileMeta = offer.files[i];
         // Never overwrite an earlier file with the same name.
         final savePath = uniqueFilePath(dirPath, safeFileName(fileMeta.name));
         hFiles[i] = HistoryFile(name: fileMeta.name, size: fileMeta.size, path: savePath);
         final fileSink = File(savePath).openWrite();
-        int fileWritten = 0;
+        var fileWritten = 0;
+        try {
+          while (fileWritten < fileMeta.size) {
+            if (pending.isEmpty) {
+              if (!await data.moveNext()) {
+                throw 'Connection closed after ${fileWritten} of ${fileMeta.size} bytes of ${fileMeta.name}';
+              }
+              pending = data.current;
+            }
+            final take = min(fileMeta.size - fileWritten, pending.length);
+            fileSink.add(Uint8List.sublistView(pending, 0, take));
+            pending = Uint8List.sublistView(pending, take);
+            fileWritten += take;
+            totalWritten += take;
 
-        // Drain overflow buffer first
-        if (buffer.isNotEmpty) {
-          final bytesStr = buffer.toBytes();
-          final available = bytesStr.length;
-          final needed = fileMeta.size - fileWritten;
-
-          if (available <= needed) {
-            fileSink.add(bytesStr);
-            fileWritten += available;
-            totalWritten += available;
-            buffer.clear();
-          } else {
-            fileSink.add(bytesStr.sublist(0, needed));
-            fileWritten += needed;
-            totalWritten += needed;
-            buffer.clear();
-            buffer.add(bytesStr.sublist(needed));
+            if (totalWritten % (1024 * 512) < take || fileWritten == fileMeta.size) {
+              final elapsedSec = stopwatch.elapsedMilliseconds / 1000.0;
+              ref.read(transferProgressProvider.notifier).state = TransferProgress(
+                  offer.transferId, fileWritten, fileMeta.size,
+                  currentFileName: fileMeta.name,
+                  speed: elapsedSec > 0 ? totalWritten / elapsedSec : 0.0,
+                  sentItems: i + 1,
+                  totalItems: totalFiles,
+                  route: route);
+            }
           }
+        } finally {
+          await fileSink.flush();
+          await fileSink.close();
         }
-
-        // Stream exactly remaining raw files bytes directly from socket iterator
-        while (fileWritten < fileMeta.size && await iterator.moveNext()) {
-          final data = iterator.current;
-          int needed = fileMeta.size - fileWritten;
-
-          if (data.length <= needed) {
-            fileSink.add(data);
-            fileWritten += data.length;
-            totalWritten += data.length;
-          } else {
-            fileSink.add(data.sublist(0, needed));
-            fileWritten += needed;
-            totalWritten += needed;
-            
-            // Re-buffer the overflow bytes for the next file loop!
-            buffer.add(data.sublist(needed));
-          }
-
-          // Report progress 
-          if (totalWritten % (1024 * 512) < data.length || fileWritten == fileMeta.size) {
-            final elapsedSec = stopwatch.elapsedMilliseconds / 1000.0;
-            final speed = elapsedSec > 0 ? totalWritten / elapsedSec : 0.0;
-            
-            ref.read(transferProgressProvider.notifier).state = 
-                TransferProgress(offer.transferId, fileWritten, fileMeta.size, 
-                                 currentFileName: fileMeta.name,
-                                 speed: speed,
-                                 sentItems: i+1, totalItems: totalFiles,
-                                 route: route);
-          }
-        }
-
-        await fileSink.flush();
-        await fileSink.close();
-        print('[TransferService] Downloaded File ${i+1}/${totalFiles}: ${fileMeta.name}');
+        print('[TransferService] Downloaded File ${i + 1}/$totalFiles: ${fileMeta.name}');
       }
 
-      print('[TransferService] Batch Download complete!');
       socket.destroy();
       stopwatch.stop();
-
-      for (var hFile in hFiles) {
-        final entry = HistoryEntry(
-          id: '${offer.transferId}_${hFile.name}',
-          partnerName: offer.senderName,
-          files: [hFile],
-          totalSize: hFile.size,
-          direction: 'incoming',
-          timestamp: DateTime.now(),
-          status: 'completed',
-          durationMillis: stopwatch.elapsedMilliseconds,
-          route: route,
-        );
-        ref.read(historyProvider.notifier).addEntry(entry);
+      for (final hFile in hFiles) {
+        ref.read(historyProvider.notifier).addEntry(HistoryEntry(
+              id: '${offer.transferId}_${hFile.name}',
+              partnerName: offer.senderName,
+              files: [hFile],
+              totalSize: hFile.size,
+              direction: 'incoming',
+              timestamp: DateTime.now(),
+              status: 'completed',
+              durationMillis: stopwatch.elapsedMilliseconds,
+              route: route,
+            ));
       }
-      
-      ref.read(transferProgressProvider.notifier).state = 
-          TransferProgress(offer.transferId, totalWritten, offer.totalSize, 
-                           sentItems: totalFiles, totalItems: totalFiles,
-                           status: TransferStatus.completed, filePath: dirPath,
-                           route: route);
-
+      ref.read(transferProgressProvider.notifier).state = TransferProgress(
+          offer.transferId, totalWritten, offer.totalSize,
+          sentItems: totalFiles,
+          totalItems: totalFiles,
+          status: TransferStatus.completed,
+          filePath: dirPath,
+          route: route);
       Future.delayed(const Duration(seconds: 5), () {
         final current = ref.read(transferProgressProvider);
-        if (current?.status == TransferStatus.completed && current?.transferId == offer!.transferId) {
+        if (current?.status == TransferStatus.completed && current?.transferId == offer.transferId) {
           ref.read(transferProgressProvider.notifier).state = null;
         }
       });
-
     } catch (e) {
       print('[TransferService] Stream processing error: $e');
-      
-      if (offer != null) {
-        for (var f in offer.files) {
-          final entry = HistoryEntry(
-            id: '${offer.transferId}_${f.name}',
-            partnerName: offer.senderName,
-            files: [HistoryFile(name: f.name, size: f.size)],
-            totalSize: f.size,
-            direction: 'incoming',
-            timestamp: DateTime.now(),
-            status: 'error',
-            errorMessage: e.toString(),
-            durationMillis: 0,
-            route: route,
-          );
-          ref.read(historyProvider.notifier).addEntry(entry);
-        }
-      }
-
-      ref.read(transferProgressProvider.notifier).state = 
-          TransferProgress(offer?.transferId ?? 'unknown', 0, offer?.totalSize ?? 0, 
-                           status: TransferStatus.error, error: e.toString());
       socket.destroy();
+      for (final f in hFiles) {
+        ref.read(historyProvider.notifier).addEntry(HistoryEntry(
+              id: '${offer.transferId}_${f.name}',
+              partnerName: offer.senderName,
+              files: [f],
+              totalSize: f.size,
+              direction: 'incoming',
+              timestamp: DateTime.now(),
+              status: 'error',
+              errorMessage: e.toString(),
+              durationMillis: 0,
+              route: route,
+            ));
+      }
+      ref.read(transferProgressProvider.notifier).state = TransferProgress(
+          offer.transferId, 0, offer.totalSize,
+          status: TransferStatus.error, error: e.toString());
     }
   }
 
@@ -428,11 +400,10 @@ class TransferService {
     socket.destroy();
     if (!ok) return;
 
-    // Auto-copy is opt-in per device and only for trusted devices, so an
+    // Auto-copy is opt-in per device and only for paired devices, so an
     // arbitrary LAN peer can't overwrite the clipboard.
     var copied = false;
-    if (ref.read(trustProvider.notifier).isTrusted(offer.senderName) &&
-        ref.read(autoCopyProvider.notifier).isEnabled(offer.senderName)) {
+    if (offer.paired && ref.read(autoCopyProvider.notifier).isEnabled(offer.senderName)) {
       try {
         await Clipboard.setData(ClipboardData(text: text));
         copied = true;
@@ -461,9 +432,35 @@ class TransferService {
 
   // ── Route choice ────────────────────────────────────────────────────────────
 
-  /// Connects to [peer], preferring the LAN; falls back to the relay when the
-  /// peer is connected there. Returns the connection (its route says which).
+  /// Connects to [peer]. Paired devices get an encrypted connection, over the
+  /// LAN when possible, else the relay. Other devices get the plain v1
+  /// protocol on the LAN. The connection's route says which way it went.
   Future<PaltConn> _dial(Peer peer) async {
+    final pairing = ref.read(pairingProvider);
+    final relay = await ref.read(relayClientProvider.future);
+    final link = ref.read(linkManagerProvider).byName(peer.deviceName);
+
+    if (link != null) {
+      Object? lanErr;
+      final ip = link.remoteIp;
+      if (ip != null) {
+        try {
+          final port = peer.ipAddress == ip && peer.port > 0 ? peer.port : kPaltPort;
+          return await secureDial(ip, port, selfId: pairing.deviceId, keys: pairing.keys);
+        } catch (e) {
+          lanErr = e;
+        }
+      }
+      if (relay != null) {
+        try {
+          return await relay.dial(link.peer.id);
+        } catch (e) {
+          lanErr ??= e;
+        }
+      }
+      throw 'Could not reach ${peer.deviceName}: $lanErr';
+    }
+
     Object? directError;
     if (!peer.viaRelay) {
       try {
@@ -472,25 +469,14 @@ class TransferService {
       } catch (e) {
         directError = e;
       }
-    } else {
-      // It may have shown up on the LAN since the list was built.
-      final lan = ref.read(lanPeerListProvider).valueOrNull ?? const <Peer>[];
-      for (final p in lan.where((p) => p.deviceName == peer.deviceName)) {
-        try {
-          return SocketConn(await Socket.connect(p.ipAddress, p.port,
-              timeout: const Duration(seconds: 4)));
-        } catch (_) {}
-      }
     }
-
-    final relay = await ref.read(relayClientProvider.future);
     final rp = relay?.peerByName(peer.deviceName);
     if (relay != null && rp != null) {
       print('[TransferClient] Sending to ${peer.deviceName} via relay');
       return relay.dial(rp.id);
     }
     if (directError != null) throw directError;
-    throw '${peer.deviceName} is not connected to the relay';
+    throw '${peer.deviceName} is not reachable';
   }
 
   // ── Send Text ───────────────────────────────────────────────────────────────

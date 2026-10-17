@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'trust_provider.dart';
 
 /// Devices whose incoming text messages are copied to the clipboard as they
-/// arrive. Only honoured for trusted devices (see TransferService).
+/// arrive. Only honoured for paired devices (see TransferService).
 final autoCopyProvider = StateNotifierProvider<AutoCopyNotifier, List<String>>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return AutoCopyNotifier(prefs);

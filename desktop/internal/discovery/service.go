@@ -54,6 +54,13 @@ type Service struct {
 	// deviceName is the human-readable name shown to peers.
 	deviceName string
 
+	// deviceID is this install's stable PALT ID, advertised so peers can
+	// match LAN entries to paired devices.
+	deviceID string
+
+	// beacon is the UDP broadcast fallback for networks where mDNS fails.
+	beacon *beacon
+
 	// port is the TCP port this device's PALT service listens on.
 	port int
 
@@ -95,7 +102,7 @@ type trackedPeer struct {
 //   - port:       TCP port to advertise (the PALT transfer server port).
 //   - hostOS:     OS string embedded in TXT records ("linux", "android", etc.).
 //   - onChange:   called whenever the peer set changes (may be nil).
-func NewService(parentCtx context.Context, deviceName string, port int, hostOS string, onChange func()) (*Service, error) {
+func NewService(parentCtx context.Context, deviceName, deviceID string, port int, hostOS string, onChange func()) (*Service, error) {
 	// Fall back to the system hostname if no name was provided.
 	if deviceName == "" {
 		h, err := os.Hostname()
@@ -110,6 +117,7 @@ func NewService(parentCtx context.Context, deviceName string, port int, hostOS s
 
 	svc := &Service{
 		deviceName: deviceName,
+		deviceID:   deviceID,
 		port:       port,
 		os:         hostOS,
 		peers:      make(map[string]*trackedPeer),
@@ -133,6 +141,14 @@ func NewService(parentCtx context.Context, deviceName string, port int, hostOS s
 	svc.wg.Add(1)
 	go svc.reaperLoop()
 
+	if b, err := newBeacon(svc); err != nil {
+		log.Printf("[discovery] UDP beacon unavailable: %v", err)
+	} else {
+		svc.beacon = b
+		svc.wg.Add(1)
+		go b.run()
+	}
+
 	log.Printf("[discovery] Service started: name=%q port=%d os=%s", deviceName, port, hostOS)
 	return svc, nil
 }
@@ -144,6 +160,9 @@ func (s *Service) Stop() {
 
 	if s.server != nil {
 		s.server.Shutdown()
+	}
+	if s.beacon != nil {
+		s.beacon.close()
 	}
 
 	s.wg.Wait()
@@ -172,6 +191,7 @@ func (s *Service) startAdvertising() error {
 	txtRecords := []string{
 		"os=" + s.os,
 		"app=palt",
+		"id=" + s.deviceID,
 	}
 
 	server, err := zeroconf.Register(
@@ -216,6 +236,9 @@ func (s *Service) Rescan() {
 	select {
 	case s.rescan <- struct{}{}:
 	default:
+	}
+	if s.beacon != nil {
+		s.beacon.kick()
 	}
 }
 
@@ -286,7 +309,8 @@ func (s *Service) handleEntry(entry *zeroconf.ServiceEntry) {
 	}
 
 	// Ignore ourselves.
-	if entry.Instance == s.deviceName && entry.Port == s.port {
+	id := parseTXTField(entry.Text, "id")
+	if (entry.Instance == s.deviceName && entry.Port == s.port) || (id != "" && id == s.deviceID) {
 		return
 	}
 
@@ -296,20 +320,30 @@ func (s *Service) handleEntry(entry *zeroconf.ServiceEntry) {
 		peerOS = "unknown"
 	}
 
-	peer := models.Peer{
+	s.upsert(models.Peer{
 		ID:         ip,
 		DeviceName: entry.Instance,
 		IPAddress:  ip,
 		Port:       entry.Port,
 		OS:         peerOS,
-	}
+		DeviceID:   id,
+	})
+}
 
+// upsert records a sighting of a LAN peer (from mDNS or the beacon).
+func (s *Service) upsert(peer models.Peer) {
+	ip := peer.IPAddress
 	s.mu.Lock()
 	isNew := true
 	if existing, ok := s.peers[ip]; ok {
 		isNew = false
 		existing.lastSeen = time.Now()
-		if existing.peer.DeviceName != peer.DeviceName || existing.peer.OS != peer.OS || existing.peer.Port != peer.Port {
+		// mDNS from a 2.0 build carries the ID; don't let an ID-less
+		// sighting of the same address wipe it.
+		if peer.DeviceID == "" {
+			peer.DeviceID = existing.peer.DeviceID
+		}
+		if existing.peer.DeviceName != peer.DeviceName || existing.peer.OS != peer.OS || existing.peer.Port != peer.Port || existing.peer.DeviceID != peer.DeviceID {
 			existing.peer = peer
 			isNew = true
 		}

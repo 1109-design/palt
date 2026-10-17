@@ -32,7 +32,9 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"palt/internal/discovery"
+	"palt/internal/link"
 	"palt/internal/models"
+	"palt/internal/pairing"
 	"palt/internal/relay"
 	"palt/internal/thumbs"
 	"palt/internal/transfer"
@@ -72,6 +74,13 @@ type App struct {
 	startTime      map[string]time.Time
 	offersMu       sync.Mutex
 
+	pair   pairing.Pairing
+	pairMu sync.Mutex
+
+	links       *link.Manager
+	knownMu     sync.Mutex
+	connectKick chan struct{}
+
 	// trayEnabled is set before startup when a tray host is running.
 	trayEnabled bool
 	tray        trayState
@@ -83,6 +92,7 @@ func NewApp() *App {
 		pendingOffers: make(map[string]chan OfferResolution),
 		startTime:     make(map[string]time.Time),
 		probeKick:     make(chan struct{}, 1),
+		connectKick:   make(chan struct{}, 1),
 	}
 }
 
@@ -99,7 +109,10 @@ func (a *App) startup(ctx context.Context) {
 	// Detect the host OS so peers can show a platform icon.
 	hostOS := runtime.GOOS // "linux", "darwin", "windows"
 
-	svc, err := discovery.NewService(ctx, hostname, paltPort, hostOS, a.emitPeers)
+	svc, err := discovery.NewService(ctx, hostname, a.pairing().DeviceID, paltPort, hostOS, func() {
+		a.emitPeers()
+		a.kickConnector()
+	})
 	if err != nil {
 		log.Fatalf("[app] Could not start discovery service: %v", err)
 	}
@@ -108,8 +121,10 @@ func (a *App) startup(ctx context.Context) {
 
 	// Initialize Custom TCP Transfer Server
 	a.transferServer = transfer.NewServer(paltPort)
+	a.setupLinks()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
-		if a.isTrusted(meta.SenderName) {
+		// Paired devices proved they hold our key: their files come straight in.
+		if meta.Paired {
 			a.offersMu.Lock()
 			a.startTime[meta.TransferID] = time.Now()
 			a.offersMu.Unlock()
@@ -189,10 +204,10 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.transferServer.OnText = func(meta transfer.Metadata) {
-		// Auto-copy is opt-in per device and only honoured for trusted
+		// Auto-copy is opt-in per device and only honoured for paired
 		// devices, so an arbitrary LAN peer can't overwrite the clipboard.
 		copied := false
-		if a.isTrusted(meta.SenderName) && a.isAutoCopy(meta.SenderName) {
+		if meta.Paired && a.isAutoCopy(meta.SenderName) {
 			if err := wailsruntime.ClipboardSetText(a.ctx, meta.Text); err != nil {
 				log.Printf("[app] Auto-copy failed: %v", err)
 			} else {
@@ -253,6 +268,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.startRelay()
 	go a.runLANProbe()
+	go a.runConnector()
 
 	ensureAutostart()
 	a.startTray()
@@ -263,6 +279,9 @@ func (a *App) startup(ctx context.Context) {
 // shutdown is called by Wails when the window is closed.
 func (a *App) shutdown(ctx context.Context) {
 	a.stopTray()
+	if a.links != nil {
+		a.links.CloseAll()
+	}
 	if a.discovery != nil {
 		a.discovery.Stop()
 	}
@@ -450,6 +469,7 @@ func (a *App) GetLocalDevice() models.Peer {
 		IPAddress:  "127.0.0.1",
 		Port:       paltPort,
 		OS:         runtime.GOOS,
+		DeviceID:   a.pairing().DeviceID,
 	}
 }
 
@@ -465,64 +485,6 @@ func (a *App) AcceptOffer(transferID string) {
 	}
 
 	ch <- OfferResolution{Accept: true}
-}
-
-// trustedFile returns the path to the trusted devices JSON file.
-func (a *App) trustedFile() string {
-	dir, err := configDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(dir, "trusted.json")
-}
-
-// isTrusted checks if a sender name is in the trusted list.
-func (a *App) isTrusted(name string) bool {
-	tf := a.trustedFile()
-	if tf == "" {
-		return false
-	}
-	data, err := os.ReadFile(tf)
-	if err != nil {
-		return false
-	}
-	var trusted []string
-	if err := json.Unmarshal(data, &trusted); err != nil {
-		return false
-	}
-	for _, t := range trusted {
-		if t == name {
-			return true
-		}
-	}
-	return false
-}
-
-// AddTrustedDevice adds a device name to the list of trusted devices.
-// Exposed as a Wails binding.
-func (a *App) AddTrustedDevice(name string) {
-	tf := a.trustedFile()
-	if tf == "" {
-		return
-	}
-	var trusted []string
-	if data, err := os.ReadFile(tf); err == nil {
-		_ = json.Unmarshal(data, &trusted)
-	}
-	for _, t := range trusted {
-		if t == name {
-			return
-		}
-	}
-	trusted = append(trusted, name)
-	if data, err := json.MarshalIndent(trusted, "", "  "); err == nil {
-		_ = os.WriteFile(tf, data, 0o644)
-	}
-}
-
-// GetTrustedDevices returns the names of devices whose transfers are auto-accepted.
-func (a *App) GetTrustedDevices() []string {
-	return readNameList(a.trustedFile())
 }
 
 // autoCopyFile returns the path to the auto-copy devices JSON file.
@@ -549,12 +511,9 @@ func (a *App) GetAutoCopyDevices() []string {
 	return readNameList(a.autoCopyFile())
 }
 
-// SetAutoCopy turns clipboard auto-copy on or off for a device. Enabling it
-// requires the device to be trusted first.
+// SetAutoCopy turns clipboard auto-copy on or off for a device. It only
+// takes effect for paired devices.
 func (a *App) SetAutoCopy(name string, enabled bool) error {
-	if enabled && !a.isTrusted(name) {
-		return fmt.Errorf("%s must be trusted (\"Always accept\") before auto-copy can be turned on", name)
-	}
 	file := a.autoCopyFile()
 	if file == "" {
 		return fmt.Errorf("could not locate config directory")

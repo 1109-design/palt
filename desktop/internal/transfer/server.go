@@ -8,13 +8,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"time"
+
+	"palt/internal/secure"
 )
 
 // Server handles incoming PALT TCP connections and file downloads.
 type Server struct {
 	port     int
 	listener net.Listener
-	running  bool
+	running  atomic.Bool
 
 	// OnOffer blockingly decides whether to accept an incoming file.
 	OnOffer func(meta Metadata) (accept bool)
@@ -33,6 +37,14 @@ type Server struct {
 	// OnError is called when a transfer fails. savedPaths covers the files
 	// opened before the failure (the last one may be partial).
 	OnError func(meta Metadata, savedPaths []string, err error)
+
+	// Keys returns this device's pairing keys; ok is false when unpaired,
+	// and v2 (paired) connections are then refused.
+	Keys func() (keys secure.Keys, ok bool)
+
+	// OnLink takes over a link connection from a paired device. The handler
+	// owns conn.
+	OnLink func(conn net.Conn, meta Metadata)
 }
 
 // NewServer initializes a TCP receiver.
@@ -50,7 +62,7 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.listener = l
-	s.running = true
+	s.running.Store(true)
 
 	log.Printf("[TransferServer] Listening for chunks on %s\n", addr)
 
@@ -60,17 +72,17 @@ func (s *Server) Start() error {
 
 // Stop halts the listener.
 func (s *Server) Stop() {
-	s.running = false
+	s.running.Store(false)
 	if s.listener != nil {
 		s.listener.Close()
 	}
 }
 
 func (s *Server) acceptLoop() {
-	for s.running {
+	for s.running.Load() {
 		conn, err := s.listener.Accept()
 		if err != nil {
-			if s.running {
+			if s.running.Load() {
 				log.Printf("[TransferServer] Accept Error: %v\n", err)
 			}
 			continue
@@ -80,21 +92,91 @@ func (s *Server) acceptLoop() {
 	}
 }
 
-// HandleConn serves one PALT exchange on conn, which may be a LAN socket or
-// an encrypted relay pipe. route records which, for the UI and history.
+// HandleConn serves one PALT exchange arriving on a LAN socket: a plain v1
+// exchange from any device, or a v2 encrypted one from a paired device.
 func (s *Server) HandleConn(conn net.Conn, route string) {
-	defer conn.Close()
-
-	// 1. Read the HTTP-like JSON Handshake Frame
-	meta, err := ReadOffer(conn)
-	if err != nil {
+	first := make([]byte, 4)
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	if _, err := io.ReadFull(conn, first); err != nil {
 		// A bare connect-and-close is a peer checking we're reachable.
 		if err != io.EOF {
 			log.Printf("[TransferServer] Failed to read offer protocol: %v\n", err)
 		}
+		conn.Close()
+		return
+	}
+
+	if string(first) == helloMagic {
+		hello, raw, err := readHello(conn)
+		if err != nil {
+			log.Printf("[TransferServer] Bad hello from %s: %v\n", conn.RemoteAddr(), err)
+			conn.Close()
+			return
+		}
+		keys, ok := secure.Keys{}, false
+		if s.Keys != nil {
+			keys, ok = s.Keys()
+		}
+		if !ok {
+			conn.Close()
+			return
+		}
+		sc, err := secure.Handshake(conn, keys, helloSession(raw), false)
+		if err != nil {
+			log.Printf("[TransferServer] Handshake with %s failed: %v\n", conn.RemoteAddr(), err)
+			conn.Close()
+			return
+		}
+		s.HandlePaired(sc, route, hello.From)
+		return
+	}
+
+	meta, err := readOfferBody(conn, first)
+	conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		log.Printf("[TransferServer] Failed to read offer protocol: %v\n", err)
+		conn.Close()
 		return
 	}
 	meta.Route = route
+	meta.Paired, meta.SenderID = false, ""
+	s.serve(conn, meta)
+}
+
+// HandlePaired serves an encrypted connection from a paired device: a v2 LAN
+// connection after its handshake, or a relay pipe.
+func (s *Server) HandlePaired(conn net.Conn, route, from string) {
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	meta, err := ReadOffer(conn)
+	conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		if err != io.EOF {
+			log.Printf("[TransferServer] Failed to read offer from paired device: %v\n", err)
+		}
+		conn.Close()
+		return
+	}
+	meta.Route = route
+	meta.Paired, meta.SenderID = true, from
+
+	if meta.Action == ActionLink {
+		if s.OnLink == nil {
+			conn.Close()
+			return
+		}
+		if _, err := conn.Write([]byte{ResponseAccept}); err != nil {
+			conn.Close()
+			return
+		}
+		s.OnLink(conn, *meta)
+		return
+	}
+	s.serve(conn, meta)
+}
+
+// serve runs a text or file exchange whose offer has been read.
+func (s *Server) serve(conn net.Conn, meta *Metadata) {
+	defer conn.Close()
 
 	if meta.Action == ActionText {
 		if len(meta.Text) == 0 || len(meta.Text) > MaxTextBytes {
@@ -132,7 +214,7 @@ func (s *Server) HandleConn(conn net.Conn, route string) {
 	}
 
 	// 4. Accept Route
-	_, err = conn.Write([]byte{ResponseAccept})
+	_, err := conn.Write([]byte{ResponseAccept})
 	if err != nil {
 		log.Printf("[TransferServer] Failed to send Accept byte: %v\n", err)
 		return

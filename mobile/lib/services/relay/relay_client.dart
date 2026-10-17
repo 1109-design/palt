@@ -12,7 +12,8 @@ import 'package:flutter/foundation.dart';
 
 import '../palt_conn.dart';
 import 'relay_code.dart';
-import 'secure_pipe.dart';
+import '../secure/keys.dart';
+import '../secure/pipe.dart';
 
 const _protocolVersion = 1;
 const _pingInterval = Duration(seconds: 20);
@@ -41,7 +42,7 @@ class RelayStatus {
 
 class RelayClient {
   final RelayCode code;
-  final RelayKeys keys;
+  final GroupKeys keys;
   final String deviceId;
   final String name;
   final String os;

@@ -6,10 +6,6 @@ export function AcceptOffer(arg1) {
   return window['go']['main']['App']['AcceptOffer'](arg1);
 }
 
-export function AddTrustedDevice(arg1) {
-  return window['go']['main']['App']['AddTrustedDevice'](arg1);
-}
-
 export function CheckForUpdate() {
   return window['go']['main']['App']['CheckForUpdate']();
 }
@@ -20,10 +16,6 @@ export function ClearHistory() {
 
 export function DeleteHistoryEntry(arg1, arg2) {
   return window['go']['main']['App']['DeleteHistoryEntry'](arg1, arg2);
-}
-
-export function GenerateRelayCode(arg1) {
-  return window['go']['main']['App']['GenerateRelayCode'](arg1);
 }
 
 export function GetAliases() {
@@ -54,6 +46,10 @@ export function GetMediaPreview(arg1, arg2) {
   return window['go']['main']['App']['GetMediaPreview'](arg1, arg2);
 }
 
+export function GetPairing() {
+  return window['go']['main']['App']['GetPairing']();
+}
+
 export function GetPeers() {
   return window['go']['main']['App']['GetPeers']();
 }
@@ -62,8 +58,8 @@ export function GetRelayStatus() {
   return window['go']['main']['App']['GetRelayStatus']();
 }
 
-export function GetTrustedDevices() {
-  return window['go']['main']['App']['GetTrustedDevices']();
+export function JoinPairing(arg1) {
+  return window['go']['main']['App']['JoinPairing'](arg1);
 }
 
 export function OpenDownloadFolder() {
@@ -84,6 +80,10 @@ export function RejectOffer(arg1) {
 
 export function RescanPeers() {
   return window['go']['main']['App']['RescanPeers']();
+}
+
+export function ResetPairing() {
+  return window['go']['main']['App']['ResetPairing']();
 }
 
 export function RevealHistoryFile(arg1, arg2) {
@@ -114,6 +114,6 @@ export function SetAutoCopy(arg1, arg2) {
   return window['go']['main']['App']['SetAutoCopy'](arg1, arg2);
 }
 
-export function SetRelayCode(arg1) {
-  return window['go']['main']['App']['SetRelayCode'](arg1);
+export function SetRelayServer(arg1) {
+  return window['go']['main']['App']['SetRelayServer'](arg1);
 }

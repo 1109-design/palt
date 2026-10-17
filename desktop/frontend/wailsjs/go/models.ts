@@ -16,6 +16,22 @@ export namespace main {
 	        this.duration = source["duration"];
 	    }
 	}
+	export class PairingInfo {
+	    deviceId: string;
+	    code: string;
+	    relay: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PairingInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.deviceId = source["deviceId"];
+	        this.code = source["code"];
+	        this.relay = source["relay"];
+	    }
+	}
 	export class RelayStatus {
 	    configured: boolean;
 	    status: string;
@@ -140,6 +156,8 @@ export namespace models {
 	    port: number;
 	    os: string;
 	    via: string;
+	    deviceId: string;
+	    paired: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Peer(source);
@@ -153,6 +171,8 @@ export namespace models {
 	        this.port = source["port"];
 	        this.os = source["os"];
 	        this.via = source["via"];
+	        this.deviceId = source["deviceId"];
+	        this.paired = source["paired"];
 	    }
 	}
 

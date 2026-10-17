@@ -23,6 +23,12 @@ class Peer {
   /// How the peer is reachable: 'direct' (same LAN) or 'relay'.
   final String via;
 
+  /// Stable PALT device ID ('' for builds before 2.0).
+  final String deviceId;
+
+  /// True while an authenticated link to this paired device is up.
+  final bool paired;
+
   bool get viaRelay => via == 'relay';
 
   const Peer({
@@ -32,6 +38,8 @@ class Peer {
     required this.port,
     required this.os,
     this.via = 'direct',
+    this.deviceId = '',
+    this.paired = false,
   });
 
   factory Peer.fromJson(Map<String, dynamic> json) => Peer(
@@ -41,6 +49,8 @@ class Peer {
         port: json['port'] as int,
         os: json['os'] as String,
         via: json['via'] as String? ?? 'direct',
+        deviceId: json['deviceId'] as String? ?? '',
+        paired: json['paired'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -50,6 +60,8 @@ class Peer {
         'port': port,
         'os': os,
         'via': via,
+        'deviceId': deviceId,
+        'paired': paired,
       };
 
   @override

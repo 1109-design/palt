@@ -35,6 +35,7 @@ dependencies:
   cryptography: ^2.9.0
   cryptography_flutter: ^2.3.4
   crypto: ^3.0.7
+  mobile_scanner: ^7.4.2
 
 dev_dependencies:
   flutter_test:

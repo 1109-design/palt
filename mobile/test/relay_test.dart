@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:palt_mobile/services/palt_conn.dart';
 import 'package:palt_mobile/services/relay/relay_client.dart';
 import 'package:palt_mobile/services/relay/relay_code.dart';
+import 'package:palt_mobile/services/secure/pairing.dart';
 
 void main() {
   test('key vector matches desktop/internal/relay', () {
@@ -25,6 +26,27 @@ void main() {
     expect(p.key, code.key);
     expect(() => RelayCode.parse('palt1:host:1:short'), throwsFormatException);
     expect(() => RelayCode.parse('nope'), throwsFormatException);
+  });
+
+  test('palt2 pairing code round trip matches desktop rules', () {
+    final p = Pairing('0123456789abcdef', Uint8List.fromList(List.generate(32, (i) => i)));
+    expect(p.code, 'palt2:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8');
+    var parsed = parsePairingCode(p.code);
+    expect(parsed.key, p.key);
+    expect(parsed.relay, '');
+    final withRelay = p.copyWith(relay: 'relay.example.com:9877');
+    parsed = parsePairingCode(withRelay.code);
+    expect(parsed.relay, 'relay.example.com:9877');
+    expect(withRelay.relayCode!.host, 'relay.example.com');
+    expect(normalizeRelay('relay.example.com'), 'relay.example.com:9877');
+    for (final bad in ['', 'palt2:', 'palt2:abc', 'palt3:x']) {
+      expect(() => parsePairingCode(bad), throwsFormatException, reason: bad);
+    }
+    // palt1 relay codes keep their group.
+    final old = RelayCode('10.0.0.1', 9000, p.key);
+    parsed = parsePairingCode(old.toString());
+    expect(parsed.key, p.key);
+    expect(parsed.relay, '10.0.0.1:9000');
   });
 
   test('ByteReader reads exact sizes and lines across chunks', () async {

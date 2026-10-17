@@ -22,7 +22,6 @@ import '../../providers/alias_provider.dart';
 import '../../providers/auto_copy_provider.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/peer_provider.dart';
-import '../../providers/trust_provider.dart';
 import '../../services/transfer_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/media.dart';
@@ -102,31 +101,13 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     await _send(peer, text, clearDraft: false);
   }
 
-  Future<void> _toggleAutoCopy(
-      String name, String displayName, bool trusted, bool enabled) async {
-    if (!enabled && !trusted) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('Trust $displayName?', style: display(fontSize: 19)),
-          content: Text(
-            'Auto-copy only works for trusted devices. Trusting $displayName also means files it sends are accepted without asking. Only do this for your own devices.',
-            style: const TextStyle(color: kTextSecondary, fontSize: 14, height: 1.5),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Trust & turn on'),
-            ),
-          ],
-        ),
-      );
-      if (ok != true || !mounted) return;
-      ref.read(trustProvider.notifier).trust(name);
+  Future<void> _toggleAutoCopy(String name, bool paired, bool enabled) async {
+    if (!enabled && !paired) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Auto-copy works for paired devices only. Pair from the link icon on the home screen.'),
+      ));
+      return;
     }
     ref.read(autoCopyProvider.notifier).set(name, !enabled);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -162,7 +143,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     final alias = ref.watch(aliasProvider)[peer.deviceName];
     final displayName = (alias != null && alias.isNotEmpty) ? alias : peer.deviceName;
     final osInfo = getOsInfo(peer.os);
-    final trusted = ref.watch(trustProvider).contains(peer.deviceName);
+    final paired = peer.paired;
     final autoCopy = ref.watch(autoCopyProvider).contains(peer.deviceName);
 
     // History is newest-first, which is exactly what a reversed list wants.
@@ -195,7 +176,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
               color: autoCopy ? kAccent : kTextSecondary,
             ),
             onPressed: () =>
-                _toggleAutoCopy(peer.deviceName, displayName, trusted, autoCopy),
+                _toggleAutoCopy(peer.deviceName, paired, autoCopy),
           ),
           const SizedBox(width: 4),
         ],

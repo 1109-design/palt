@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 
 import '../../providers/peer_provider.dart';
-import '../../providers/trust_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../services/transfer_service.dart';
 import '../../utils/version.dart';
@@ -23,7 +22,9 @@ import '../widgets/beacon_pulse.dart';
 import '../widgets/local_device_card.dart';
 import '../widgets/peer_card.dart';
 import '../widgets/route_badge.dart';
-import 'relay_screen.dart';
+import 'pair_screen.dart';
+import '../widgets/background_banner.dart';
+import '../../providers/link_provider.dart';
 import '../widgets/update_banner.dart';
 import '../../providers/update_visibility_provider.dart';
 import '../../models/peer.dart';
@@ -61,7 +62,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _rescan() async {
-    ref.invalidate(discoveryServiceProvider);
+    await ref.read(discoveryServiceProvider).rescan();
+    ref.read(connectorProvider).kick();
     // Give mDNS a beat to re-browse so the refresh feels real.
     await Future.delayed(const Duration(milliseconds: 900));
   }
@@ -80,10 +82,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ref.read(activeOfferProvider.notifier).reject();
           Navigator.pop(context);
         },
-        onAccept: (alwaysTrust) {
-          if (alwaysTrust) {
-            ref.read(trustProvider.notifier).trust(offer.senderName);
-          }
+        onAccept: () {
           ref.read(activeOfferProvider.notifier).accept();
           Navigator.pop(context);
         },
@@ -203,7 +202,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     .read(updateBannerVisibleProvider.notifier)
                     .state = true,
               ),
-            const RelayButton(),
+            const PairButton(),
             IconButton(
               icon: const Icon(Icons.history_rounded, color: kTextSecondary),
               tooltip: 'History',
@@ -223,6 +222,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: UpdateBanner(info: updateInfo),
             ),
           ),
+
+        const SliverToBoxAdapter(child: BackgroundBanner()),
 
         const SliverToBoxAdapter(child: LocalDeviceCard()),
 
@@ -502,7 +503,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 class _OfferSheet extends StatefulWidget {
   final OfferData offer;
   final VoidCallback onReject;
-  final void Function(bool alwaysTrust) onAccept;
+  final VoidCallback onAccept;
 
   const _OfferSheet({
     required this.offer,
@@ -515,7 +516,6 @@ class _OfferSheet extends StatefulWidget {
 }
 
 class _OfferSheetState extends State<_OfferSheet> {
-  bool _alwaysTrust = false;
 
   String _formatBytes(int bytes) {
     if (bytes <= 0) return "0 B";
@@ -644,19 +644,10 @@ class _OfferSheetState extends State<_OfferSheet> {
               ),
             ),
             const SizedBox(height: 6),
-            CheckboxListTile(
-              value: _alwaysTrust,
-              onChanged: (val) =>
-                  setState(() => _alwaysTrust = val ?? false),
-              title: Text(
-                'Always accept from ${offer.senderName}',
-                style:
-                    const TextStyle(fontSize: 13.5, color: kTextSecondary),
-              ),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              visualDensity: VisualDensity.compact,
+            Text(
+              '${offer.senderName} isn\'t paired. Pair it (link icon at the top) '
+              'and its files come in without asking.',
+              style: const TextStyle(fontSize: 12.5, color: kTextFaint),
             ),
             const SizedBox(height: 6),
             Row(
@@ -670,7 +661,7 @@ class _OfferSheetState extends State<_OfferSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: () => widget.onAccept(_alwaysTrust),
+                    onPressed: widget.onAccept,
                     child: const Text('Accept'),
                   ),
                 ),

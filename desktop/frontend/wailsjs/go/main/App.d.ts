@@ -5,15 +5,11 @@ import {models} from '../models';
 
 export function AcceptOffer(arg1:string):Promise<void>;
 
-export function AddTrustedDevice(arg1:string):Promise<void>;
-
 export function CheckForUpdate():Promise<main.UpdateInfo>;
 
 export function ClearHistory():Promise<void>;
 
 export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
-
-export function GenerateRelayCode(arg1:string):Promise<string>;
 
 export function GetAliases():Promise<Record<string, string>>;
 
@@ -29,11 +25,13 @@ export function GetLocalDevice():Promise<models.Peer>;
 
 export function GetMediaPreview(arg1:string,arg2:string):Promise<main.MediaPreview>;
 
+export function GetPairing():Promise<main.PairingInfo>;
+
 export function GetPeers():Promise<Array<models.Peer>>;
 
 export function GetRelayStatus():Promise<main.RelayStatus>;
 
-export function GetTrustedDevices():Promise<Array<string>>;
+export function JoinPairing(arg1:string):Promise<void>;
 
 export function OpenDownloadFolder():Promise<void>;
 
@@ -44,6 +42,8 @@ export function OpenURL(arg1:string):Promise<void>;
 export function RejectOffer(arg1:string):Promise<void>;
 
 export function RescanPeers():Promise<void>;
+
+export function ResetPairing():Promise<void>;
 
 export function RevealHistoryFile(arg1:string,arg2:string):Promise<void>;
 
@@ -59,4 +59,4 @@ export function SetAlias(arg1:string,arg2:string):Promise<void>;
 
 export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;
 
-export function SetRelayCode(arg1:string):Promise<void>;
+export function SetRelayServer(arg1:string):Promise<void>;

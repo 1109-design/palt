@@ -1,11 +1,16 @@
 package transfer
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"time"
+
+	"palt/internal/secure"
 )
 
 // Port defines the default TCP port for the PALT file transfer protocol.
@@ -23,6 +28,7 @@ const MaxTextBytes = 16 * 1024
 const (
 	ActionOffer = "offer" // file batch; payload bytes follow an accept
 	ActionText  = "text"  // text message carried inside the handshake itself
+	ActionLink  = "link"  // long-lived packet channel; paired devices only
 )
 
 // Response Bytes
@@ -48,6 +54,95 @@ type Metadata struct {
 	// Route is how this connection reached us ("direct" or "relay"). It is
 	// set locally by the receiver, never trusted from the wire.
 	Route string `json:"route,omitempty"`
+
+	// Paired is true when the sender proved it holds our pairing key, and
+	// SenderID is its device ID. Both are set locally by the receiver.
+	Paired   bool   `json:"paired,omitempty"`
+	SenderID string `json:"senderId,omitempty"`
+}
+
+// ─── v2: paired connections ──────────────────────────────────────────────────
+//
+// A v1 connection starts with the offer's u32 length, whose first byte is
+// always 0 (offers are ≤ 64 KB). A v2 connection starts with the magic
+// "PALT" instead, then:
+//
+//	u8 version (2) | u16 big-endian length | hello JSON {"from","nonce"}
+//
+// followed by the secure handshake (session = "palt-lan|" + hello JSON), and
+// then the v1 exchange (offer/text/link) inside the encrypted pipe.
+
+const (
+	helloMagic   = "PALT"
+	helloVersion = 2
+	maxHello     = 4096
+)
+
+// Hello opens a v2 connection.
+type Hello struct {
+	From  string `json:"from"`  // sender's device ID
+	Nonce string `json:"nonce"` // fresh per connection
+}
+
+// ErrNotPaired means a v2 connection arrived but this device has no pairing key.
+var ErrNotPaired = errors.New("not paired")
+
+func helloSession(raw []byte) string { return "palt-lan|" + string(raw) }
+
+// SecureDialer wraps a raw dialer: it sends the v2 hello and runs the secure
+// handshake, so what it returns is an encrypted pipe to a paired device.
+func SecureDialer(raw Dialer, selfID string, keys secure.Keys) Dialer {
+	return func() (net.Conn, error) {
+		conn, err := raw()
+		if err != nil {
+			return nil, err
+		}
+		sc, err := secureClient(conn, selfID, keys)
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+		return sc, nil
+	}
+}
+
+func secureClient(conn net.Conn, selfID string, keys secure.Keys) (net.Conn, error) {
+	hello, _ := json.Marshal(Hello{From: selfID, Nonce: secure.RandomHex(16)})
+	frame := make([]byte, 0, 7+len(hello))
+	frame = append(frame, helloMagic...)
+	frame = append(frame, helloVersion)
+	frame = binary.BigEndian.AppendUint16(frame, uint16(len(hello)))
+	frame = append(frame, hello...)
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if _, err := conn.Write(frame); err != nil {
+		return nil, err
+	}
+	conn.SetWriteDeadline(time.Time{})
+	return secure.Handshake(conn, keys, helloSession(hello), true)
+}
+
+// readHello reads the rest of a v2 hello after the magic.
+func readHello(r io.Reader) (Hello, []byte, error) {
+	var hdr [3]byte
+	if _, err := io.ReadFull(r, hdr[:]); err != nil {
+		return Hello{}, nil, err
+	}
+	if hdr[0] != helloVersion {
+		return Hello{}, nil, fmt.Errorf("unsupported protocol version %d", hdr[0])
+	}
+	n := binary.BigEndian.Uint16(hdr[1:])
+	if n == 0 || n > maxHello {
+		return Hello{}, nil, errors.New("bad hello size")
+	}
+	raw := make([]byte, n)
+	if _, err := io.ReadFull(r, raw); err != nil {
+		return Hello{}, nil, err
+	}
+	var h Hello
+	if err := json.Unmarshal(raw, &h); err != nil || h.From == "" {
+		return Hello{}, nil, errors.New("bad hello")
+	}
+	return h, raw, nil
 }
 
 // Routes a transfer can take.
@@ -68,13 +163,16 @@ func DirectDialer(ip string, port int, timeout time.Duration) Dialer {
 
 // ReadOffer parses the exact 4-byte length header and subsequent JSON payload.
 func ReadOffer(r io.Reader) (*Metadata, error) {
-	// 1. Read 4-byte big-endian length prefix
-	var length uint32
 	lengthBuf := make([]byte, 4)
 	if _, err := io.ReadFull(r, lengthBuf); err != nil {
 		return nil, err
 	}
-	length = uint32(lengthBuf[3]) | uint32(lengthBuf[2])<<8 | uint32(lengthBuf[1])<<16 | uint32(lengthBuf[0])<<24
+	return readOfferBody(r, lengthBuf)
+}
+
+// readOfferBody reads an offer whose 4-byte length prefix was already read.
+func readOfferBody(r io.Reader, lengthBuf []byte) (*Metadata, error) {
+	length := uint32(lengthBuf[3]) | uint32(lengthBuf[2])<<8 | uint32(lengthBuf[1])<<16 | uint32(lengthBuf[0])<<24
 
 	if length > MaxOfferSize {
 		return nil, io.ErrShortBuffer // Protective limit

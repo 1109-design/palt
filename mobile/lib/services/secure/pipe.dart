@@ -1,6 +1,7 @@
-/// secure_pipe.dart — end-to-end encryption over a relayed stream.
+/// pipe.dart — the encrypted pipe between two paired devices, over the LAN or
+/// a relayed stream.
 ///
-/// Must stay byte-for-byte identical to desktop/internal/relay/securepipe.go:
+/// Must stay byte-for-byte identical to desktop/internal/secure/pipe.go:
 ///
 ///   initiator → epkI | HMAC(authKey, "palt-hs-i|" session epkI)
 ///   responder → epkR | HMAC(authKey, "palt-hs-r|" session epkI epkR)
@@ -19,16 +20,16 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import '../palt_conn.dart';
-import 'relay_code.dart';
+import 'keys.dart';
 
 const _maxFramePlain = 64 * 1024;
 const _tagSize = 16;
 const _flushEvery = 512 * 1024;
 
-class RelayHandshakeException implements Exception {
+class HandshakeException implements Exception {
   @override
   String toString() =>
-      'Relay handshake failed — are both devices using the same pairing code?';
+      'Secure handshake failed — are both devices paired with the same code?';
 }
 
 /// Runs the key exchange on [raw] (whose bytes are read through [reader])
@@ -36,9 +37,10 @@ class RelayHandshakeException implements Exception {
 Future<SecureConn> secureHandshake(
   Socket raw,
   ByteReader reader,
-  RelayKeys keys,
+  GroupKeys keys,
   String session, {
   required bool initiator,
+  String route = Route.relay,
 }) async {
   final x = X25519();
   final pair = await x.newKeyPair();
@@ -53,16 +55,16 @@ Future<SecureConn> secureHandshake(
     epkI = epk;
     raw.add([...epkI, ...hmacParts(keys.authKey, [hsI, sess, epkI])]);
     final msg = await reader.read(64).timeout(timeout);
-    if (msg == null) throw RelayHandshakeException();
+    if (msg == null) throw HandshakeException();
     epkR = Uint8List.fromList(msg.sublist(0, 32));
     final want = hmacParts(keys.authKey, [hsR, sess, epkI, epkR]);
-    if (!constantTimeEquals(msg.sublist(32), want)) throw RelayHandshakeException();
+    if (!constantTimeEquals(msg.sublist(32), want)) throw HandshakeException();
   } else {
     final msg = await reader.read(64).timeout(timeout);
-    if (msg == null) throw RelayHandshakeException();
+    if (msg == null) throw HandshakeException();
     epkI = Uint8List.fromList(msg.sublist(0, 32));
     final want = hmacParts(keys.authKey, [hsI, sess, epkI]);
-    if (!constantTimeEquals(msg.sublist(32), want)) throw RelayHandshakeException();
+    if (!constantTimeEquals(msg.sublist(32), want)) throw HandshakeException();
     epkR = epk;
     raw.add([...epkR, ...hmacParts(keys.authKey, [hsR, sess, epkI, epkR])]);
   }
@@ -82,6 +84,7 @@ Future<SecureConn> secureHandshake(
   return SecureConn._(
     raw,
     reader,
+    route,
     writeKey: initiator ? i2r : r2i,
     readKey: initiator ? r2i : i2r,
   );
@@ -98,6 +101,8 @@ Uint8List _nonce(int n) {
 class SecureConn implements PaltConn {
   final Socket _raw;
   final ByteReader _reader;
+  @override
+  final String route;
   final SecretKey _writeKey;
   final SecretKey _readKey;
   final _aead = AesGcm.with256bits();
@@ -107,16 +112,16 @@ class SecureConn implements PaltConn {
   int _unflushed = 0;
   Object? _writeError;
 
-  SecureConn._(this._raw, this._reader,
+  SecureConn._(this._raw, this._reader, this.route,
       {required SecretKey writeKey, required SecretKey readKey})
       : _writeKey = writeKey,
         _readKey = readKey;
 
   @override
-  String get route => Route.relay;
+  String get remoteLabel => '$route ${_raw.remoteAddress.address}';
 
-  @override
-  String get remoteLabel => 'relay ${_raw.remoteAddress.address}';
+  /// The peer's address (the relay's, for relayed pipes).
+  String get remoteAddress => _raw.remoteAddress.address;
 
   @override
   late final Stream<Uint8List> input = _decrypt();
@@ -127,10 +132,10 @@ class SecureConn implements PaltConn {
       if (hdr == null) return; // clean end of stream
       final size = ByteData.sublistView(hdr).getUint32(0);
       if (size < _tagSize || size > _maxFramePlain + _tagSize) {
-        throw const FormatException('Relay: bad frame size');
+        throw const FormatException('Secure: bad frame size');
       }
       final ct = await _reader.read(size);
-      if (ct == null) throw const SocketException('Relay: connection cut mid-frame');
+      if (ct == null) throw const SocketException('Secure: connection cut mid-frame');
       final box = SecretBox(
         Uint8List.sublistView(ct, 0, size - _tagSize),
         nonce: _nonce(_rCount),
@@ -140,7 +145,7 @@ class SecureConn implements PaltConn {
       try {
         plain = await _aead.decrypt(box, secretKey: _readKey);
       } on SecretBoxAuthenticationError {
-        throw const FormatException('Relay: frame failed authentication');
+        throw const FormatException('Secure: frame failed authentication');
       }
       _rCount++;
       yield plain is Uint8List ? plain : Uint8List.fromList(plain);

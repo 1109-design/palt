@@ -21,4 +21,10 @@ type Peer struct {
 
 	// Via is how this peer is reachable: "direct" (same LAN) or "relay".
 	Via string `json:"via"`
+
+	// DeviceID is the peer's stable PALT ID ("" for builds before 2.0).
+	DeviceID string `json:"deviceId"`
+
+	// Paired is true while an authenticated link to the peer is up.
+	Paired bool `json:"paired"`
 }

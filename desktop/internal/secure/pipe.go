@@ -1,4 +1,4 @@
-package relay
+package secure
 
 import (
 	"crypto/aes"
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// Secure pipe over a relayed stream.
+// Secure pipe between two paired devices, over the LAN or a relayed stream.
 //
 // Handshake (64 bytes each way):
 //
@@ -40,7 +40,7 @@ const (
 	hkdfInfo      = "palt-relay-v1"
 )
 
-var ErrHandshake = errors.New("relay handshake failed — are both devices using the same pairing code?")
+var ErrHandshake = errors.New("secure handshake failed — are both devices paired with the same code?")
 
 // Handshake runs the key exchange over raw and returns the encrypted conn.
 func Handshake(raw net.Conn, keys Keys, session string, initiator bool) (*SecureConn, error) {
@@ -188,7 +188,7 @@ func (c *SecureConn) Read(p []byte) (int, error) {
 		}
 		size := binary.BigEndian.Uint32(hdr[:])
 		if size < gcmTagSize || size > maxFramePlain+gcmTagSize {
-			return 0, fmt.Errorf("relay: bad frame size %d", size)
+			return 0, fmt.Errorf("secure: bad frame size %d", size)
 		}
 		if cap(c.rbuf) < int(size) {
 			c.rbuf = make([]byte, maxFramePlain+gcmTagSize)
@@ -202,7 +202,7 @@ func (c *SecureConn) Read(p []byte) (int, error) {
 		}
 		plain, err := c.r.Open(ct[:0], nonce(c.rCount), ct, nil)
 		if err != nil {
-			return 0, errors.New("relay: frame failed authentication")
+			return 0, errors.New("secure: frame failed authentication")
 		}
 		c.rCount++
 		c.pending = plain

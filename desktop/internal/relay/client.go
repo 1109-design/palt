@@ -10,6 +10,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"palt/internal/secure"
 )
 
 const (
@@ -61,7 +63,7 @@ type wirePeer struct {
 // encrypted pipes to other devices of the same pairing group.
 type Client struct {
 	code     Code
-	keys     Keys
+	keys     secure.Keys
 	deviceID string
 	name     string
 	os       string
@@ -304,7 +306,7 @@ func (c *Client) acceptSession(session, from string) {
 		log.Printf("[relay] Accept failed: %v", err)
 		return
 	}
-	sc, err := Handshake(raw, c.keys, session, false)
+	sc, err := secure.Handshake(raw, c.keys, session, false)
 	if err != nil {
 		log.Printf("[relay] Incoming handshake from %s failed: %v", peer.Name, err)
 		raw.Close()
@@ -324,7 +326,7 @@ func (c *Client) Dial(peerID string) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	sc, err := Handshake(raw, c.keys, session, true)
+	sc, err := secure.Handshake(raw, c.keys, session, true)
 	if err != nil {
 		raw.Close()
 		return nil, err

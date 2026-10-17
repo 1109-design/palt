@@ -30,8 +30,8 @@ import ChangelogDialog from './components/ChangelogDialog';
 import HistoryView from './components/HistoryView';
 import RenameDialog from './components/RenameDialog';
 import DevicePage from './components/DevicePage';
-import RelayDialog from './components/RelayDialog';
-import type { RelayStatus } from './components/RelayDialog';
+import PairingDialog from './components/PairingDialog';
+import type { PairingInfo, RelayStatus } from './components/PairingDialog';
 import { beacon, fonts } from './theme/theme';
 
 import type { Peer } from './types/peer';
@@ -60,9 +60,7 @@ const ClearHistory         = isWails ? (WailsApp as any).ClearHistory         : 
 const OpenDownloadFolder   = isWails ? (WailsApp as any).OpenDownloadFolder   : () => { console.log('Mock: Open Folder'); };
 const GetAliases           = isWails ? (WailsApp as any).GetAliases           : () => Promise.resolve({});
 const SendText             = isWails ? (WailsApp as any).SendText             : MockApp.SendText;
-const GetTrustedDevices    = isWails ? (WailsApp as any).GetTrustedDevices    : MockApp.GetTrustedDevices;
 const GetAutoCopyDevices   = isWails ? (WailsApp as any).GetAutoCopyDevices   : MockApp.GetAutoCopyDevices;
-const AddTrustedDevice     = isWails ? (WailsApp as any).AddTrustedDevice     : MockApp.AddTrustedDevice;
 const SetAutoCopy          = isWails ? (WailsApp as any).SetAutoCopy          : MockApp.SetAutoCopy;
 const ReadClipboard        = isWails
   ? () => (window as any).runtime.ClipboardGetText() as Promise<string>
@@ -70,8 +68,11 @@ const ReadClipboard        = isWails
 const OpenHistoryFile      = isWails ? (WailsApp as any).OpenHistoryFile      : MockApp.OpenHistoryFile;
 const RevealHistoryFile    = isWails ? (WailsApp as any).RevealHistoryFile    : MockApp.RevealHistoryFile;
 const GetRelayStatus       = isWails ? (WailsApp as any).GetRelayStatus       : MockApp.GetRelayStatus;
-const SetRelayCode         = isWails ? (WailsApp as any).SetRelayCode         : MockApp.SetRelayCode;
-const GenerateRelayCode    = isWails ? (WailsApp as any).GenerateRelayCode    : MockApp.GenerateRelayCode;
+const GetPairing           = isWails ? (WailsApp as any).GetPairing           : MockApp.GetPairing;
+const JoinPairing          = isWails ? (WailsApp as any).JoinPairing          : MockApp.JoinPairing;
+const ResetPairing         = isWails ? (WailsApp as any).ResetPairing         : MockApp.ResetPairing;
+const SetRelayServer       = isWails ? (WailsApp as any).SetRelayServer       : MockApp.SetRelayServer;
+const ConnectByIP          = isWails ? (WailsApp as any).ConnectByIP          : MockApp.ConnectByIP;
 const RescanPeers          = isWails ? (WailsApp as any).RescanPeers          : () => Promise.resolve();
 const GetMediaPreview      = isWails ? (WailsApp as any).GetMediaPreview      : MockApp.GetMediaPreview;
 const DeleteHistoryEntry   = isWails ? (WailsApp as any).DeleteHistoryEntry   : MockApp.DeleteHistoryEntry;
@@ -108,10 +109,10 @@ const App: React.FC = () => {
   const [dragActive, setDragActive] = useState(false);
   /** Device whose page is open; a snapshot so the page survives the peer going offline. */
   const [openPeer, setOpenPeer] = useState<Peer | null>(null);
-  const [trusted, setTrusted] = useState<string[]>([]);
   const [autoCopy, setAutoCopy] = useState<string[]>([]);
   const [relayStatus, setRelayStatus] = useState<RelayStatus | null>(null);
   const [relayOpen, setRelayOpen] = useState(false);
+  const [pairing, setPairing] = useState<PairingInfo | null>(null);
 
   // ── Update state ───────────────────────────────────────────────────────────
   const [appVersion, setAppVersion] = useState('');
@@ -216,9 +217,7 @@ const App: React.FC = () => {
 
   const fetchDeviceSettings = useCallback(async () => {
     try {
-      const [t, ac] = await Promise.all([GetTrustedDevices(), GetAutoCopyDevices()]);
-      setTrusted(t || []);
-      setAutoCopy(ac || []);
+      setAutoCopy((await GetAutoCopyDevices()) || []);
     } catch (err) {
       console.error('[App] Device settings fetch failed:', err);
     }
@@ -230,7 +229,9 @@ const App: React.FC = () => {
 
   const fetchRelayStatus = useCallback(async () => {
     try {
-      setRelayStatus(await GetRelayStatus());
+      const [st, p] = await Promise.all([GetRelayStatus(), GetPairing()]);
+      setRelayStatus(st);
+      setPairing(p);
     } catch (err) {
       console.error('[App] GetRelayStatus failed:', err);
     }
@@ -240,14 +241,18 @@ const App: React.FC = () => {
     fetchRelayStatus();
   }, [fetchRelayStatus]);
 
-  const handleGenerateRelayCode = useCallback(async (addr: string) => {
-    const code = await GenerateRelayCode(addr);
+  const handleJoinPairing = useCallback(async (code: string) => {
+    await JoinPairing(code);
     await fetchRelayStatus();
-    return code;
   }, [fetchRelayStatus]);
 
-  const handleSetRelayCode = useCallback(async (code: string) => {
-    await SetRelayCode(code);
+  const handleResetPairing = useCallback(async () => {
+    await ResetPairing();
+    await fetchRelayStatus();
+  }, [fetchRelayStatus]);
+
+  const handleSetRelayServer = useCallback(async (addr: string) => {
+    await SetRelayServer(addr);
     await fetchRelayStatus();
   }, [fetchRelayStatus]);
 
@@ -433,9 +438,8 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleToggleAutoCopy = useCallback(async (peer: Peer, enabled: boolean, trustFirst: boolean) => {
+  const handleToggleAutoCopy = useCallback(async (peer: Peer, enabled: boolean) => {
     try {
-      if (trustFirst) await AddTrustedDevice(peer.deviceName);
       await SetAutoCopy(peer.deviceName, enabled);
     } catch (e: any) {
       setErrorMsg(String(e?.message || e));
@@ -462,34 +466,13 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const acceptOffer = useCallback(async (transferId: string, alwaysTrust: boolean) => {
-    if (alwaysTrust && offer) {
-      try {
-        if (isWails) {
-          if (typeof (WailsApp as any).AddTrustedDevice === 'function') {
-            // @ts-ignore
-            await WailsApp.AddTrustedDevice(offer.senderName);
-            fetchDeviceSettings();
-          }
-        }
-        const trustedJSON = localStorage.getItem('palt_trusted_devices');
-        const trusted = trustedJSON ? JSON.parse(trustedJSON) as string[] : [];
-        if (!trusted.includes(offer.senderName)) {
-          trusted.push(offer.senderName);
-          localStorage.setItem('palt_trusted_devices', JSON.stringify(trusted));
-          console.log(`[App] Added ${offer.senderName} to trusted devices.`);
-        }
-      } catch (e) {
-        console.error('Failed to save trusted device', e);
-      }
-    }
-
+  const acceptOffer = useCallback(async (transferId: string) => {
     setOffer(null);
     if (isWails) {
       // @ts-ignore
       await WailsApp.AcceptOffer(transferId);
     }
-  }, [offer, fetchDeviceSettings]);
+  }, []);
 
   const rejectOffer = useCallback(async (transferId: string) => {
     setOffer(null);
@@ -578,12 +561,16 @@ const App: React.FC = () => {
         onRelayClick={() => setRelayOpen(true)}
       />
 
-      <RelayDialog
+      <PairingDialog
         open={relayOpen}
+        pairing={pairing}
         status={relayStatus}
+        pairedCount={peers.filter((p) => p.paired).length}
         onClose={() => setRelayOpen(false)}
-        onGenerate={handleGenerateRelayCode}
-        onSetCode={handleSetRelayCode}
+        onJoin={handleJoinPairing}
+        onReset={handleResetPairing}
+        onSetRelay={handleSetRelayServer}
+        onConnectIP={ConnectByIP}
       />
 
       {openPeer ? (
@@ -596,7 +583,7 @@ const App: React.FC = () => {
           onBack={() => setOpenPeer(null)}
           onSendFiles={handleSendFile}
           onSendText={handleSendText}
-          trusted={trusted.includes(openPeer.deviceName)}
+          paired={!!(livePeer ?? openPeer).paired}
           autoCopy={autoCopy.includes(openPeer.deviceName)}
           onToggleAutoCopy={handleToggleAutoCopy}
           readClipboard={ReadClipboard}
