@@ -147,6 +147,8 @@ void setupPhoneFeatures(ProviderContainer c) {
   }
 
   refreshPhoneStatus = () => send();
+  // Android only reveals the Wi-Fi name to the app on screen: re-read on open.
+  AppLifecycleListener(onResume: () => send());
 
   _device.setMethodCallHandler((call) async {
     if (call.method == 'battery') {

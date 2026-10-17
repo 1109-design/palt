@@ -76,15 +76,32 @@ object DeviceInfo {
         return out
     }
 
+    // Android hides the Wi-Fi name from apps in the background, so the
+    // name read while PALT was open is kept for as long as the phone stays
+    // on that same network.
+    private var knownNetwork: android.net.Network? = null
+    private var knownSsid = ""
+
     @Suppress("DEPRECATION")
     private fun wifiName(context: Context, caps: NetworkCapabilities): String {
-        if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return ""
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        val network = cm.activeNetwork
+        if (network != knownNetwork) {
+            knownNetwork = network
+            knownSsid = ""
         }
-        val info = (if (Build.VERSION.SDK_INT >= 31) caps.transportInfo as? WifiInfo else null)
-            ?: context.applicationContext.getSystemService(WifiManager::class.java).connectionInfo
-        val ssid = info?.ssid ?: return ""
-        return if (ssid == WifiManager.UNKNOWN_SSID || ssid == "<unknown ssid>") "" else ssid.trim('"')
+        if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            val fromManager = context.applicationContext.getSystemService(WifiManager::class.java).connectionInfo?.ssid
+            val fromCaps = (if (Build.VERSION.SDK_INT >= 31) caps.transportInfo as? WifiInfo else null)?.ssid
+            for (raw in listOf(fromManager, fromCaps)) {
+                val ssid = raw?.trim('"') ?: continue
+                if (ssid.isNotEmpty() && ssid != "<unknown ssid>") {
+                    knownSsid = ssid
+                    break
+                }
+            }
+        }
+        return knownSsid
     }
 
     private fun networkName(t: Int): String = when (t) {
@@ -95,8 +112,10 @@ object DeviceInfo {
         TelephonyManager.NETWORK_TYPE_UMTS, TelephonyManager.NETWORK_TYPE_EVDO_0,
         TelephonyManager.NETWORK_TYPE_EVDO_A, TelephonyManager.NETWORK_TYPE_EVDO_B -> "3G"
         TelephonyManager.NETWORK_TYPE_EDGE -> "EDGE"
-        TelephonyManager.NETWORK_TYPE_GPRS -> "GPRS"
-        TelephonyManager.NETWORK_TYPE_UNKNOWN -> ""
-        else -> "2G"
+        TelephonyManager.NETWORK_TYPE_GPRS, TelephonyManager.NETWORK_TYPE_CDMA,
+        TelephonyManager.NETWORK_TYPE_1xRTT, TelephonyManager.NETWORK_TYPE_IDEN -> "2G"
+        // Unknown and newer types (e.g. IWLAN for Wi-Fi calling): say nothing
+        // rather than something wrong.
+        else -> ""
     }
 }

@@ -215,6 +215,8 @@ func trayPeerLabel(p models.Peer, alias string, st DeviceStatus) string {
 	case "wifi":
 		if st.SSID != "" {
 			name += "  · " + st.SSID
+		} else {
+			name += "  · Wi-Fi"
 		}
 	case "cellular":
 		name += "  · mobile data"

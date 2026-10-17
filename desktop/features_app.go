@@ -109,6 +109,8 @@ func (a *App) onStatus(l *link.Link, p link.Packet) {
 		b.Signal = -1
 	}
 	name := l.Peer.Name
+	log.Printf("[status] %s: battery=%d charging=%v network=%q ssid=%q cellular=%q signal=%d",
+		name, b.Battery, b.Charging, b.Network, b.SSID, b.Cellular, b.Signal)
 	a.updateStatus(name, func(st *DeviceStatus) { *st = b })
 
 	if b.Battery < 0 {
