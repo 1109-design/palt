@@ -36,8 +36,9 @@ func pathSpeed(ip string) int {
 	case ifc == "":
 		mbps = 50
 	case isWirelessIface(ifc):
-		// Wi-Fi delivers about half its link rate.
-		mbps = float64(wifiRate()) * 0.5
+		// Wi-Fi delivers about half its link rate, and device to device
+		// every byte crosses the air twice (laptop → router → phone).
+		mbps = float64(wifiRate()) * 0.3
 	case isUSBIface(ifc):
 		// USB tethering reports its bus speed; RNDIS/NCM overhead and the
 		// phone's CPU cap it well below that.
