@@ -226,6 +226,42 @@ object Channels {
         }
         MediaSessions.onChange = { sessions.invokeMethod("changed", null) }
 
+        // palt/messages: contacts and SMS for computers
+        // (lib/features/messages.dart). Queries run off the main thread.
+        val messages = MethodChannel(messenger, "palt/messages")
+        messages.setMethodCallHandler { call, result ->
+            fun bg(work: () -> Any?) = worker.execute {
+                val out = try {
+                    Result.success(work())
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+                mainThread.post {
+                    out.fold({ result.success(it) }, { result.error("messages", it.message ?: it.toString(), null) })
+                }
+            }
+            when (call.method) {
+                "start" -> {
+                    Messages.start(app)
+                    result.success(Messages.canRead(app))
+                }
+                "conversations" -> bg { Messages.conversations(app, call.argument<Int>("limit") ?: 100) }
+                "thread" -> bg {
+                    Messages.thread(
+                        app,
+                        (call.argument<Number>("threadId") ?: 0).toLong(),
+                        (call.argument<Number>("before") ?: 0).toLong(),
+                        call.argument<Int>("limit") ?: 50,
+                    )
+                }
+                "send" -> bg { Messages.send(app, call.argument<String>("address") ?: "", call.argument<String>("body") ?: "") }
+                "contacts" -> bg { Messages.contacts(app) }
+                else -> result.notImplemented()
+            }
+        }
+        Messages.onReceived = { m -> mainThread.post { messages.invokeMethod("received", m) } }
+        Messages.onChanged = { what -> mainThread.post { messages.invokeMethod("changed", what) } }
+
         // palt/calls: incoming calls for computers (lib/features/calls.dart).
         val calls = MethodChannel(messenger, "palt/calls")
         calls.setMethodCallHandler { call, result ->

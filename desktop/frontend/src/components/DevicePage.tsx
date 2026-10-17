@@ -40,6 +40,7 @@ import { Badge } from '@mui/material';
 import WavingHandIcon from '@mui/icons-material/WavingHand';
 import WifiIcon from '@mui/icons-material/Wifi';
 import RouterIcon from '@mui/icons-material/Router';
+import SmsIcon from '@mui/icons-material/SmsOutlined';
 import DeviceStatusPanel from './DeviceStatusPanel';
 import PeerMediaCard from './PeerMediaCard';
 import { beacon, fonts } from '../theme/theme';
@@ -77,6 +78,7 @@ interface DevicePageProps {
   onPing: (peer: Peer) => void;
   onShareWifi: (peer: Peer) => void;
   onShareInternet: (peer: Peer) => void;
+  onShowMessages: () => void;
   hotspotOn: boolean;
   media?: MediaState;
   mediaReceivedAt?: number;
@@ -515,6 +517,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onPing,
   onShareWifi,
   onShareInternet,
+  onShowMessages,
   hotspotOn,
   media,
   mediaReceivedAt,
@@ -719,6 +722,13 @@ const DevicePage: React.FC<DevicePageProps> = ({
                   <RouterIcon sx={{ fontSize: 19 }} />
                 </IconButton>
               </Tooltip>
+              {peer.os === 'android' && (
+                <Tooltip title="Messages (SMS)">
+                  <IconButton onClick={onShowMessages} aria-label="messages" sx={{ color: beacon.textSecondary }}>
+                    <SmsIcon sx={{ fontSize: 19 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title="Phone notifications">
                 <IconButton onClick={onShowNotifications} aria-label="phone notifications" sx={{ color: beacon.textSecondary }}>
                   <Badge badgeContent={notificationCount} color="primary" max={99}>

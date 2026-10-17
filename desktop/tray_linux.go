@@ -215,6 +215,13 @@ func (a *App) trayDeviceMenu(device *systray.MenuItem, p models.Peer) {
 	if p.Paired {
 		on("Ring", func() error { return a.RingDevice(name) })
 		on("Ping", func() error { return a.PingDevice(name) })
+		if p.OS == "android" {
+			on("Messages", func() error {
+				a.showWindow()
+				wailsruntime.EventsEmit(a.ctx, "open_messages", map[string]any{"device": name})
+				return nil
+			})
+		}
 		on("Share Wi-Fi", func() error { return a.ShareWifi(name) })
 		if hotspotActive() {
 			on("Stop hotspot", a.StopSharingInternet)

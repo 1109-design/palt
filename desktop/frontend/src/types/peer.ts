@@ -100,3 +100,26 @@ export interface MediaState {
   volume: { level: number; muted: boolean };
   at: number;
 }
+
+/** One SMS, or a conversation's newest one (Go SMSMessage). */
+export interface SMSMessage {
+  id: number;
+  threadId: number;
+  address: string;
+  body: string;
+  /** unix ms */
+  date: number;
+  /** 1 received, 2 sent, 4 sending, 5 failed, 6 queued */
+  type: number;
+  read: boolean;
+  name: string;
+  unread?: number;
+}
+
+/** A phone contact with numbers (Go Contact). */
+export interface Contact {
+  id: string;
+  name: string;
+  numbers: string[];
+  photo: string;
+}

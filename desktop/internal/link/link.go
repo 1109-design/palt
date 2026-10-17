@@ -96,6 +96,11 @@ type Link struct {
 	wmu    sync.Mutex
 	closed chan struct{}
 	once   sync.Once
+
+	// Request waiters by packet id; replies carry the request's id.
+	waitMu  sync.Mutex
+	waiting map[string]chan Packet
+	nextID  atomic.Uint64
 }
 
 // Prio is the dialer's preference for this link (see Identity.Prio).
@@ -187,6 +192,54 @@ func (l *Link) write(p Packet) error {
 		l.Close()
 	}
 	return err
+}
+
+// Request sends a packet and waits for the reply: any packet carrying the
+// same id (the peer answers "<t>.reply"). It fails when the link ends or
+// timeout passes.
+func (l *Link) Request(t string, body any, timeout time.Duration) (Packet, error) {
+	id := fmt.Sprintf("r%d", l.nextID.Add(1))
+	ch := make(chan Packet, 1)
+	l.waitMu.Lock()
+	if l.waiting == nil {
+		l.waiting = map[string]chan Packet{}
+	}
+	l.waiting[id] = ch
+	l.waitMu.Unlock()
+	defer func() {
+		l.waitMu.Lock()
+		delete(l.waiting, id)
+		l.waitMu.Unlock()
+	}()
+	if err := l.SendID(t, id, body); err != nil {
+		return Packet{}, err
+	}
+	select {
+	case p := <-ch:
+		return p, nil
+	case <-l.closed:
+		return Packet{}, net.ErrClosed
+	case <-time.After(timeout):
+		return Packet{}, fmt.Errorf("%s didn't answer", l.Peer.Name)
+	}
+}
+
+// deliver hands a reply to its waiting Request; false if none waits.
+func (l *Link) deliver(p Packet) bool {
+	if p.ID == "" {
+		return false
+	}
+	l.waitMu.Lock()
+	ch := l.waiting[p.ID]
+	l.waitMu.Unlock()
+	if ch == nil {
+		return false
+	}
+	select {
+	case ch <- p:
+	default:
+	}
+	return true
 }
 
 // Close ends the link.
@@ -447,6 +500,9 @@ func (m *Manager) serve(l *Link) {
 			return
 		}
 		l.lastRecv.Store(time.Now().UnixNano())
+		if l.deliver(p) {
+			continue
+		}
 		switch p.T {
 		case TypePing:
 			l.Send(TypePong, nil)

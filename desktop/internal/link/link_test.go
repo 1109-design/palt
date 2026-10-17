@@ -167,3 +167,19 @@ func TestFasterPathReplacesLink(t *testing.T) {
 		t.Fatal("plain link replaced the faster one")
 	}
 }
+
+func TestRequestReply(t *testing.T) {
+	a, b := manager("aaaa"), manager("bbbb")
+	b.Handle("echo", func(l *Link, p Packet) { l.SendID("echo.reply", p.ID, map[string]string{"got": string(p.Body)}) })
+	la, _, errA, errB := connect(t, a, b, RouteDirect)
+	if errA != nil || errB != nil {
+		t.Fatal(errA, errB)
+	}
+	p, err := la.Request("echo", map[string]int{"n": 1}, time.Second)
+	if err != nil || p.T != "echo.reply" {
+		t.Fatalf("reply %+v, %v", p, err)
+	}
+	if _, err := la.Request("nobody", nil, 100*time.Millisecond); err == nil {
+		t.Fatal("unanswered request didn't time out")
+	}
+}

@@ -59,7 +59,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (offer != null) _showOfferSheet(offer);
       final intake = ref.read(intakeProvider);
       if (intake != null) _handleIntake(intake);
-      _askPhonePermission();
+      _askPhonePermission().then((_) => _askSmsPermission());
     });
   }
 
@@ -71,6 +71,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await prefs.setBool('palt_asked_status_perms', true);
     await [Permission.phone, Permission.contacts, Permission.locationWhenInUse].request();
     refreshPhoneStatus();
+  }
+
+  /// Texts on paired computers. Asked once, after the status permissions.
+  Future<void> _askSmsPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('palt_asked_sms_perms') == true) return;
+    await prefs.setBool('palt_asked_sms_perms', true);
+    await [Permission.sms, Permission.contacts].request();
   }
 
   void _handleIntake(Map<String, dynamic> m) {

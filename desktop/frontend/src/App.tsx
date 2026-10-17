@@ -27,6 +27,7 @@ import { ProgressSnack } from './components/ProgressSnack';
 import type { TransferProgress } from './components/ProgressSnack';
 import UpdateDialog from './components/UpdateDialog';
 import ChangelogDialog from './components/ChangelogDialog';
+import MessagesDialog, { type MessagesApi } from './components/MessagesDialog';
 import HistoryView from './components/HistoryView';
 import RenameDialog from './components/RenameDialog';
 import DevicePage from './components/DevicePage';
@@ -81,6 +82,13 @@ const PingDevice           = isWails ? (WailsApp as any).PingDevice           : 
 const ShareWifi            = isWails ? (WailsApp as any).ShareWifi            : MockApp.ShareWifi;
 const ShareInternet        = isWails ? (WailsApp as any).ShareInternet        : MockApp.ShareInternet;
 const GetPeerMedia         = isWails ? (WailsApp as any).GetPeerMedia         : MockApp.GetPeerMedia;
+const messagesApi: MessagesApi = {
+  getConversations: isWails ? (WailsApp as any).GetConversations : MockApp.GetConversations,
+  getThread: isWails ? (WailsApp as any).GetThread : MockApp.GetThread,
+  send: isWails ? (WailsApp as any).SendSMS : MockApp.SendSMS,
+  getContacts: isWails ? (WailsApp as any).GetContacts : MockApp.GetContacts,
+  copy: (text: string) => navigator.clipboard?.writeText(text).catch(() => {}),
+};
 const PeerMediaAction      = isWails ? (WailsApp as any).PeerMediaAction      : MockApp.PeerMediaAction;
 const StopSharingInternet  = isWails ? (WailsApp as any).StopSharingInternet  : MockApp.StopSharingInternet;
 const GetHotspotActive     = isWails ? (WailsApp as any).GetHotspotActive     : MockApp.GetHotspotActive;
@@ -352,6 +360,10 @@ const App: React.FC = () => {
       .catch((e: any) => setErrorMsg(String(e?.message || e)));
   }, []);
 
+  // SMS window: which phone, which conversation to open, refresh on news.
+  const [messages, setMessages] = useState<{ device: string; focus: { threadId: number; address: string; reply: boolean } | null } | null>(null);
+  const [smsRefresh, setSmsRefresh] = useState(0);
+
   const [hotspotOn, setHotspotOn] = useState(false);
   useEffect(() => {
     Promise.resolve().then(() => GetHotspotActive()).then((on: boolean) => setHotspotOn(!!on)).catch(() => {});
@@ -421,6 +433,11 @@ const App: React.FC = () => {
     if (!win.runtime) return;
 
     win.runtime.EventsOn('hotspot', (on: boolean) => setHotspotOn(!!on));
+    win.runtime.EventsOn('sms_received', () => setSmsRefresh((n) => n + 1));
+    win.runtime.EventsOn('sms_changed', () => setSmsRefresh((n) => n + 1));
+    win.runtime.EventsOn('open_messages', (d: { device: string; threadId: number; address: string; reply: boolean }) =>
+      setMessages({ device: d.device, focus: d.threadId ? { threadId: d.threadId, address: d.address, reply: d.reply } : null }),
+    );
     win.runtime.EventsOn('peer_media', (m: Record<string, MediaState>) => setPeerMedia({ states: m || {}, receivedAt: Date.now() }));
 
     win.runtime.EventsOn('peers_changed', (newPeers: Peer[]) => {
@@ -800,6 +817,7 @@ const App: React.FC = () => {
           onPing={handlePing}
           onShareWifi={handleShareWifi}
           onShareInternet={handleShareInternet}
+          onShowMessages={() => setMessages({ device: openPeer.deviceName, focus: null })}
           media={peerMedia.states[openPeer.deviceName]}
           mediaReceivedAt={peerMedia.receivedAt}
           onMediaAction={(player: string, action: string, value?: number) => handleMediaAction(openPeer.deviceName, player, action, value)}
@@ -992,6 +1010,17 @@ const App: React.FC = () => {
           downloadUrl={updateInfo.downloadUrl}
           onDownload={handleUpdateDownload}
           onClose={() => setUpdateDialogOpen(false)}
+        />
+      )}
+
+      {messages && (
+        <MessagesDialog
+          open
+          device={messages.device}
+          focus={messages.focus}
+          refreshKey={smsRefresh}
+          api={messagesApi}
+          onClose={() => setMessages(null)}
         />
       )}
 
