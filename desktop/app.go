@@ -71,6 +71,10 @@ type App struct {
 	pendingOffers  map[string]chan OfferResolution
 	startTime      map[string]time.Time
 	offersMu       sync.Mutex
+
+	// trayEnabled is set before startup when a tray host is running.
+	trayEnabled bool
+	tray        trayState
 }
 
 // NewApp constructs an App instance. Wails calls this during startup.
@@ -120,8 +124,7 @@ func (a *App) startup(ctx context.Context) {
 
 		// Tell React UI a device wants to send some files
 		wailsruntime.EventsEmit(a.ctx, "transfer_offer", meta)
-		wailsruntime.WindowShow(a.ctx)
-		wailsruntime.WindowUnminimise(a.ctx)
+		a.showWindow()
 
 		// Wait indefinitely for user to click Accept or Reject in the UI
 		res := <-offerChan
@@ -251,11 +254,15 @@ func (a *App) startup(ctx context.Context) {
 	a.startRelay()
 	go a.runLANProbe()
 
+	ensureAutostart()
+	a.startTray()
+
 	log.Println("[app] PALT started successfully.")
 }
 
 // shutdown is called by Wails when the window is closed.
 func (a *App) shutdown(ctx context.Context) {
+	a.stopTray()
 	if a.discovery != nil {
 		a.discovery.Stop()
 	}
@@ -345,6 +352,12 @@ func (a *App) CheckForUpdate() UpdateInfo {
 		DownloadURL:   downloadURL,
 		ReleaseNotes:  release.Body,
 	}
+}
+
+// showWindow brings the window back from the tray or a minimised state.
+func (a *App) showWindow() {
+	wailsruntime.WindowShow(a.ctx)
+	wailsruntime.WindowUnminimise(a.ctx)
 }
 
 // OpenURL opens a URL in the system's default browser.
@@ -615,6 +628,7 @@ func (a *App) SetAlias(deviceName, alias string) {
 	if data, err := json.MarshalIndent(aliases, "", "  "); err == nil {
 		_ = os.WriteFile(af, data, 0o644)
 	}
+	a.refreshTray()
 }
 
 // RejectOffer is called by React when user clicks Reject (closes the modal).

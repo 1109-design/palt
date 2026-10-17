@@ -9,6 +9,8 @@ package main
 
 import (
 	"embed"
+	"os"
+	"slices"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -22,8 +24,19 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// instanceID names the single-instance lock shared by every PALT launch.
+const instanceID = "com.lads.palt.desktop"
+
 func main() {
+	if signalRunningInstance(instanceID) {
+		return
+	}
 	app := NewApp()
+
+	// With a tray to come back from, closing the window keeps PALT running,
+	// and the login entry starts it straight in the tray.
+	app.trayEnabled = trayAvailable()
+	startHidden := app.trayEnabled && slices.Contains(os.Args[1:], startHiddenFlag)
 
 	err := wails.Run(&options.App{
 		Title:     "PALT — Local File Transfer",
@@ -35,9 +48,17 @@ func main() {
 			Assets: assets,
 		},
 		// Deep ink — matches Beacon background.default in theme.ts
-		BackgroundColour: &options.RGBA{R: 12, G: 18, B: 32, A: 1},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
+		BackgroundColour:  &options.RGBA{R: 12, G: 18, B: 32, A: 1},
+		OnStartup:         app.startup,
+		OnShutdown:        app.shutdown,
+		StartHidden:       startHidden,
+		HideWindowOnClose: app.trayEnabled,
+		// Launching PALT again (or from the menu while it sits in the tray)
+		// brings up the running window instead of fighting it for the port.
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               instanceID,
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) { app.showWindow() },
+		},
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop: true,
 		},

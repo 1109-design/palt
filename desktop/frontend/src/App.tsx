@@ -123,6 +123,8 @@ const App: React.FC = () => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const openPeerNameRef = useRef<string | null>(null);
   openPeerNameRef.current = openPeer?.deviceName ?? null;
+  const peersRef = useRef<Peer[]>([]);
+  peersRef.current = peers;
   const dragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Update + Changelog on mount ────────────────────────────────────────────
@@ -318,6 +320,12 @@ const App: React.FC = () => {
       setErrorMsg(`${data.senderName}: ${preview}${data.copied ? ' — copied to clipboard' : ''}`);
     });
 
+    // A device picked from the tray menu opens its chat.
+    win.runtime.EventsOn('tray_open_device', (deviceName: string) => {
+      const peer = peersRef.current.find(p => p.deviceName === deviceName);
+      if (peer) setOpenPeer(peer);
+    });
+
     return () => {
       win.runtime.EventsOff('peers_changed');
       win.runtime.EventsOff('history_updated');
@@ -328,6 +336,7 @@ const App: React.FC = () => {
       win.runtime.EventsOff('transfer_error');
       win.runtime.EventsOff('text_received');
       win.runtime.EventsOff('relay_status');
+      win.runtime.EventsOff('tray_open_device');
     };
   }, []);
 

@@ -44,6 +44,7 @@ Full spec in [`design.md`](design.md).
 - **Drag & Drop:** Drop files straight onto a device card on desktop to send them.
 - **Inbound Safety:** Manual accept/reject handshake on every incoming transfer.
 - **Native Downloads:** Received files land directly in the Android public `Downloads` directory.
+- **Lives in the Tray (Linux):** Starts on login straight into the system tray. The tray lists connected devices — pick one to open its chat. Closing the window keeps PALT running; quit from the tray. Toggle **Start on login** there too.
 - **Remote via Relay (optional):** Not on the same network? Point PALT at your own [`palt-relay`](relay/) server. Transfers are end-to-end encrypted and never stored; same-network transfers still go direct. Each device and transfer is tagged **DIRECT** or **RELAY**.
 
 ---

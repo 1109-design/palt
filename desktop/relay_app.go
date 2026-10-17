@@ -171,6 +171,7 @@ func (a *App) emitRelayStatus() {
 func (a *App) emitPeers() {
 	if a.ctx != nil {
 		wailsruntime.EventsEmit(a.ctx, "peers_changed", a.GetPeers())
+		a.refreshTray()
 	}
 }
 
