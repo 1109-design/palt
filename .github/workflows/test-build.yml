@@ -1,0 +1,71 @@
+name: Test Build
+
+# Builds the Android APK for testing on a device without cutting a release.
+# Signed with the release key, so it installs over the released app and keeps
+# its data. Download it from the run's artifacts.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/test-build.yml'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-mobile:
+    name: Build Android APK (test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > mobile/android/app/palt-release.keystore
+
+      - name: Flutter Pub Get
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze and test
+        working-directory: mobile
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Build APK
+        working-directory: mobile
+        env:
+          ANDROID_KEYSTORE_FILE: palt-release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: mv mobile/build/app/outputs/flutter-apk/app-release.apk "mobile/build/app/outputs/flutter-apk/palt-test-${GITHUB_SHA::7}.apk"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: palt-android-test
+          path: mobile/build/app/outputs/flutter-apk/palt-test-*.apk
+          retention-days: 14
