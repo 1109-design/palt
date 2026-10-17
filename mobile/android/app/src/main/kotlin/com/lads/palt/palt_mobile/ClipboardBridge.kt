@@ -1,13 +1,17 @@
 package com.lads.palt.palt_mobile
 
+import android.Manifest
 import android.app.Activity
 import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import android.service.quicksettings.TileService
 
 /**
@@ -38,10 +42,75 @@ object ClipboardBridge {
     )
 }
 
+/**
+ * Sends whatever is copied on the phone without a tap, once READ_LOGS has
+ * been granted over adb (`pm grant <pkg> android.permission.READ_LOGS`).
+ *
+ * Android only lets the app on screen read the clipboard, but it still
+ * calls every app's clipboard listener on a copy, and logs that it denied
+ * the read: "Denying clipboard access to <pkg>". PALT keeps a listener
+ * registered, watches the log for its own name, and then opens
+ * [ClipboardActivity] for a split second to read the new clip.
+ */
+object ClipboardWatcher {
+    private const val TAG = "PaltClipboard"
+    private var thread: Thread? = null
+    private var process: Process? = null
+    private val listener = ClipboardManager.OnPrimaryClipChangedListener { }
+
+    fun available(context: Context) =
+        context.checkSelfPermission(Manifest.permission.READ_LOGS) == PackageManager.PERMISSION_GRANTED
+
+    @Synchronized
+    fun start(context: Context) {
+        if (thread != null || !available(context)) return
+        val app = context.applicationContext
+        app.getSystemService(ClipboardManager::class.java).addPrimaryClipChangedListener(listener)
+        val needle = "clipboard access to ${app.packageName}"
+        thread = Thread {
+            try {
+                // -T 1: start from the newest line rather than the whole buffer.
+                val p = ProcessBuilder("logcat", "-T", "1", "-v", "brief", "-s", "ClipboardService:E")
+                    .redirectErrorStream(true).start()
+                process = p
+                val started = SystemClock.elapsedRealtime()
+                var lastOpen = 0L
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    val now = SystemClock.elapsedRealtime()
+                    // Skip the one old line -T replays, and repeats of a copy.
+                    if (!line.contains(needle) || now - started < 500 || now - lastOpen < 700) return@forEachLine
+                    lastOpen = now
+                    try {
+                        app.startActivity(
+                            Intent(app, ClipboardActivity::class.java)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Couldn't open the clipboard reader: $e")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Clipboard log watch stopped: $e")
+            } finally {
+                synchronized(this) { thread = null; process = null }
+            }
+        }.apply { isDaemon = true; name = "palt-clipboard-log"; start() }
+        Log.i(TAG, "Watching for copies")
+    }
+
+    @Synchronized
+    fun stop(context: Context) {
+        context.applicationContext.getSystemService(ClipboardManager::class.java)
+            .removePrimaryClipChangedListener(listener)
+        process?.destroy()
+    }
+}
+
 /** Invisible; reads the clipboard once it has focus, hands it over, closes. */
 class ClipboardActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        overridePendingTransition(0, 0)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

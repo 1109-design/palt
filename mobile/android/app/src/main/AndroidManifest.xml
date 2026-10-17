@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ── Network & mDNS permissions ──────────────────────────────────────── -->
     <!-- Basic internet / network access -->
@@ -25,6 +26,8 @@
     <!-- Find my phone, mobile signal -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Granted only over adb; lets PALT notice copies (ClipboardWatcher). -->
+    <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
     <!-- Who is calling, for the computer -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />

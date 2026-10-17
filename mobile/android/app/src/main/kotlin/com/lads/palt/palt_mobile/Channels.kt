@@ -180,6 +180,10 @@ object Channels {
                     result.success(null)
                 }
                 "get" -> result.success(ClipboardBridge.get(app))
+                "autoAvailable" -> {
+                    ClipboardWatcher.start(app)
+                    result.success(ClipboardWatcher.available(app))
+                }
                 else -> result.notImplemented()
             }
         }

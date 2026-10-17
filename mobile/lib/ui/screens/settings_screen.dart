@@ -18,6 +18,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBindingObserver {
   bool _access = true;
+  bool _autoClip = false;
 
   @override
   void initState() {
@@ -39,7 +40,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
 
   Future<void> _check() async {
     final ok = await hasNotificationAccess();
-    if (mounted) setState(() => _access = ok);
+    var auto = false;
+    try {
+      auto = await const MethodChannel('palt/clipboard').invokeMethod<bool>('autoAvailable') ?? false;
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _access = ok;
+        _autoClip = auto;
+      });
+    }
   }
 
   @override
@@ -80,10 +90,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Send this phone\'s clipboard', style: TextStyle(color: kText)),
-            subtitle: const Text(
-                'When you open PALT, from the "Send clipboard" button on its notification, '
-                'or the Quick Settings tile (add it from the tile editor)',
-                style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+            subtitle: Text(
+                _autoClip
+                    ? 'Automatically, whenever you copy something'
+                    : 'When you open PALT, from the "Send clipboard" button on its notification, '
+                        'or the Quick Settings tile. For automatic: connect by USB and run '
+                        'adb shell pm grant com.h200137j.palt.palt_mobile android.permission.READ_LOGS',
+                style: const TextStyle(color: kTextSecondary, fontSize: 12.5)),
             value: clip.send,
             onChanged: ref.read(clipboardSettingsProvider.notifier).setSend,
           ),
