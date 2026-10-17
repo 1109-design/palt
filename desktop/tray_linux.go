@@ -211,6 +211,14 @@ func trayPeerLabel(p models.Peer, alias string, st DeviceStatus) string {
 			name += " ⚡"
 		}
 	}
+	switch st.Network {
+	case "wifi":
+		if st.SSID != "" {
+			name += "  · " + st.SSID
+		}
+	case "cellular":
+		name += "  · mobile data"
+	}
 	if p.Via == transfer.RouteRelay {
 		name += "  · relay"
 	}

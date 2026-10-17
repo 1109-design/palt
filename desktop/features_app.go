@@ -4,8 +4,8 @@
 //
 // Packet types (must match mobile/lib/features/):
 //
-//	battery      phone → desktop  {level 0-100, charging}
-//	connectivity phone → desktop  {network "5G"/"LTE"/"Wi-Fi"..., signal 0-4, -1 unknown}
+//	status       either way       DeviceStatus: battery and network, sent on
+//	                              link up and whenever it changes
 //	ring         either way       {} start ringing to be found
 //	ring.stop    either way       {} stop ringing
 //	user_ping    either way       {message?}
@@ -32,13 +32,17 @@ const (
 	ringFor         = 2 * time.Minute
 )
 
-// DeviceStatus is what a paired device reports about itself.
+// DeviceStatus is what a device reports about itself.
 type DeviceStatus struct {
-	Battery  int    `json:"battery"` // -1 unknown
+	Battery  int    `json:"battery"` // 0-100, -1 none/unknown
 	Charging bool   `json:"charging"`
-	Network  string `json:"network"`
-	Signal   int    `json:"signal"` // 0-4, -1 unknown
+	Network  string `json:"network"`  // "wifi", "cellular", "ethernet", "" unknown
+	SSID     string `json:"ssid"`     // Wi-Fi name, "" if unknown
+	Cellular string `json:"cellular"` // "5G", "LTE", ... when on mobile data
+	Signal   int    `json:"signal"`   // mobile signal 0-4, -1 unknown
 }
+
+const statusInterval = 30 * time.Second
 
 type featureState struct {
 	mu          sync.Mutex
@@ -54,8 +58,8 @@ func (a *App) setupFeatures() {
 	a.features.status = map[string]DeviceStatus{}
 	a.features.lowNotified = map[string]bool{}
 
-	a.links.Handle("battery", a.onBattery)
-	a.links.Handle("connectivity", a.onConnectivity)
+	a.links.Handle("status", a.onStatus)
+	go a.sendStatusLoop()
 	a.links.Handle("ring", func(l *link.Link, p link.Packet) { a.startRinging(l.Peer.Name) })
 	a.links.Handle("ring.stop", func(l *link.Link, p link.Packet) { a.StopRinging() })
 	a.links.Handle("user_ping", func(l *link.Link, p link.Packet) {
@@ -93,46 +97,82 @@ func (a *App) updateStatus(name string, change func(st *DeviceStatus)) {
 	a.refreshTray()
 }
 
-func (a *App) onBattery(l *link.Link, p link.Packet) {
-	var b struct {
-		Level    int  `json:"level"`
-		Charging bool `json:"charging"`
-	}
-	if p.Decode(&b) != nil || b.Level < 0 || b.Level > 100 {
+func (a *App) onStatus(l *link.Link, p link.Packet) {
+	var b DeviceStatus
+	if p.Decode(&b) != nil {
 		return
 	}
+	if b.Battery < -1 || b.Battery > 100 {
+		b.Battery = -1
+	}
+	if b.Signal < -1 || b.Signal > 4 {
+		b.Signal = -1
+	}
 	name := l.Peer.Name
-	a.updateStatus(name, func(st *DeviceStatus) { st.Battery, st.Charging = b.Level, b.Charging })
+	a.updateStatus(name, func(st *DeviceStatus) { *st = b })
 
+	if b.Battery < 0 {
+		return
+	}
 	a.features.mu.Lock()
-	warn := b.Level <= lowBatteryLevel && !b.Charging && !a.features.lowNotified[name]
+	warn := b.Battery <= lowBatteryLevel && !b.Charging && !a.features.lowNotified[name]
 	if warn {
 		a.features.lowNotified[name] = true
-	} else if b.Charging || b.Level > lowBatteryLevel+5 {
+	} else if b.Charging || b.Battery > lowBatteryLevel+5 {
 		a.features.lowNotified[name] = false
 	}
 	a.features.mu.Unlock()
 	if warn {
 		notify(Notification{
 			Title: fmt.Sprintf("%s battery low", name),
-			Body:  fmt.Sprintf("%d%% left", b.Level),
+			Body:  fmt.Sprintf("%d%% left", b.Battery),
 			Icon:  "battery-caution",
 		})
 	}
 }
 
-func (a *App) onConnectivity(l *link.Link, p link.Packet) {
-	var b struct {
-		Network string `json:"network"`
-		Signal  int    `json:"signal"`
+// sendStatusLoop tells linked devices about this computer's battery and
+// network: right after each link comes up, then whenever they change.
+func (a *App) sendStatusLoop() {
+	var last DeviceStatus
+	told := map[*link.Link]bool{}
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	lastCheck := time.Time{}
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-t.C:
+		}
+		links := a.links.Links()
+		fresh := []*link.Link{}
+		alive := map[*link.Link]bool{}
+		for _, l := range links {
+			alive[l] = true
+			if !told[l] {
+				fresh = append(fresh, l)
+			}
+		}
+		for l := range told {
+			if !alive[l] {
+				delete(told, l)
+			}
+		}
+		if len(fresh) == 0 && time.Since(lastCheck) < statusInterval {
+			continue
+		}
+		lastCheck = time.Now()
+		st := localStatus()
+		changed := st != last
+		last = st
+		for _, l := range links {
+			if (changed || !told[l]) && l.Supports("status") {
+				l.Send("status", st)
+			}
+			told[l] = true
+		}
 	}
-	if p.Decode(&b) != nil {
-		return
-	}
-	if b.Signal < -1 || b.Signal > 4 {
-		b.Signal = -1
-	}
-	a.updateStatus(l.Peer.Name, func(st *DeviceStatus) { st.Network, st.Signal = b.Network, b.Signal })
 }
 
 // ─── Find my desktop ─────────────────────────────────────────────────────────

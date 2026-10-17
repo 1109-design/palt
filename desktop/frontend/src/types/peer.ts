@@ -26,11 +26,31 @@ export type Route = 'direct' | 'relay';
 
 /** What a paired device reports about itself (Go DeviceStatus). */
 export interface DeviceStatus {
-  /** 0-100, -1 unknown */
+  /** 0-100, -1 none/unknown */
   battery: number;
   charging: boolean;
-  /** "5G", "LTE", "Wi-Fi", … */
+  /** "wifi" | "cellular" | "ethernet" | "" */
   network: string;
-  /** 0-4, -1 unknown */
+  /** Wi-Fi name, "" when unknown */
+  ssid: string;
+  /** "5G", "LTE", … on mobile data */
+  cellular: string;
+  /** mobile signal 0-4, -1 unknown */
   signal: number;
+}
+
+/** A notification mirrored from a paired phone (Go PhoneNotification). */
+export interface PhoneNotification {
+  id: string;
+  device: string;
+  app: string;
+  appId: string;
+  title: string;
+  text: string;
+  /** ms since epoch */
+  time: number;
+  actions: string[];
+  replyable: boolean;
+  /** local icon file path */
+  icon?: string;
 }

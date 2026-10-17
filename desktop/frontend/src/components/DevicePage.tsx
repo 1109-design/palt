@@ -34,6 +34,9 @@ import type { DeviceStatus, Peer } from '../types/peer';
 import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import TuneIcon from '@mui/icons-material/Tune';
+import { Badge } from '@mui/material';
 import WavingHandIcon from '@mui/icons-material/WavingHand';
 import DeviceStatusChip from './DeviceStatusChip';
 import { beacon, fonts } from '../theme/theme';
@@ -69,7 +72,21 @@ interface DevicePageProps {
   status?: DeviceStatus;
   onRing: (peer: Peer) => void;
   onPing: (peer: Peer) => void;
+  /** Number of the phone's current notifications; opens the drawer. */
+  notificationCount: number;
+  onShowNotifications: () => void;
+  /** Per-device feature switches (Go deviceSettingDefaults). */
+  settings: Record<string, boolean>;
+  onSetSetting: (key: string, on: boolean) => void;
 }
+
+/** Labels for the per-device switches, in menu order. */
+const SETTING_LABELS: [string, string][] = [
+  ['notifications', 'Show its notifications here'],
+  ['clipboardSend', 'Send my clipboard to it'],
+  ['clipboardReceive', 'Take its clipboard'],
+  ['pauseOnCall', 'Pause media during calls'],
+];
 
 /** Received files fall back to the download folder by name; sent files need a recorded path. */
 const canLocate = (entry: HistoryEntry, file: HistoryFile) =>
@@ -487,7 +504,12 @@ const DevicePage: React.FC<DevicePageProps> = ({
   status,
   onRing,
   onPing,
+  notificationCount,
+  onShowNotifications,
+  settings,
+  onSetSetting,
 }) => {
+  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
   const displayName = alias || peer.deviceName;
@@ -700,6 +722,26 @@ const DevicePage: React.FC<DevicePageProps> = ({
                   <WavingHandIcon sx={{ fontSize: 18 }} />
                 </IconButton>
               </Tooltip>
+              <Tooltip title="Phone notifications">
+                <IconButton onClick={onShowNotifications} aria-label="phone notifications" sx={{ color: beacon.textSecondary }}>
+                  <Badge badgeContent={notificationCount} color="primary" max={99}>
+                    <NotificationsIcon sx={{ fontSize: 19 }} />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Device settings">
+                <IconButton onClick={(e) => setSettingsAnchor(e.currentTarget)} aria-label="device settings" sx={{ color: beacon.textSecondary }}>
+                  <TuneIcon sx={{ fontSize: 19 }} />
+                </IconButton>
+              </Tooltip>
+              <Menu anchorEl={settingsAnchor} open={!!settingsAnchor} onClose={() => setSettingsAnchor(null)}>
+                {SETTING_LABELS.map(([key, label]) => (
+                  <MenuItem key={key} onClick={() => onSetSetting(key, !settings[key])} sx={{ gap: 1.5 }}>
+                    <Switch size="small" checked={!!settings[key]} />
+                    <Typography sx={{ fontSize: '0.86rem' }}>{label}</Typography>
+                  </MenuItem>
+                ))}
+              </Menu>
             </>
           )}
           <Button

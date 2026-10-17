@@ -88,10 +88,24 @@ export const JoinPairing = (code: string): Promise<void> =>
   code.startsWith('palt2:') || code.startsWith('palt1:') ? Promise.resolve() : Promise.reject('pairing code must start with palt2:');
 export const ResetPairing = (): Promise<void> => Promise.resolve();
 export const GetDeviceStatus = () =>
-  Promise.resolve({ 'Pixel 8': { battery: 82, charging: true, network: '5G', signal: 3 } });
+  Promise.resolve({ 'Pixel 8': { battery: 82, charging: true, network: 'cellular', ssid: '', cellular: '5G', signal: 3 } });
 export const RingDevice = (name: string): Promise<void> => Promise.resolve();
 export const PingDevice = (name: string): Promise<void> => Promise.resolve();
 export const StopRinging = (): Promise<void> => Promise.resolve();
+export const GetPhoneNotifications = (device: string) =>
+  Promise.resolve([
+    { id: 'n1', device, app: 'WhatsApp', appId: 'com.whatsapp', title: 'Mum', text: 'Are you coming for dinner?', time: Date.now() - 120000, actions: ['Mark as read'], replyable: true },
+    { id: 'n2', device, app: 'Gmail', appId: 'com.google.android.gm', title: 'Your order shipped', text: 'Arrives Tuesday', time: Date.now() - 3600000, actions: ['Archive'], replyable: false },
+  ]);
+export const ReplyToNotification = (device: string, id: string, text: string): Promise<void> => Promise.resolve();
+export const DismissPhoneNotification = (device: string, id: string): Promise<void> => Promise.resolve();
+export const RunPhoneNotificationAction = (device: string, id: string, index: number): Promise<void> => Promise.resolve();
+const mockSettings: Record<string, boolean> = { notifications: true, clipboardSend: true, clipboardReceive: true, pauseOnCall: true };
+export const GetDeviceSettings = (device: string) => Promise.resolve({ ...mockSettings });
+export const SetDeviceSetting = (device: string, key: string, on: boolean): Promise<void> => {
+  mockSettings[key] = on;
+  return Promise.resolve();
+};
 export const ConnectByIP = (addr: string): Promise<void> =>
   new Promise((_, reject) => setTimeout(() => reject('could not connect: timeout'), 400));
 export const SetRelayServer = (addr: string): Promise<void> => {

@@ -180,7 +180,7 @@ const PeerCard: React.FC<PeerCardProps> = ({
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1, minHeight: 24 }}>
             <RouteBadge route={peer.via} />
-            {peer.paired && <DeviceStatusChip status={status} />}
+            {peer.paired && <DeviceStatusChip status={status} compact />}
             {peer.via !== 'relay' && (
             <>
             <Typography

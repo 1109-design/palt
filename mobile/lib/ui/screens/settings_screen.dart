@@ -1,0 +1,111 @@
+/// settings_screen.dart — what this phone shares with paired computers.
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../features/notification_sync.dart';
+import '../../theme/app_theme.dart';
+
+class SettingsScreen extends ConsumerStatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBindingObserver {
+  bool _access = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await hasNotificationAccess();
+    if (mounted) setState(() => _access = ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sync = ref.watch(notificationSyncProvider);
+    final notifier = ref.read(notificationSyncProvider.notifier);
+    final apps = sync.apps.entries.toList()
+      ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+
+    return Scaffold(
+      appBar: AppBar(title: Text('Settings', style: display(fontSize: 19))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        children: [
+          Text('NOTIFICATIONS ON YOUR COMPUTER', style: overline()),
+          const SizedBox(height: 8),
+          if (!_access)
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 6),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: kAccent.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kAccent.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'PALT needs notification access to show this phone\'s notifications on your '
+                    'computer, and to dismiss, act on and reply to them from there.',
+                    style: TextStyle(color: kTextSecondary, fontSize: 13, height: 1.45),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: openNotificationAccessSettings,
+                      child: const Text('Grant access'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Send notifications', style: TextStyle(color: kText)),
+            subtitle: const Text('Show them on paired computers',
+                style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+            value: sync.enabled,
+            onChanged: notifier.setEnabled,
+          ),
+          if (sync.enabled && apps.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('APPS', style: overline()),
+            const SizedBox(height: 4),
+            const Text('Apps show up here after their first notification.',
+                style: TextStyle(color: kTextFaint, fontSize: 12)),
+            for (final a in apps)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(a.value, style: const TextStyle(color: kText, fontSize: 14)),
+                value: !sync.muted.contains(a.key),
+                onChanged: (on) => notifier.setMuted(a.key, !on),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}

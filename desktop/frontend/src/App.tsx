@@ -34,7 +34,8 @@ import PairingDialog from './components/PairingDialog';
 import type { PairingInfo, RelayStatus } from './components/PairingDialog';
 import { beacon, fonts } from './theme/theme';
 
-import type { DeviceStatus, Peer } from './types/peer';
+import type { DeviceStatus, Peer, PhoneNotification } from './types/peer';
+import PhoneNotificationsDrawer from './components/PhoneNotificationsDrawer';
 import type { HistoryEntry, HistoryFile } from './types/history';
 
 // ── Wails bindings ────────────────────────────────────────────────────────────
@@ -77,6 +78,12 @@ const GetDeviceStatus      = isWails ? (WailsApp as any).GetDeviceStatus      : 
 const RingDevice           = isWails ? (WailsApp as any).RingDevice           : MockApp.RingDevice;
 const PingDevice           = isWails ? (WailsApp as any).PingDevice           : MockApp.PingDevice;
 const StopRinging          = isWails ? (WailsApp as any).StopRinging          : MockApp.StopRinging;
+const GetPhoneNotifications = isWails ? (WailsApp as any).GetPhoneNotifications : MockApp.GetPhoneNotifications;
+const ReplyToNotification  = isWails ? (WailsApp as any).ReplyToNotification  : MockApp.ReplyToNotification;
+const DismissPhoneNotification = isWails ? (WailsApp as any).DismissPhoneNotification : MockApp.DismissPhoneNotification;
+const RunPhoneNotificationAction = isWails ? (WailsApp as any).RunPhoneNotificationAction : MockApp.RunPhoneNotificationAction;
+const GetDeviceSettings    = isWails ? (WailsApp as any).GetDeviceSettings    : MockApp.GetDeviceSettings;
+const SetDeviceSetting     = isWails ? (WailsApp as any).SetDeviceSetting     : MockApp.SetDeviceSetting;
 const RescanPeers          = isWails ? (WailsApp as any).RescanPeers          : () => Promise.resolve();
 const GetMediaPreview      = isWails ? (WailsApp as any).GetMediaPreview      : MockApp.GetMediaPreview;
 const DeleteHistoryEntry   = isWails ? (WailsApp as any).DeleteHistoryEntry   : MockApp.DeleteHistoryEntry;
@@ -120,6 +127,10 @@ const App: React.FC = () => {
   const [deviceStatus, setDeviceStatus] = useState<Record<string, DeviceStatus>>({});
   /** Set while this computer rings because a paired device is looking for it. */
   const [ringingFrom, setRingingFrom] = useState<string | null>(null);
+  /** The open device's mirrored notifications and switches. */
+  const [phoneNotes, setPhoneNotes] = useState<PhoneNotification[]>([]);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [deviceSettings, setDeviceSettings] = useState<Record<string, boolean>>({});
 
   // ── Update state ───────────────────────────────────────────────────────────
   const [appVersion, setAppVersion] = useState('');
@@ -271,6 +282,26 @@ const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  // Notifications and switches follow the open device.
+  const openName = openPeer?.deviceName;
+  useEffect(() => {
+    if (!openName) return;
+    Promise.resolve().then(() => GetPhoneNotifications(openName)).then((n: PhoneNotification[]) => setPhoneNotes(n || [])).catch(() => {});
+    Promise.resolve().then(() => GetDeviceSettings(openName)).then((s: Record<string, boolean>) => setDeviceSettings(s || {})).catch(() => {});
+  }, [openName]);
+
+  const handleSetSetting = useCallback(async (key: string, on: boolean) => {
+    if (!openName) return;
+    setDeviceSettings((s) => ({ ...s, [key]: on }));
+    try {
+      await SetDeviceSetting(openName, key, on);
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+  }, [openName]);
+
+  const noteError = (e: any) => setErrorMsg(String(e?.message || e));
+
   const handleRing = useCallback(async (peer: Peer) => {
     try {
       await RingDevice(peer.deviceName);
@@ -354,6 +385,17 @@ const App: React.FC = () => {
       setRingingFrom(data.on ? data.from || 'A device' : null);
     });
 
+    win.runtime.EventsOn('phone_notifications', (data: { device: string; items: PhoneNotification[] }) => {
+      if (openPeerNameRef.current === data.device) setPhoneNotes(data.items || []);
+    });
+
+    // "Reply" on a desktop notification: open that device with the drawer.
+    win.runtime.EventsOn('notification_reply', (n: PhoneNotification) => {
+      const peer = peersRef.current.find((p) => p.deviceName === n.device);
+      if (peer) setOpenPeer(peer);
+      setNotesOpen(true);
+    });
+
     win.runtime.EventsOn('history_updated', (data: HistoryEntry[]) => {
       setHistory(data);
     });
@@ -384,6 +426,8 @@ const App: React.FC = () => {
       win.runtime.EventsOff('tray_open_device');
       win.runtime.EventsOff('device_status');
       win.runtime.EventsOff('ringing');
+      win.runtime.EventsOff('phone_notifications');
+      win.runtime.EventsOff('notification_reply');
     };
   }, []);
 
@@ -615,6 +659,16 @@ const App: React.FC = () => {
         onConnectIP={ConnectByIP}
       />
 
+      <PhoneNotificationsDrawer
+        open={notesOpen && !!openPeer}
+        device={openPeer?.deviceName || ''}
+        items={phoneNotes}
+        onClose={() => setNotesOpen(false)}
+        onDismiss={(n) => DismissPhoneNotification(n.device, n.id).catch(noteError)}
+        onAction={(n, i) => RunPhoneNotificationAction(n.device, n.id, i).catch(noteError)}
+        onReply={(n, text) => ReplyToNotification(n.device, n.id, text).catch(noteError)}
+      />
+
       <Dialog open={!!ringingFrom} onClose={() => StopRinging()} maxWidth="xs" fullWidth>
         <DialogContent sx={{ pt: 3.5, textAlign: 'center' }}>
           <Typography sx={{ fontSize: '2.2rem', lineHeight: 1 }}>🔔</Typography>
@@ -648,6 +702,10 @@ const App: React.FC = () => {
           status={deviceStatus[openPeer.deviceName]}
           onRing={handleRing}
           onPing={handlePing}
+          notificationCount={phoneNotes.length}
+          onShowNotifications={() => setNotesOpen(true)}
+          settings={deviceSettings}
+          onSetSetting={handleSetSetting}
         />
       ) : (
       /* ── Main content (offset for AppBar + StatusBar) ───────────────────── */

@@ -22,6 +22,10 @@ export function DeleteHistoryEntry(arg1, arg2) {
   return window['go']['main']['App']['DeleteHistoryEntry'](arg1, arg2);
 }
 
+export function DismissPhoneNotification(arg1, arg2) {
+  return window['go']['main']['App']['DismissPhoneNotification'](arg1, arg2);
+}
+
 export function GetAliases() {
   return window['go']['main']['App']['GetAliases']();
 }
@@ -32,6 +36,10 @@ export function GetAppVersion() {
 
 export function GetAutoCopyDevices() {
   return window['go']['main']['App']['GetAutoCopyDevices']();
+}
+
+export function GetDeviceSettings(arg1) {
+  return window['go']['main']['App']['GetDeviceSettings'](arg1);
 }
 
 export function GetDeviceStatus() {
@@ -62,6 +70,10 @@ export function GetPeers() {
   return window['go']['main']['App']['GetPeers']();
 }
 
+export function GetPhoneNotifications(arg1) {
+  return window['go']['main']['App']['GetPhoneNotifications'](arg1);
+}
+
 export function GetRelayStatus() {
   return window['go']['main']['App']['GetRelayStatus']();
 }
@@ -90,6 +102,10 @@ export function RejectOffer(arg1) {
   return window['go']['main']['App']['RejectOffer'](arg1);
 }
 
+export function ReplyToNotification(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ReplyToNotification'](arg1, arg2, arg3);
+}
+
 export function RescanPeers() {
   return window['go']['main']['App']['RescanPeers']();
 }
@@ -104,6 +120,10 @@ export function RevealHistoryFile(arg1, arg2) {
 
 export function RingDevice(arg1) {
   return window['go']['main']['App']['RingDevice'](arg1);
+}
+
+export function RunPhoneNotificationAction(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunPhoneNotificationAction'](arg1, arg2, arg3);
 }
 
 export function SaveLastSeenVersion(arg1) {
@@ -132,6 +152,10 @@ export function SetAlias(arg1, arg2) {
 
 export function SetAutoCopy(arg1, arg2) {
   return window['go']['main']['App']['SetAutoCopy'](arg1, arg2);
+}
+
+export function SetDeviceSetting(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetDeviceSetting'](arg1, arg2, arg3);
 }
 
 export function SetRelayServer(arg1) {

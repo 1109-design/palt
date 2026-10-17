@@ -9,7 +9,9 @@ type Notification struct {
 	OnAction          func(key string)
 	Urgent            bool
 	Replaces          uint32
-	OnClosed          func()
+	OnClosed          func(byUser bool)
+	Silent            bool
+	Category          string
 }
 
 type NotifyAction struct{ Key, Label string }

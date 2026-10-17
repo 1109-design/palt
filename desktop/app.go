@@ -92,6 +92,8 @@ type App struct {
 	quitting     atomic.Bool
 
 	features featureState
+	notes    notificationState
+	calls    callState
 	tray     trayState
 }
 
@@ -132,6 +134,8 @@ func (a *App) startup(ctx context.Context) {
 	a.transferServer = transfer.NewServer(paltPort)
 	a.setupLinks()
 	a.setupFeatures()
+	a.setupNotificationSync()
+	a.setupCalls()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {

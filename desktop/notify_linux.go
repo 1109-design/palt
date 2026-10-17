@@ -28,8 +28,13 @@ type Notification struct {
 	Urgent bool
 	// Replaces is the ID of an earlier notification to update in place.
 	Replaces uint32
-	// OnClosed is called when the notification goes away for any reason.
-	OnClosed func()
+	// OnClosed is called when the notification goes away; byUser is true
+	// when the user dismissed it.
+	OnClosed func(byUser bool)
+	// Silent notifications make no sound (e.g. updates of earlier ones).
+	Silent bool
+	// Category is a freedesktop category such as "im.received".
+	Category string
 }
 
 type NotifyAction struct{ Key, Label string }
@@ -76,8 +81,9 @@ func (n *notifier) init() {
 						go nt.OnAction(key)
 					}
 				case notifyIface + ".NotificationClosed":
+					reason, _ := s.Body[1].(uint32)
 					if nt.OnClosed != nil {
-						go nt.OnClosed()
+						go nt.OnClosed(reason == 2)
 					}
 				}
 			}
@@ -108,6 +114,12 @@ func notify(nt Notification) uint32 {
 	hints := map[string]dbus.Variant{
 		"urgency":       dbus.MakeVariant(urgency),
 		"desktop-entry": dbus.MakeVariant("palt"),
+	}
+	if nt.Silent {
+		hints["suppress-sound"] = dbus.MakeVariant(true)
+	}
+	if nt.Category != "" {
+		hints["category"] = dbus.MakeVariant(nt.Category)
 	}
 	var id uint32
 	err := n.conn.Object(notifyDest, notifyPath).Call(notifyIface+".Notify", 0,

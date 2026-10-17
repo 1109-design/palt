@@ -27,6 +27,7 @@ import '../widgets/local_device_card.dart';
 import '../widgets/peer_card.dart';
 import '../widgets/route_badge.dart';
 import 'pair_screen.dart';
+import 'settings_screen.dart';
 import '../widgets/background_banner.dart';
 import '../../providers/link_provider.dart';
 import '../widgets/update_banner.dart';
@@ -61,12 +62,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
-  /// Mobile network type for the computer's status readout. Asked once.
+  /// Mobile network type and the Wi-Fi name for the computer's status
+  /// readout. Asked once.
   Future<void> _askPhonePermission() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool('palt_asked_phone') == true) return;
-    await prefs.setBool('palt_asked_phone', true);
-    await Permission.phone.request();
+    if (prefs.getBool('palt_asked_status_perms') == true) return;
+    await prefs.setBool('palt_asked_status_perms', true);
+    await [Permission.phone, Permission.contacts, Permission.locationWhenInUse].request();
+    refreshPhoneStatus();
   }
 
   void _handleIntake(Map<String, dynamic> m) {
@@ -300,6 +303,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     .state = true,
               ),
             const PairButton(),
+            IconButton(
+              icon: const Icon(Icons.tune_rounded, color: kTextSecondary),
+              tooltip: 'Settings',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.history_rounded, color: kTextSecondary),
               tooltip: 'History',

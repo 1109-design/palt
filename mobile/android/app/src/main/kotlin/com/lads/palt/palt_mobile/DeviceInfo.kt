@@ -6,6 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.wifi.WifiInfo
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.telephony.TelephonyManager
@@ -41,18 +45,46 @@ object DeviceInfo {
         }, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     }
 
+    /**
+     * The network the phone uses right now: Wi-Fi (with its name when
+     * location permission allows reading it), mobile data (generation and
+     * signal) or Ethernet.
+     */
     fun connectivity(context: Context): Map<String, Any> {
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork)
         val tm = context.getSystemService(TelephonyManager::class.java)
         val signal = if (Build.VERSION.SDK_INT >= 28) tm.signalStrength?.level ?: -1 else -1
-        var network = ""
+        var cellular = ""
         if (context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
-            network = try {
+            cellular = try {
                 networkName(tm.dataNetworkType)
             } catch (_: SecurityException) {
                 ""
             }
         }
-        return mapOf("network" to network, "signal" to signal)
+        val out = mutableMapOf<String, Any>("network" to "", "ssid" to "", "cellular" to cellular, "signal" to signal)
+        when {
+            caps == null -> {}
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
+                out["network"] = "wifi"
+                out["ssid"] = wifiName(context, caps)
+            }
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> out["network"] = "cellular"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> out["network"] = "ethernet"
+        }
+        return out
+    }
+
+    @Suppress("DEPRECATION")
+    private fun wifiName(context: Context, caps: NetworkCapabilities): String {
+        if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return ""
+        }
+        val info = (if (Build.VERSION.SDK_INT >= 31) caps.transportInfo as? WifiInfo else null)
+            ?: context.applicationContext.getSystemService(WifiManager::class.java).connectionInfo
+        val ssid = info?.ssid ?: return ""
+        return if (ssid == WifiManager.UNKNOWN_SSID || ssid == "<unknown ssid>") "" else ssid.trim('"')
     }
 
     private fun networkName(t: Int): String = when (t) {

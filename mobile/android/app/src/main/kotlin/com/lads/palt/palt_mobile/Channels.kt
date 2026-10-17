@@ -124,6 +124,48 @@ object Channels {
         DeviceInfo.watchBattery(app) { b -> mainThread.post { device.invokeMethod("battery", b) } }
         Ringer.onStopped = { mainThread.post { device.invokeMethod("ringStopped", null) } }
 
+        // palt/notifications: the phone's notifications, mirrored to
+        // computers (lib/features/notification_sync.dart).
+        val notes = MethodChannel(messenger, "palt/notifications")
+        notes.setMethodCallHandler { call, result ->
+            val fwd = NotificationForwarder.instance
+            when (call.method) {
+                "hasAccess" -> result.success(hasNotificationAccess(app))
+                "openAccessSettings" -> {
+                    app.startActivity(
+                        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                    result.success(null)
+                }
+                "dismiss" -> {
+                    fwd?.dismiss(call.argument<String>("id") ?: "")
+                    result.success(null)
+                }
+                "action" -> result.success(
+                    fwd?.runAction(call.argument<String>("id") ?: "", call.argument<Int>("index") ?: -1) ?: false
+                )
+                "reply" -> result.success(
+                    fwd?.reply(call.argument<String>("id") ?: "", call.argument<String>("text") ?: "") ?: false
+                )
+                else -> result.notImplemented()
+            }
+        }
+        NotificationForwarder.sink = { kind, m -> mainThread.post { notes.invokeMethod(kind, m) } }
+
+        // palt/calls: incoming calls for computers (lib/features/calls.dart).
+        val calls = MethodChannel(messenger, "palt/calls")
+        calls.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "mute" -> {
+                    CallWatcher.mute(app)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        CallWatcher.sink = { m -> mainThread.post { calls.invokeMethod("call", m) } }
+        CallWatcher.start(app)
+
         // palt/intent: shares and notification taps (lib/features/intake.dart).
         val intake = MethodChannel(messenger, "palt/intent")
         intake.setMethodCallHandler { call, result ->
@@ -145,6 +187,11 @@ object Channels {
                 mainThread.post { service.invokeMethod("networkChanged", null) }
             }
         })
+    }
+
+    private fun hasNotificationAccess(context: Context): Boolean {
+        val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: ""
+        return enabled.contains(context.packageName)
     }
 
     /** A JPEG frame (~1 s in) scaled to fit maxSide, plus the duration in ms. */

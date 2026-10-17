@@ -32,6 +32,36 @@ export namespace main {
 	        this.relay = source["relay"];
 	    }
 	}
+	export class PhoneNotification {
+	    id: string;
+	    device: string;
+	    app: string;
+	    appId: string;
+	    title: string;
+	    text: string;
+	    time: number;
+	    actions: string[];
+	    replyable: boolean;
+	    icon?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PhoneNotification(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.device = source["device"];
+	        this.app = source["app"];
+	        this.appId = source["appId"];
+	        this.title = source["title"];
+	        this.text = source["text"];
+	        this.time = source["time"];
+	        this.actions = source["actions"];
+	        this.replyable = source["replyable"];
+	        this.icon = source["icon"];
+	    }
+	}
 	export class RelayStatus {
 	    configured: boolean;
 	    status: string;

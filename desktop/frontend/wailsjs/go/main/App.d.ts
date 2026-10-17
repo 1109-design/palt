@@ -13,11 +13,15 @@ export function ConnectByIP(arg1:string):Promise<void>;
 
 export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
 
+export function DismissPhoneNotification(arg1:string,arg2:string):Promise<void>;
+
 export function GetAliases():Promise<Record<string, string>>;
 
 export function GetAppVersion():Promise<string>;
 
 export function GetAutoCopyDevices():Promise<Array<string>>;
+
+export function GetDeviceSettings(arg1:string):Promise<Record<string, boolean>>;
 
 export function GetDeviceStatus():Promise<Record<string, main.DeviceStatus>>;
 
@@ -33,6 +37,8 @@ export function GetPairing():Promise<main.PairingInfo>;
 
 export function GetPeers():Promise<Array<models.Peer>>;
 
+export function GetPhoneNotifications(arg1:string):Promise<Array<main.PhoneNotification>>;
+
 export function GetRelayStatus():Promise<main.RelayStatus>;
 
 export function JoinPairing(arg1:string):Promise<void>;
@@ -47,6 +53,8 @@ export function PingDevice(arg1:string):Promise<void>;
 
 export function RejectOffer(arg1:string):Promise<void>;
 
+export function ReplyToNotification(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function RescanPeers():Promise<void>;
 
 export function ResetPairing():Promise<void>;
@@ -54,6 +62,8 @@ export function ResetPairing():Promise<void>;
 export function RevealHistoryFile(arg1:string,arg2:string):Promise<void>;
 
 export function RingDevice(arg1:string):Promise<void>;
+
+export function RunPhoneNotificationAction(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function SaveLastSeenVersion(arg1:string):Promise<void>;
 
@@ -68,6 +78,8 @@ export function SendText(arg1:string,arg2:number,arg3:string,arg4:string):Promis
 export function SetAlias(arg1:string,arg2:string):Promise<void>;
 
 export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetDeviceSetting(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function SetRelayServer(arg1:string):Promise<void>;
 

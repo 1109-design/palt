@@ -2,8 +2,8 @@
 /// signal reports, find my phone, pings, and notifications for messages.
 ///
 /// Packet types (must match desktop/features_app.go):
-///   battery      phone → desktop  {level 0-100, charging}
-///   connectivity phone → desktop  {network, signal 0-4 / -1}
+///   status       either way       [DeviceStatus]: battery and network, on
+///                                 link up and whenever they change
 ///   ring         either way       {} ring loudly to be found
 ///   ring.stop    either way       {}
 ///   user_ping    either way       {message?}
@@ -21,6 +21,49 @@ import '../services/transfer_service.dart';
 
 const _device = MethodChannel('palt/device');
 const _intent = MethodChannel('palt/intent');
+
+/// What a device reports about itself (Go DeviceStatus).
+class DeviceStatus {
+  final int battery; // 0-100, -1 none/unknown
+  final bool charging;
+  final String network; // wifi | cellular | ethernet | ''
+  final String ssid;
+  final String cellular; // 5G, LTE, … when on mobile data
+  final int signal; // 0-4, -1 unknown
+
+  const DeviceStatus({
+    this.battery = -1,
+    this.charging = false,
+    this.network = '',
+    this.ssid = '',
+    this.cellular = '',
+    this.signal = -1,
+  });
+
+  factory DeviceStatus.fromJson(Map<String, dynamic> j) => DeviceStatus(
+        battery: (j['battery'] as num?)?.toInt() ?? -1,
+        charging: j['charging'] as bool? ?? false,
+        network: j['network'] as String? ?? '',
+        ssid: j['ssid'] as String? ?? '',
+        cellular: j['cellular'] as String? ?? '',
+        signal: (j['signal'] as num?)?.toInt() ?? -1,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'battery': battery,
+        'charging': charging,
+        'network': network,
+        'ssid': ssid,
+        'cellular': cellular,
+        'signal': signal,
+      };
+}
+
+/// Status reported by each linked device, by device name.
+final peerStatusProvider = StateProvider<Map<String, DeviceStatus>>((ref) => const {});
+
+/// Re-reads and sends this phone's status now (e.g. after a network change).
+void Function() refreshPhoneStatus = () {};
 
 /// A share from another app or a notification tap, for the UI to act on:
 /// {paths: [..], text: ..} or {openDevice: name}.
@@ -64,41 +107,65 @@ void setupPhoneFeatures(ProviderContainer c) {
     return showPhoneNotification(l.peer.name, msg.isEmpty ? 'Ping!' : msg, device: l.peer.name);
   });
 
-  // Battery: on every change, and to each device as it links up.
-  Map<String, dynamic>? battery;
-  Map<String, dynamic>? connectivity;
-  Future<void> refreshConnectivity({bool force = false}) async {
+  links.handle('status', (l, p) {
+    if (p.body == null) return;
+    c.read(peerStatusProvider.notifier).update((m) => {...m, l.peer.name: DeviceStatus.fromJson(p.body!)});
+  });
+
+  // This phone's status: to each device as it links up, and on any change.
+  Map<String, dynamic> battery = const {'level': -1, 'charging': false};
+  String? lastSent;
+  Future<Map<String, dynamic>> current() async {
+    Map<String, dynamic> net = const {};
     try {
-      final now = Map<String, dynamic>.from(await _device.invokeMethod('connectivity') as Map);
-      if (force || now.toString() != connectivity.toString()) {
-        connectivity = now;
-        links.broadcast('connectivity', body: now);
-      }
+      net = Map<String, dynamic>.from(await _device.invokeMethod('connectivity') as Map);
     } catch (_) {}
+    return DeviceStatus(
+      battery: (battery['level'] as num?)?.toInt() ?? -1,
+      charging: battery['charging'] as bool? ?? false,
+      network: net['network'] as String? ?? '',
+      ssid: net['ssid'] as String? ?? '',
+      cellular: net['cellular'] as String? ?? '',
+      signal: (net['signal'] as num?)?.toInt() ?? -1,
+    ).toJson();
   }
 
+  Future<void> send({Link? only}) async {
+    final st = await current();
+    final key = st.toString();
+    if (only != null) {
+      if (only.supports('status')) only.send('status', body: st).catchError((_) {});
+      return;
+    }
+    if (key == lastSent) return;
+    lastSent = key;
+    links.broadcast('status', body: st);
+  }
+
+  refreshPhoneStatus = () => send();
+
   _device.setMethodCallHandler((call) async {
-    switch (call.method) {
-      case 'battery':
-        battery = Map<String, dynamic>.from(call.arguments as Map);
-        links.broadcast('battery', body: battery);
+    if (call.method == 'battery') {
+      battery = Map<String, dynamic>.from(call.arguments as Map);
+      await send();
     }
   });
   _device.invokeMethod('battery').then((b) {
     battery = Map<String, dynamic>.from(b as Map);
   }, onError: (_) {});
-  Timer.periodic(const Duration(seconds: 60), (_) => refreshConnectivity());
+  Timer.periodic(const Duration(seconds: 60), (_) => send());
 
   final told = <Link>{};
   c.listen<AsyncValue<List<Link>>>(linksProvider, (_, next) {
     final current = next.valueOrNull ?? const <Link>[];
     told.removeWhere((l) => !current.contains(l));
+    final names = {for (final l in current) l.peer.name};
+    c.read(peerStatusProvider.notifier).update((m) => {
+          for (final e in m.entries)
+            if (names.contains(e.key)) e.key: e.value
+        });
     for (final l in current) {
-      if (!told.add(l)) continue;
-      if (battery != null && l.supports('battery')) l.send('battery', body: battery).catchError((_) {});
-      if (l.supports('connectivity')) {
-        refreshConnectivity(force: true);
-      }
+      if (told.add(l)) send(only: l);
     }
   });
 
