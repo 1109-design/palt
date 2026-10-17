@@ -96,7 +96,9 @@ type App struct {
 	calls    callState
 	clip     clipboardState
 	media    mediaState
-	tray     trayState
+
+	startupErr string
+	tray       trayState
 }
 
 // NewApp constructs an App instance. Wails calls this during startup.
@@ -127,10 +129,10 @@ func (a *App) startup(ctx context.Context) {
 		a.kickConnector()
 	})
 	if err != nil {
-		log.Fatalf("[app] Could not start discovery service: %v", err)
+		a.startupFailed("PALT can't find devices", "Discovery didn't start: "+err.Error())
+	} else {
+		a.discovery = svc
 	}
-
-	a.discovery = svc
 
 	// Initialize Custom TCP Transfer Server
 	a.transferServer = transfer.NewServer(paltPort)
@@ -284,7 +286,8 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	if err := a.transferServer.Start(); err != nil {
-		log.Fatalf("[app] Could not start transfer TCP server: %v", err)
+		a.startupFailed("PALT can't receive anything",
+			fmt.Sprintf("Port %d is in use by another program (%v). Close it and restart PALT.", paltPort, err))
 	}
 
 	a.startRelay()
@@ -1086,3 +1089,14 @@ func (a *App) OpenDownloadFolder() {
 		log.Printf("[app] Failed to open download folder: %v", err)
 	}
 }
+
+// startupFailed reports a startup problem that leaves PALT running with
+// less: in the log, as a notification, and to the window (GetStartupError).
+func (a *App) startupFailed(title, detail string) {
+	log.Printf("[app] %s: %s", title, detail)
+	a.startupErr = title + ". " + detail
+	notify(Notification{Title: title, Body: detail, Icon: "dialog-warning", Urgent: true})
+}
+
+// GetStartupError is the problem PALT hit while starting, "" if none.
+func (a *App) GetStartupError() string { return a.startupErr }

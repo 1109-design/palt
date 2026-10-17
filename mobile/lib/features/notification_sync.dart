@@ -16,6 +16,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/link/link.dart';
+import '../providers/device_features_provider.dart';
 import '../providers/link_provider.dart';
 import '../providers/trust_provider.dart';
 
@@ -91,6 +93,7 @@ Future<void> openNotificationAccessSettings() async {
 
 void setupNotificationSync(ProviderContainer c) {
   final links = c.read(linkManagerProvider);
+  bool toDevice(Link l) => c.read(deviceFeaturesProvider.notifier).isOn(DeviceFeature.notifications, l.peer.name);
 
   _channel.setMethodCallHandler((call) async {
     final m = Map<String, dynamic>.from(call.arguments as Map);
@@ -101,9 +104,9 @@ void setupNotificationSync(ProviderContainer c) {
         settings._seen(appId, m['app'] as String? ?? appId);
         final s = c.read(notificationSyncProvider);
         if (!s.enabled || s.muted.contains(appId)) return;
-        links.broadcast('notification', body: m);
+        links.broadcast('notification', body: m, only: toDevice);
       case 'removed':
-        if (c.read(notificationSyncProvider).enabled) links.broadcast('notification.removed', body: m);
+        if (c.read(notificationSyncProvider).enabled) links.broadcast('notification.removed', body: m, only: toDevice);
     }
   });
 

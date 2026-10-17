@@ -20,6 +20,7 @@ import '../../models/history_entry.dart';
 import '../../models/peer.dart';
 import '../../providers/alias_provider.dart';
 import '../../providers/auto_copy_provider.dart';
+import '../../providers/device_features_provider.dart';
 import '../../features/device_actions.dart';
 import '../../features/phone_features.dart';
 import '../widgets/device_status.dart';
@@ -105,6 +106,48 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     await _send(peer, text, clearDraft: false);
   }
 
+  /// What this phone shares with one device.
+  void _deviceSettings(String name, bool paired) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => Consumer(builder: (ctx, ref, _) {
+        final autoCopy = ref.watch(autoCopyProvider).contains(name);
+        ref.watch(deviceFeaturesProvider);
+        final features = ref.read(deviceFeaturesProvider.notifier);
+        Widget toggle(String feature, String title, String subtitle) => SwitchListTile(
+              title: Text(title, style: const TextStyle(color: kText)),
+              subtitle: Text(subtitle, style: const TextStyle(color: kTextSecondary, fontSize: 12.5)),
+              value: features.isOn(feature, name),
+              onChanged: paired ? (on) => features.set(feature, name, on) : null,
+            );
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(name, style: display(fontSize: 17)),
+            if (!paired)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: Text('Pair with this device to share clipboard and notifications.',
+                    style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+              ),
+            const SizedBox(height: 6),
+            toggle(DeviceFeature.clipboardSend, 'Send my clipboard', 'What you copy here goes to $name'),
+            toggle(DeviceFeature.clipboardReceive, 'Take its clipboard', 'What you copy on $name lands here'),
+            toggle(DeviceFeature.notifications, 'Show my notifications', 'This phone\'s notifications appear on $name'),
+            SwitchListTile(
+              title: const Text('Copy its messages', style: TextStyle(color: kText)),
+              subtitle: const Text('Texts it sends you go to the clipboard',
+                  style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+              value: autoCopy,
+              onChanged: (_) => _toggleAutoCopy(name, paired, autoCopy),
+            ),
+            const SizedBox(height: 8),
+          ]),
+        );
+      }),
+    );
+  }
+
   Future<void> _toggleAutoCopy(String name, bool paired, bool enabled) async {
     if (!enabled && !paired) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -148,7 +191,6 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     final displayName = (alias != null && alias.isNotEmpty) ? alias : peer.deviceName;
     final osInfo = getOsInfo(peer.os);
     final paired = peer.paired;
-    final autoCopy = ref.watch(autoCopyProvider).contains(peer.deviceName);
 
     // History is newest-first, which is exactly what a reversed list wants.
     final thread = _groupTransfers(ref
@@ -216,13 +258,9 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
             : null,
         actions: [
           IconButton(
-            tooltip: autoCopy ? 'Auto-copy on' : 'Auto-copy off',
-            icon: Icon(
-              autoCopy ? Icons.content_paste_rounded : Icons.content_paste_off_rounded,
-              color: autoCopy ? kAccent : kTextSecondary,
-            ),
-            onPressed: () =>
-                _toggleAutoCopy(peer.deviceName, paired, autoCopy),
+            tooltip: 'Device settings',
+            icon: const Icon(Icons.tune_rounded, color: kTextSecondary),
+            onPressed: () => _deviceSettings(peer.deviceName, paired),
           ),
           const SizedBox(width: 4),
         ],

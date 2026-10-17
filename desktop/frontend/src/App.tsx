@@ -388,6 +388,14 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // A problem PALT hit while starting (port in use, ...).
+  useEffect(() => {
+    Promise.resolve()
+      .then(() => (WailsApp as any).GetStartupError?.())
+      .then((e?: string) => e && setErrorMsg(e))
+      .catch(() => {});
+  }, []);
+
   // Initial load
   useEffect(() => {
     fetchLocalDevice();

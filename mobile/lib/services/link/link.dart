@@ -208,9 +208,9 @@ class LinkManager {
   }
 
   /// Broadcasts a packet to every linked device that handles its type.
-  void broadcast(String t, {Map<String, dynamic>? body}) {
+  void broadcast(String t, {Map<String, dynamic>? body, bool Function(Link l)? only}) {
     for (final l in links) {
-      if (l.supports(t)) l.send(t, body: body).catchError((Object _) {});
+      if (l.supports(t) && (only == null || only(l))) l.send(t, body: body).catchError((Object _) {});
     }
   }
 

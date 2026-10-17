@@ -14,6 +14,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../providers/device_features_provider.dart';
 import '../providers/link_provider.dart';
 import '../providers/trust_provider.dart';
 
@@ -67,13 +68,16 @@ void setupClipboard(ProviderContainer c) {
     if (!c.read(clipboardSettingsProvider).send) return;
     last = text;
     record(text, '');
-    links.broadcast('clipboard', body: {'text': text});
+    final features = c.read(deviceFeaturesProvider.notifier);
+    links.broadcast('clipboard',
+        body: {'text': text}, only: (l) => features.isOn(DeviceFeature.clipboardSend, l.peer.name));
   }
 
   links.handle('clipboard', (l, p) async {
     final text = p.body?['text'] as String? ?? '';
     if (text.isEmpty || text.length > _maxText || text == last) return;
     if (!c.read(clipboardSettingsProvider).receive) return;
+    if (!c.read(deviceFeaturesProvider.notifier).isOn(DeviceFeature.clipboardReceive, l.peer.name)) return;
     last = text;
     record(text, l.peer.name);
     try {
