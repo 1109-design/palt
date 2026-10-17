@@ -204,6 +204,20 @@ jobs:
     needs: [build-mobile, build-desktop, build-windows]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # The tag's section of CHANGELOG.md is the release notes; both apps
+      # show them in "What's new".
+      - name: Release Notes
+        run: |
+          awk -v v="## ${GITHUB_REF_NAME}" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md | sed '/./,$!d' > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## ${GITHUB_REF_NAME}' section"
+            exit 1
+          fi
+          cat release-notes.md
+
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -216,4 +230,4 @@ jobs:
             release-artifacts/palt-android-apk/palt-*.apk
             release-artifacts/palt-linux-deb/palt-*-linux-amd64.deb
             release-artifacts/palt-windows-exe/palt-*-windows-amd64.exe
-          generate_release_notes: true
+          body_path: release-notes.md

@@ -55,6 +55,8 @@ export function GetPhoneNotifications(arg1:string):Promise<Array<main.PhoneNotif
 
 export function GetRelayStatus():Promise<main.RelayStatus>;
 
+export function GetReleaseNotes(arg1:string):Promise<string>;
+
 export function InstallClipboardHelper():Promise<void>;
 
 export function JoinPairing(arg1:string):Promise<void>;

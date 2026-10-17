@@ -172,7 +172,11 @@ const App: React.FC = () => {
         // 2. Check if the user has seen this version before.
         const lastSeen = await _GetLastSeenVersion();
         if (lastSeen !== version && version !== 'dev') {
-          setChangelogNotes(''); // will be filled by CheckForUpdate below
+          // This version's own notes (not the latest release's).
+          const notes = await Promise.resolve()
+            .then(() => (WailsApp as any).GetReleaseNotes?.(version) ?? '')
+            .catch(() => '');
+          setChangelogNotes(notes || '');
           setTimeout(() => setChangelogOpen(true), 600);
         }
 
@@ -180,10 +184,6 @@ const App: React.FC = () => {
         const info: UpdateInfo = await _CheckForUpdate();
         if (info.isNewer) {
           setUpdateInfo(info);
-        }
-        // Reuse release notes for the changelog if available.
-        if (info.releaseNotes) {
-          setChangelogNotes(info.releaseNotes);
         }
       } catch (err) {
         console.warn('[App] Update check failed:', err);

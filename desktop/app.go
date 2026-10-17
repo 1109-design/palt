@@ -404,8 +404,49 @@ func (a *App) CheckForUpdate() UpdateInfo {
 		IsNewer:       true,
 		LatestVersion: latest,
 		DownloadURL:   downloadURL,
-		ReleaseNotes:  release.Body,
+		ReleaseNotes:  plainReleaseNotes(release.Body),
 	}
+}
+
+// GetReleaseNotes returns the notes of one release (this version's, for
+// "What's new") as plain text; "" when offline.
+func (a *App) GetReleaseNotes(tag string) string {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/h200137j/palt/releases/tags/"+url.PathEscape(tag), nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "palt-desktop/"+AppVersion)
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var release struct {
+		Body string `json:"body"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&release) != nil {
+		return ""
+	}
+	return plainReleaseNotes(release.Body)
+}
+
+// plainReleaseNotes turns release notes markdown into plain text: bullets
+// as "•", no **bold** markers, no "Full Changelog" link.
+func plainReleaseNotes(md string) string {
+	var out []string
+	for _, l := range strings.Split(md, "\n") {
+		if strings.Contains(l, "Full Changelog") {
+			continue
+		}
+		l = strings.ReplaceAll(strings.TrimRight(l, "\r"), "**", "")
+		if t := strings.TrimLeft(l, " "); strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "* ") {
+			l = "• " + t[2:]
+		}
+		out = append(out, l)
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
 // showWindow brings the window back from the tray or a minimised state.

@@ -43,7 +43,35 @@ class UpdateInfo {
   );
 }
 
+/// Release notes markdown as plain text: bullets as "•", no **bold**
+/// markers, no "Full Changelog" link.
+String plainReleaseNotes(String md) => md
+    .split('\n')
+    .where((l) => !l.contains('Full Changelog'))
+    .map((l) => l.replaceAll('**', '').replaceFirst(RegExp(r'^\s*[-*] '), '• '))
+    .join('\n')
+    .trim();
+
 class UpdateService {
+  /// The notes of one release (e.g. this version's, for "What's new"); ''
+  /// when offline.
+  static Future<String> notesFor(String tag) async {
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+      final request = await client
+          .getUrl(Uri.parse('https://api.github.com/repos/h200137j/palt/releases/tags/$tag'));
+      request.headers.set('Accept', 'application/vnd.github+json');
+      request.headers.set('User-Agent', 'palt-mobile/$kAppVersion');
+      final response = await request.close();
+      if (response.statusCode != 200) return '';
+      final body = await response.transform(utf8.decoder).join();
+      client.close();
+      return plainReleaseNotes((jsonDecode(body) as Map<String, dynamic>)['body'] as String? ?? '');
+    } catch (_) {
+      return '';
+    }
+  }
+
   /// Performs the GitHub Releases API check.
   ///
   /// Returns [UpdateInfo.none] on any error so callers never have to
@@ -85,7 +113,7 @@ class UpdateService {
       return UpdateInfo(
         isNewer: isNewer,
         latestVersion: tagName.isNotEmpty ? tagName : kAppVersion,
-        releaseNotes: releaseBody,
+        releaseNotes: plainReleaseNotes(releaseBody),
         downloadUrl: downloadUrl,
       );
     } catch (_) {

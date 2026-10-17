@@ -19,6 +19,7 @@ import '../../features/phone_features.dart';
 
 import '../../providers/peer_provider.dart';
 import '../../providers/update_provider.dart';
+import '../../services/update_service.dart';
 import '../../services/transfer_service.dart';
 import '../../utils/version.dart';
 import '../widgets/changelog_dialog.dart';
@@ -150,8 +151,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final lastSeen = prefs.getString(kLastSeenVersionKey) ?? '';
     if (lastSeen != kAppVersion && mounted) {
       _changelogShown = true;
-      final updateAsync = ref.read(updateProvider);
-      final notes = updateAsync.valueOrNull?.releaseNotes ?? '';
+      final notes = await UpdateService.notesFor(kAppVersion);
+      if (!mounted) return;
       await showChangelogDialog(context, releaseNotes: notes);
       await prefs.setString(kLastSeenVersionKey, kAppVersion);
     }

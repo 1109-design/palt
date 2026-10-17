@@ -106,6 +106,10 @@ export function GetRelayStatus() {
   return window['go']['main']['App']['GetRelayStatus']();
 }
 
+export function GetReleaseNotes(arg1) {
+  return window['go']['main']['App']['GetReleaseNotes'](arg1);
+}
+
 export function InstallClipboardHelper() {
   return window['go']['main']['App']['InstallClipboardHelper']();
 }
