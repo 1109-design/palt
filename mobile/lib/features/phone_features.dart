@@ -110,6 +110,19 @@ void setupPhoneFeatures(ProviderContainer c) {
     return showPhoneNotification(l.peer.name, msg.isEmpty ? 'Ping!' : msg, device: l.peer.name);
   });
 
+  // A computer shared its Wi-Fi: ask before saving it (WifiShare.kt).
+  links.handle('wifi.share', (l, p) {
+    final b = p.body;
+    if (b == null || (b['ssid'] as String? ?? '').isEmpty) return null;
+    return _device.invokeMethod('wifiOffer', {
+      'ssid': b['ssid'],
+      'password': b['password'] ?? '',
+      'security': b['security'] ?? '',
+      'hidden': b['hidden'] ?? false,
+      'from': l.peer.name,
+    });
+  });
+
   links.handle('status', (l, p) {
     if (p.body == null) return;
     c.read(peerStatusProvider.notifier).update((m) => {...m, l.peer.name: DeviceStatus.fromJson(p.body!)});

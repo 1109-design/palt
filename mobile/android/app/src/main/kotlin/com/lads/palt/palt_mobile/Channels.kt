@@ -118,6 +118,21 @@ object Channels {
                     Notifier.cancel(app, call.argument<Int>("id") ?: 0)
                     result.success(null)
                 }
+                "wifiOffer" -> {
+                    WifiShare.offer(
+                        app,
+                        call.argument<String>("ssid") ?: "",
+                        call.argument<String>("password") ?: "",
+                        call.argument<String>("security") ?: "",
+                        call.argument<Boolean>("hidden") ?: false,
+                        call.argument<String>("from") ?: "Your computer",
+                    )
+                    result.success(null)
+                }
+                "openWifiSettings" -> {
+                    WifiShare.openWifiSettings(app)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

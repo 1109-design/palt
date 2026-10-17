@@ -39,3 +39,29 @@ Future<void> sendClipboardTo(BuildContext context, WidgetRef ref, Peer peer) asy
     if (context.mounted) _say(context, e.toString());
   }
 }
+
+/// Shares this phone's Wi-Fi with a computer. Android never hands apps a
+/// saved password, so the phone shows its network as a QR code and the
+/// computer reads it from a screenshot sent through PALT.
+Future<void> shareWifiTo(BuildContext context, Peer peer) => showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Share Wi-Fi'),
+        content: Text(
+          '1. In Wi-Fi settings, tap your network, then QR code.\n'
+          '2. Take a screenshot.\n'
+          '3. Share the screenshot to PALT → ${peer.deviceName}.\n\n'
+          '${peer.deviceName} will ask to join.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              const MethodChannel('palt/device').invokeMethod('openWifiSettings');
+            },
+            child: const Text('Open Wi-Fi settings'),
+          ),
+        ],
+      ),
+    );

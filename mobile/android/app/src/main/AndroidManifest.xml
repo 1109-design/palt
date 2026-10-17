@@ -80,6 +80,12 @@
             </intent-filter>
         </service>
         <activity
+            android:name=".WifiAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
             android:name=".ClipboardActivity"
             android:exported="false"
             android:excludeFromRecents="true"
