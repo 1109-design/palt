@@ -14,9 +14,9 @@ import (
 	"log"
 	"net"
 	"os"
-	"sort"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,7 +31,7 @@ import (
 const (
 	// probeLinkTimeout is how long a link has to answer after a network change.
 	probeLinkTimeout = 3 * time.Second
-	connectInterval = 5 * time.Second
+	connectInterval  = 5 * time.Second
 	// Backoff caps for a device that doesn't answer: short while it is being
 	// seen on the LAN right now, long for a remembered address.
 	backoffSeen  = 30 * time.Second
@@ -43,9 +43,9 @@ const (
 // knownDevice is a paired device seen before, kept so it can be found again
 // even when discovery fails.
 type knownDevice struct {
-	Name     string    `json:"name"`
-	OS       string    `json:"os"`
-	LastIP   string    `json:"lastIp,omitempty"`
+	Name   string `json:"name"`
+	OS     string `json:"os"`
+	LastIP string `json:"lastIp,omitempty"`
 	// LanIP is the last address reached other than over a USB cable, tried
 	// when the device says it is back on Wi-Fi but discovery hasn't seen it.
 	LanIP    string    `json:"lanIp,omitempty"`
@@ -502,6 +502,7 @@ func (a *App) onNetworkChanged() {
 		a.discovery.Rescan()
 	}
 	go func() {
+		a.refreshTray()
 		a.probeLinks()
 		a.kickConnector()
 	}()

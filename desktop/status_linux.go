@@ -28,6 +28,10 @@ func localStatus() DeviceStatus {
 	}
 
 	nm := conn.Object("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager")
+	if c, err := nm.GetProperty("org.freedesktop.NetworkManager.Connectivity"); err == nil {
+		state, _ := c.Value().(uint32)
+		st.Internet = state == 4 // NM_CONNECTIVITY_FULL
+	}
 	v, err := nm.GetProperty("org.freedesktop.NetworkManager.PrimaryConnection")
 	if err != nil {
 		return st

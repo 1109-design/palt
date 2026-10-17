@@ -39,6 +39,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import { Badge } from '@mui/material';
 import WavingHandIcon from '@mui/icons-material/WavingHand';
 import WifiIcon from '@mui/icons-material/Wifi';
+import RouterIcon from '@mui/icons-material/Router';
 import DeviceStatusPanel from './DeviceStatusPanel';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
@@ -74,6 +75,8 @@ interface DevicePageProps {
   onRing: (peer: Peer) => void;
   onPing: (peer: Peer) => void;
   onShareWifi: (peer: Peer) => void;
+  onShareInternet: (peer: Peer) => void;
+  hotspotOn: boolean;
   /** Number of the phone's current notifications; opens the drawer. */
   notificationCount: number;
   onShowNotifications: () => void;
@@ -507,6 +510,8 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onRing,
   onPing,
   onShareWifi,
+  onShareInternet,
+  hotspotOn,
   notificationCount,
   onShowNotifications,
   settings,
@@ -688,6 +693,23 @@ const DevicePage: React.FC<DevicePageProps> = ({
               <Tooltip title="Share this computer's Wi-Fi">
                 <IconButton onClick={() => onShareWifi(peer)} aria-label="share wi-fi" sx={{ color: beacon.textSecondary }}>
                   <WifiIcon sx={{ fontSize: 19 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip
+                title={
+                  hotspotOn
+                    ? 'Hotspot on — click to stop'
+                    : status && !status.internet
+                    ? `${peer.deviceName} has no internet — share this computer's`
+                    : "Share this computer's internet"
+                }
+              >
+                <IconButton
+                  onClick={() => onShareInternet(peer)}
+                  aria-label="share internet"
+                  sx={{ color: hotspotOn ? beacon.ok : status && !status.internet ? beacon.relay : beacon.textSecondary }}
+                >
+                  <RouterIcon sx={{ fontSize: 19 }} />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Phone notifications">

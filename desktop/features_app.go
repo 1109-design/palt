@@ -40,6 +40,7 @@ type DeviceStatus struct {
 	SSID     string `json:"ssid"`     // Wi-Fi name, "" if unknown
 	Cellular string `json:"cellular"` // "5G", "LTE", ... when on mobile data
 	Signal   int    `json:"signal"`   // mobile signal 0-4, -1 unknown
+	Internet bool   `json:"internet"` // reaches the internet (not just the LAN)
 }
 
 const statusInterval = 30 * time.Second
@@ -48,6 +49,8 @@ type featureState struct {
 	mu          sync.Mutex
 	status      map[string]DeviceStatus // by device name
 	lowNotified map[string]bool
+	// offlineOffered marks devices already offered internet this outage.
+	offlineOffered map[string]bool
 
 	ringMu    sync.Mutex
 	ringStop  chan struct{}
@@ -57,6 +60,7 @@ type featureState struct {
 func (a *App) setupFeatures() {
 	a.features.status = map[string]DeviceStatus{}
 	a.features.lowNotified = map[string]bool{}
+	a.features.offlineOffered = map[string]bool{}
 
 	a.links.Handle("status", a.onStatus)
 	go a.sendStatusLoop()
@@ -109,9 +113,13 @@ func (a *App) onStatus(l *link.Link, p link.Packet) {
 		b.Signal = -1
 	}
 	name := l.Peer.Name
-	if prev := a.statusOf(name); prev.Network != b.Network || prev.SSID != b.SSID {
+	prev := a.statusOf(name)
+	if prev.Network != b.Network || prev.SSID != b.SSID {
 		// Its network changed: look for it on the new one.
 		defer a.onNetworkChanged()
+	}
+	if l.Supports("wifi.share") {
+		defer a.offerInternetHelp(name, b)
 	}
 	log.Printf("[status] %s: battery=%d charging=%v network=%q ssid=%q cellular=%q signal=%d",
 		name, b.Battery, b.Charging, b.Network, b.SSID, b.Cellular, b.Signal)

@@ -65,3 +65,37 @@ Future<void> shareWifiTo(BuildContext context, Peer peer) => showDialog(
         ],
       ),
     );
+
+/// Internet between this phone and a computer, whichever way it's needed:
+/// asks the computer to share when this phone is offline, else offers this
+/// phone's data (hotspot or USB tethering).
+Future<void> shareInternetWith(BuildContext context, WidgetRef ref, Peer peer, {required bool phoneOnline}) async {
+  if (!phoneOnline) {
+    final link = ref.read(linkManagerProvider).byName(peer.deviceName);
+    if (link == null) return _say(context, '${peer.deviceName} isn\'t connected');
+    if (!link.supports('internet.request')) return _say(context, 'Update PALT on ${peer.deviceName} for this');
+    await link.send('internet.request', body: {});
+    if (context.mounted) _say(context, 'Asked ${peer.deviceName} — tap Join when it offers a network');
+    return;
+  }
+  await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Share this phone\'s internet'),
+      content: Text(
+        'Turn on Mobile Hotspot (then share it with Wi-Fi → QR code), or plug in the cable '
+        'and turn on USB tethering — ${peer.deviceName} uses it right away.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(ctx);
+            const MethodChannel('palt/device').invokeMethod('openTetherSettings');
+          },
+          child: const Text('Open hotspot settings'),
+        ),
+      ],
+    ),
+  );
+}

@@ -74,6 +74,7 @@ void startCore(ProviderContainer c) {
   }, fireImmediately: true);
 
   _channel.setMethodCallHandler((call) async {
+    if (call.method == 'statusChanged') refreshPhoneStatus();
     if (call.method == 'networkChanged') {
       c.read(discoveryServiceProvider).rescan();
       unawaited(refreshUsbPrefixes());

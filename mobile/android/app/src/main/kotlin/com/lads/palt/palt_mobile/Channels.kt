@@ -129,6 +129,10 @@ object Channels {
                     )
                     result.success(null)
                 }
+                "askTether" -> {
+                    WifiShare.askTether(app, call.argument<String>("from") ?: "Your computer")
+                    result.success(null)
+                }
                 "openTetherSettings" -> {
                     WifiShare.openTetherSettings(app)
                     result.success(null)
@@ -232,6 +236,14 @@ object Channels {
         cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) = changed()
             override fun onLost(network: Network) = changed()
+            // Internet access is confirmed a moment after a network comes up.
+            private var validated: Boolean? = null
+            override fun onCapabilitiesChanged(network: Network, caps: android.net.NetworkCapabilities) {
+                val v = caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                if (v == validated) return
+                validated = v
+                mainThread.post { service.invokeMethod("statusChanged", null) }
+            }
             private fun changed() {
                 mainThread.post { service.invokeMethod("networkChanged", null) }
             }

@@ -39,6 +39,8 @@ export interface DeviceStatus {
   cellular: string;
   /** mobile signal 0-4, -1 unknown */
   signal: number;
+  /** reaches the internet, not just the LAN */
+  internet?: boolean;
 }
 
 /** A notification mirrored from a paired phone (Go PhoneNotification). */

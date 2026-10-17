@@ -30,6 +30,7 @@ class DeviceStatus {
   final String ssid;
   final String cellular; // 5G, LTE, … when on mobile data
   final int signal; // 0-4, -1 unknown
+  final bool internet; // reaches the internet, not just the LAN
 
   const DeviceStatus({
     this.battery = -1,
@@ -38,6 +39,7 @@ class DeviceStatus {
     this.ssid = '',
     this.cellular = '',
     this.signal = -1,
+    this.internet = false,
   });
 
   factory DeviceStatus.fromJson(Map<String, dynamic> j) => DeviceStatus(
@@ -47,6 +49,7 @@ class DeviceStatus {
         ssid: j['ssid'] as String? ?? '',
         cellular: j['cellular'] as String? ?? '',
         signal: (j['signal'] as num?)?.toInt() ?? -1,
+        internet: j['internet'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -56,6 +59,7 @@ class DeviceStatus {
         'ssid': ssid,
         'cellular': cellular,
         'signal': signal,
+        'internet': internet,
       };
 }
 
@@ -110,6 +114,10 @@ void setupPhoneFeatures(ProviderContainer c) {
     return showPhoneNotification(l.peer.name, msg.isEmpty ? 'Ping!' : msg, device: l.peer.name);
   });
 
+  // A computer has no internet: offer hotspot / USB tethering.
+  links.handle('internet.request',
+      (l, p) => _device.invokeMethod('askTether', {'from': l.peer.name}));
+
   // A computer shared its Wi-Fi: ask before saving it (WifiShare.kt).
   links.handle('wifi.share', (l, p) {
     final b = p.body;
@@ -143,6 +151,7 @@ void setupPhoneFeatures(ProviderContainer c) {
       ssid: net['ssid'] as String? ?? '',
       cellular: net['cellular'] as String? ?? '',
       signal: (net['signal'] as num?)?.toInt() ?? -1,
+      internet: net['internet'] as bool? ?? false,
     ).toJson();
   }
 

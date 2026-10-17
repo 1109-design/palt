@@ -50,6 +50,30 @@ object WifiShare {
         nm.notify(NOTIFICATION_ID, n)
     }
 
+    /** A computer has no internet: offer to turn on hotspot or USB tethering. */
+    fun askTether(context: Context, from: String) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL, "Shared Wi-Fi", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Wi-Fi networks your computer shares with this phone"
+            }
+        )
+        val open = Intent(context, TetherActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val pi = PendingIntent.getActivity(
+            context, NOTIFICATION_ID + 1, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val n = Notification.Builder(context, CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("$from needs internet")
+            .setContentText("Turn on Mobile Hotspot, or USB tethering if it's plugged in")
+            .setContentIntent(pi)
+            .addAction(Notification.Action.Builder(null, "Open hotspot settings", pi).build())
+            .setAutoCancel(true)
+            .build()
+        nm.notify(NOTIFICATION_ID + 1, n)
+    }
+
     /**
      * Opens the hotspot and tethering settings (no public intent: try the
      * settings app's own screen, else the network settings).
@@ -109,6 +133,15 @@ class WifiAddActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        finish()
+    }
+}
+
+/** Opens the tethering settings from a notification, then closes. */
+class TetherActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        WifiShare.openTetherSettings(this)
         finish()
     }
 }

@@ -74,6 +74,7 @@ object DeviceInfo {
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> out["network"] = "ethernet"
         }
         if (out["network"] == "" && usbTethered()) out["network"] = "usb"
+        out["internet"] = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
         return out
     }
 

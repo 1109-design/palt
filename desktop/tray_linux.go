@@ -133,7 +133,8 @@ func (a *App) refreshTray() {
 	for i, p := range peers {
 		paired[i] = p.Paired
 	}
-	signature := fmt.Sprintf("%q %v %v", labels, paired, autostart)
+	// The internet items depend on these too.
+	signature := fmt.Sprintf("%q %v %v %v %v", labels, paired, autostart, hotspotActive(), localStatus().Internet)
 
 	a.tray.mu.Lock()
 	defer a.tray.mu.Unlock()
@@ -215,6 +216,13 @@ func (a *App) trayDeviceMenu(device *systray.MenuItem, p models.Peer) {
 		on("Ring", func() error { return a.RingDevice(name) })
 		on("Ping", func() error { return a.PingDevice(name) })
 		on("Share Wi-Fi", func() error { return a.ShareWifi(name) })
+		if hotspotActive() {
+			on("Stop hotspot", a.StopSharingInternet)
+		} else if localStatus().Internet {
+			on("Share internet", func() error { return a.ShareInternet(name) })
+		} else {
+			on("Use its internet", func() error { return a.AskForInternet(name) })
+		}
 	}
 }
 

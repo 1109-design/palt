@@ -79,6 +79,9 @@ const GetDeviceStatus      = isWails ? (WailsApp as any).GetDeviceStatus      : 
 const RingDevice           = isWails ? (WailsApp as any).RingDevice           : MockApp.RingDevice;
 const PingDevice           = isWails ? (WailsApp as any).PingDevice           : MockApp.PingDevice;
 const ShareWifi            = isWails ? (WailsApp as any).ShareWifi            : MockApp.ShareWifi;
+const ShareInternet        = isWails ? (WailsApp as any).ShareInternet        : MockApp.ShareInternet;
+const StopSharingInternet  = isWails ? (WailsApp as any).StopSharingInternet  : MockApp.StopSharingInternet;
+const GetHotspotActive     = isWails ? (WailsApp as any).GetHotspotActive     : MockApp.GetHotspotActive;
 const StopRinging          = isWails ? (WailsApp as any).StopRinging          : MockApp.StopRinging;
 const SendClipboard        = isWails ? (WailsApp as any).SendClipboard        : MockApp.SendClipboard;
 const GetPhoneNotifications = isWails ? (WailsApp as any).GetPhoneNotifications : MockApp.GetPhoneNotifications;
@@ -336,6 +339,25 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const [hotspotOn, setHotspotOn] = useState(false);
+  useEffect(() => {
+    Promise.resolve().then(() => GetHotspotActive()).then((on: boolean) => setHotspotOn(!!on)).catch(() => {});
+  }, []);
+
+  const handleShareInternet = useCallback(async (peer: Peer) => {
+    try {
+      if (hotspotOn) {
+        await StopSharingInternet();
+        setErrorMsg('Hotspot off');
+      } else {
+        await ShareInternet(peer.deviceName);
+        setErrorMsg(`Internet offered to ${peer.deviceName}. Tap Join there.`);
+      }
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+  }, [hotspotOn]);
+
   const handleShareWifi = useCallback(async (peer: Peer) => {
     try {
       await ShareWifi(peer.deviceName);
@@ -376,6 +398,8 @@ const App: React.FC = () => {
     // We cast window as any because __wails is not in standard TS lib
     const win = window as any;
     if (!win.runtime) return;
+
+    win.runtime.EventsOn('hotspot', (on: boolean) => setHotspotOn(!!on));
 
     win.runtime.EventsOn('peers_changed', (newPeers: Peer[]) => {
       setPeers(newPeers);
@@ -753,6 +777,8 @@ const App: React.FC = () => {
           onRing={handleRing}
           onPing={handlePing}
           onShareWifi={handleShareWifi}
+          onShareInternet={handleShareInternet}
+          hotspotOn={hotspotOn}
           notificationCount={phoneNotes.length}
           onShowNotifications={() => {
             setDrawerTab('notifications');

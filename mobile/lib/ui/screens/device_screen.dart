@@ -191,6 +191,14 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                         (icon: Icons.notifications_active_rounded, label: 'Ring', onTap: online ? () => sendDevicePacket(context, ref, peer, 'ring') : null),
                         (icon: Icons.waving_hand_rounded, label: 'Ping', onTap: online ? () => sendDevicePacket(context, ref, peer, 'user_ping') : null),
                         (icon: Icons.wifi_rounded, label: 'Wi-Fi', onTap: online ? () => shareWifiTo(context, peer) : null),
+                        (
+                          icon: Icons.router_rounded,
+                          label: 'Internet',
+                          onTap: online
+                              ? () => shareInternetWith(context, ref, peer,
+                                  phoneOnline: ref.read(localStatusProvider)?.internet ?? true)
+                              : null
+                        ),
                       ]),
                     ],
                   ),

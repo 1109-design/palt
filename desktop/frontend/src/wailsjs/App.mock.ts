@@ -92,6 +92,9 @@ export const GetDeviceStatus = () =>
 export const RingDevice = (name: string): Promise<void> => Promise.resolve();
 export const PingDevice = (name: string): Promise<void> => Promise.resolve();
 export const ShareWifi = (name: string): Promise<void> => Promise.resolve();
+export const ShareInternet = (name: string): Promise<void> => Promise.resolve();
+export const StopSharingInternet = (): Promise<void> => Promise.resolve();
+export const GetHotspotActive = (): Promise<boolean> => Promise.resolve(false);
 export const GetCurrentWifi = (): Promise<string> => Promise.resolve('HomeNet');
 export const StopRinging = (): Promise<void> => Promise.resolve();
 export const SendClipboard = (name: string): Promise<void> => Promise.resolve();
