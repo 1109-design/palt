@@ -78,6 +78,7 @@ const ConnectByIP          = isWails ? (WailsApp as any).ConnectByIP          : 
 const GetDeviceStatus      = isWails ? (WailsApp as any).GetDeviceStatus      : MockApp.GetDeviceStatus;
 const RingDevice           = isWails ? (WailsApp as any).RingDevice           : MockApp.RingDevice;
 const PingDevice           = isWails ? (WailsApp as any).PingDevice           : MockApp.PingDevice;
+const ShareWifi            = isWails ? (WailsApp as any).ShareWifi            : MockApp.ShareWifi;
 const StopRinging          = isWails ? (WailsApp as any).StopRinging          : MockApp.StopRinging;
 const SendClipboard        = isWails ? (WailsApp as any).SendClipboard        : MockApp.SendClipboard;
 const GetPhoneNotifications = isWails ? (WailsApp as any).GetPhoneNotifications : MockApp.GetPhoneNotifications;
@@ -330,6 +331,15 @@ const App: React.FC = () => {
     try {
       await SendClipboard(peer.deviceName);
       setErrorMsg(`Clipboard sent to ${peer.deviceName}`);
+    } catch (e: any) {
+      setErrorMsg(String(e?.message || e));
+    }
+  }, []);
+
+  const handleShareWifi = useCallback(async (peer: Peer) => {
+    try {
+      await ShareWifi(peer.deviceName);
+      setErrorMsg(`Wi-Fi sent to ${peer.deviceName}. Tap Save there to join.`);
     } catch (e: any) {
       setErrorMsg(String(e?.message || e));
     }
@@ -742,6 +752,7 @@ const App: React.FC = () => {
           status={deviceStatus[openPeer.deviceName]}
           onRing={handleRing}
           onPing={handlePing}
+          onShareWifi={handleShareWifi}
           notificationCount={phoneNotes.length}
           onShowNotifications={() => {
             setDrawerTab('notifications');

@@ -138,6 +138,7 @@ func (a *App) startup(ctx context.Context) {
 	a.setupNotificationSync()
 	a.setupCalls()
 	a.setupClipboard()
+	a.setupWifiShare()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {
@@ -192,6 +193,7 @@ func (a *App) startup(ctx context.Context) {
 			Files:          a.toHistoryFiles(meta.Files, savedPaths),
 			Route:          meta.Route,
 		})
+		go a.scanForWifiQR(savedPaths, meta.SenderName)
 	}
 
 	a.transferServer.OnError = func(meta transfer.Metadata, savedPaths []string, err error) {

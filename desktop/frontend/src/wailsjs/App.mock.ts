@@ -91,6 +91,8 @@ export const GetDeviceStatus = () =>
   Promise.resolve({ 'Pixel 8': { battery: 82, charging: true, network: 'cellular', ssid: '', cellular: '5G', signal: 3 } });
 export const RingDevice = (name: string): Promise<void> => Promise.resolve();
 export const PingDevice = (name: string): Promise<void> => Promise.resolve();
+export const ShareWifi = (name: string): Promise<void> => Promise.resolve();
+export const GetCurrentWifi = (): Promise<string> => Promise.resolve('HomeNet');
 export const StopRinging = (): Promise<void> => Promise.resolve();
 export const SendClipboard = (name: string): Promise<void> => Promise.resolve();
 export const GetPhoneNotifications = (device: string) =>

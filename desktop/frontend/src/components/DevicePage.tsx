@@ -38,6 +38,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import TuneIcon from '@mui/icons-material/Tune';
 import { Badge } from '@mui/material';
 import WavingHandIcon from '@mui/icons-material/WavingHand';
+import WifiIcon from '@mui/icons-material/Wifi';
 import DeviceStatusPanel from './DeviceStatusPanel';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
@@ -72,6 +73,7 @@ interface DevicePageProps {
   status?: DeviceStatus;
   onRing: (peer: Peer) => void;
   onPing: (peer: Peer) => void;
+  onShareWifi: (peer: Peer) => void;
   /** Number of the phone's current notifications; opens the drawer. */
   notificationCount: number;
   onShowNotifications: () => void;
@@ -504,6 +506,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
   status,
   onRing,
   onPing,
+  onShareWifi,
   notificationCount,
   onShowNotifications,
   settings,
@@ -680,6 +683,11 @@ const DevicePage: React.FC<DevicePageProps> = ({
               <Tooltip title="Ping">
                 <IconButton onClick={() => onPing(peer)} aria-label="ping device" sx={{ color: beacon.textSecondary }}>
                   <WavingHandIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Share this computer's Wi-Fi">
+                <IconButton onClick={() => onShareWifi(peer)} aria-label="share wi-fi" sx={{ color: beacon.textSecondary }}>
+                  <WifiIcon sx={{ fontSize: 19 }} />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Phone notifications">

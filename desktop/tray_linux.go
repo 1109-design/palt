@@ -215,6 +215,7 @@ func (a *App) trayDeviceMenu(device *systray.MenuItem, p models.Peer) {
 	if p.Paired {
 		on("Ring", func() error { return a.RingDevice(name) })
 		on("Ping", func() error { return a.PingDevice(name) })
+		on("Share Wi-Fi", func() error { return a.ShareWifi(name) })
 	}
 }
 
