@@ -6,6 +6,10 @@ export function AcceptOffer(arg1) {
   return window['go']['main']['App']['AcceptOffer'](arg1);
 }
 
+export function AskForInternet(arg1) {
+  return window['go']['main']['App']['AskForInternet'](arg1);
+}
+
 export function CheckForUpdate() {
   return window['go']['main']['App']['CheckForUpdate']();
 }
@@ -66,6 +70,10 @@ export function GetHistory() {
   return window['go']['main']['App']['GetHistory']();
 }
 
+export function GetHotspotActive() {
+  return window['go']['main']['App']['GetHotspotActive']();
+}
+
 export function GetLastSeenVersion() {
   return window['go']['main']['App']['GetLastSeenVersion']();
 }
@@ -80,6 +88,10 @@ export function GetMediaPreview(arg1, arg2) {
 
 export function GetPairing() {
   return window['go']['main']['App']['GetPairing']();
+}
+
+export function GetPeerMedia() {
+  return window['go']['main']['App']['GetPeerMedia']();
 }
 
 export function GetPeers() {
@@ -112,6 +124,10 @@ export function OpenHistoryFile(arg1, arg2) {
 
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
+}
+
+export function PeerMediaAction(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['PeerMediaAction'](arg1, arg2, arg3, arg4);
 }
 
 export function PingDevice(arg1) {
@@ -182,10 +198,18 @@ export function SetRelayServer(arg1) {
   return window['go']['main']['App']['SetRelayServer'](arg1);
 }
 
+export function ShareInternet(arg1) {
+  return window['go']['main']['App']['ShareInternet'](arg1);
+}
+
 export function ShareWifi(arg1) {
   return window['go']['main']['App']['ShareWifi'](arg1);
 }
 
 export function StopRinging() {
   return window['go']['main']['App']['StopRinging']();
+}
+
+export function StopSharingInternet() {
+  return window['go']['main']['App']['StopSharingInternet']();
 }

@@ -205,6 +205,27 @@ object Channels {
         }
         ClipboardBridge.onSend = { text -> mainThread.post { clip.invokeMethod("send", text) } }
 
+        // palt/sessions: this phone's media for computers' remote
+        // (lib/features/media.dart). Changes are pushed as "changed".
+        val sessions = MethodChannel(messenger, "palt/sessions")
+        sessions.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> result.success(MediaSessions.start(app))
+                "state" -> result.success(MediaSessions.state(app))
+                "action" -> {
+                    MediaSessions.action(
+                        app,
+                        call.argument<String>("player") ?: "",
+                        call.argument<String>("action") ?: "",
+                        call.argument<Double>("value") ?: 0.0,
+                    )
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MediaSessions.onChange = { sessions.invokeMethod("changed", null) }
+
         // palt/calls: incoming calls for computers (lib/features/calls.dart).
         val calls = MethodChannel(messenger, "palt/calls")
         calls.setMethodCallHandler { call, result ->

@@ -5,6 +5,8 @@ import {models} from '../models';
 
 export function AcceptOffer(arg1:string):Promise<void>;
 
+export function AskForInternet(arg1:string):Promise<void>;
+
 export function CheckForUpdate():Promise<main.UpdateInfo>;
 
 export function ClearHistory():Promise<void>;
@@ -35,6 +37,8 @@ export function GetDeviceStatus():Promise<Record<string, main.DeviceStatus>>;
 
 export function GetHistory():Promise<Array<models.HistoryEntry>>;
 
+export function GetHotspotActive():Promise<boolean>;
+
 export function GetLastSeenVersion():Promise<string>;
 
 export function GetLocalDevice():Promise<models.Peer>;
@@ -42,6 +46,8 @@ export function GetLocalDevice():Promise<models.Peer>;
 export function GetMediaPreview(arg1:string,arg2:string):Promise<main.MediaPreview>;
 
 export function GetPairing():Promise<main.PairingInfo>;
+
+export function GetPeerMedia():Promise<Record<string, main.MediaState>>;
 
 export function GetPeers():Promise<Array<models.Peer>>;
 
@@ -58,6 +64,8 @@ export function OpenDownloadFolder():Promise<void>;
 export function OpenHistoryFile(arg1:string,arg2:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
+
+export function PeerMediaAction(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
 
 export function PingDevice(arg1:string):Promise<void>;
 
@@ -93,6 +101,10 @@ export function SetDeviceSetting(arg1:string,arg2:string,arg3:boolean):Promise<v
 
 export function SetRelayServer(arg1:string):Promise<void>;
 
+export function ShareInternet(arg1:string):Promise<void>;
+
 export function ShareWifi(arg1:string):Promise<void>;
 
 export function StopRinging():Promise<void>;
+
+export function StopSharingInternet():Promise<void>;

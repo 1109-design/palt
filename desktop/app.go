@@ -95,6 +95,7 @@ type App struct {
 	notes    notificationState
 	calls    callState
 	clip     clipboardState
+	media    mediaState
 	tray     trayState
 }
 
@@ -139,6 +140,7 @@ func (a *App) startup(ctx context.Context) {
 	a.setupCalls()
 	a.setupClipboard()
 	a.setupWifiShare()
+	a.setupMedia()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {

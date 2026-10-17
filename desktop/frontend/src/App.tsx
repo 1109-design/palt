@@ -34,7 +34,7 @@ import PairingDialog from './components/PairingDialog';
 import type { PairingInfo, RelayStatus } from './components/PairingDialog';
 import { beacon, fonts } from './theme/theme';
 
-import type { ClipboardEntry, ClipboardHelper, DeviceStatus, Peer, PhoneNotification } from './types/peer';
+import type { ClipboardEntry, ClipboardHelper, DeviceStatus, MediaState, Peer, PhoneNotification } from './types/peer';
 import PhoneNotificationsDrawer from './components/PhoneNotificationsDrawer';
 import type { DrawerTab } from './components/PhoneNotificationsDrawer';
 import type { HistoryEntry, HistoryFile } from './types/history';
@@ -80,6 +80,8 @@ const RingDevice           = isWails ? (WailsApp as any).RingDevice           : 
 const PingDevice           = isWails ? (WailsApp as any).PingDevice           : MockApp.PingDevice;
 const ShareWifi            = isWails ? (WailsApp as any).ShareWifi            : MockApp.ShareWifi;
 const ShareInternet        = isWails ? (WailsApp as any).ShareInternet        : MockApp.ShareInternet;
+const GetPeerMedia         = isWails ? (WailsApp as any).GetPeerMedia         : MockApp.GetPeerMedia;
+const PeerMediaAction      = isWails ? (WailsApp as any).PeerMediaAction      : MockApp.PeerMediaAction;
 const StopSharingInternet  = isWails ? (WailsApp as any).StopSharingInternet  : MockApp.StopSharingInternet;
 const GetHotspotActive     = isWails ? (WailsApp as any).GetHotspotActive     : MockApp.GetHotspotActive;
 const StopRinging          = isWails ? (WailsApp as any).StopRinging          : MockApp.StopRinging;
@@ -339,6 +341,17 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // What each paired device is playing; positions count on from receivedAt.
+  const [peerMedia, setPeerMedia] = useState<{ states: Record<string, MediaState>; receivedAt: number }>({ states: {}, receivedAt: 0 });
+  useEffect(() => {
+    Promise.resolve().then(() => GetPeerMedia()).then((m: Record<string, MediaState>) => setPeerMedia({ states: m || {}, receivedAt: Date.now() })).catch(() => {});
+  }, []);
+  const handleMediaAction = useCallback((device: string, player: string, action: string, value = 0) => {
+    Promise.resolve()
+      .then(() => PeerMediaAction(device, player, action, value))
+      .catch((e: any) => setErrorMsg(String(e?.message || e)));
+  }, []);
+
   const [hotspotOn, setHotspotOn] = useState(false);
   useEffect(() => {
     Promise.resolve().then(() => GetHotspotActive()).then((on: boolean) => setHotspotOn(!!on)).catch(() => {});
@@ -400,6 +413,7 @@ const App: React.FC = () => {
     if (!win.runtime) return;
 
     win.runtime.EventsOn('hotspot', (on: boolean) => setHotspotOn(!!on));
+    win.runtime.EventsOn('peer_media', (m: Record<string, MediaState>) => setPeerMedia({ states: m || {}, receivedAt: Date.now() }));
 
     win.runtime.EventsOn('peers_changed', (newPeers: Peer[]) => {
       setPeers(newPeers);
@@ -778,6 +792,9 @@ const App: React.FC = () => {
           onPing={handlePing}
           onShareWifi={handleShareWifi}
           onShareInternet={handleShareInternet}
+          media={peerMedia.states[openPeer.deviceName]}
+          mediaReceivedAt={peerMedia.receivedAt}
+          onMediaAction={(player: string, action: string, value?: number) => handleMediaAction(openPeer.deviceName, player, action, value)}
           hotspotOn={hotspotOn}
           notificationCount={phoneNotes.length}
           onShowNotifications={() => {

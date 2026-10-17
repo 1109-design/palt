@@ -30,7 +30,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FolderOpenIcon from '@mui/icons-material/FolderOpenOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import PlayArrowIcon from '@mui/icons-material/PlayArrowRounded';
-import type { DeviceStatus, Peer } from '../types/peer';
+import type { DeviceStatus, MediaState, Peer } from '../types/peer';
 import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
@@ -41,6 +41,7 @@ import WavingHandIcon from '@mui/icons-material/WavingHand';
 import WifiIcon from '@mui/icons-material/Wifi';
 import RouterIcon from '@mui/icons-material/Router';
 import DeviceStatusPanel from './DeviceStatusPanel';
+import PeerMediaCard from './PeerMediaCard';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
 import RouteBadge, { routeLabel } from './RouteBadge';
@@ -77,6 +78,9 @@ interface DevicePageProps {
   onShareWifi: (peer: Peer) => void;
   onShareInternet: (peer: Peer) => void;
   hotspotOn: boolean;
+  media?: MediaState;
+  mediaReceivedAt?: number;
+  onMediaAction: (player: string, action: string, value?: number) => void;
   /** Number of the phone's current notifications; opens the drawer. */
   notificationCount: number;
   onShowNotifications: () => void;
@@ -512,6 +516,9 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onShareWifi,
   onShareInternet,
   hotspotOn,
+  media,
+  mediaReceivedAt,
+  onMediaAction,
   notificationCount,
   onShowNotifications,
   settings,
@@ -751,6 +758,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
         {paired && (
           <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 3 }, pb: 2, mt: -1 }}>
             <DeviceStatusPanel status={status} peer={peer} online={online} />
+            {online && <PeerMediaCard device={peer.deviceName} state={media} receivedAt={mediaReceivedAt} onAction={onMediaAction} />}
           </Box>
         )}
       </Box>

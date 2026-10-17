@@ -23,6 +23,7 @@ import '../../providers/auto_copy_provider.dart';
 import '../../features/device_actions.dart';
 import '../../features/phone_features.dart';
 import '../widgets/device_status.dart';
+import 'media_screen.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/peer_provider.dart';
 import '../../services/transfer_service.dart';
@@ -174,7 +175,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         // Paired devices get a status panel and quick actions under the title.
         bottom: paired
             ? PreferredSize(
-                preferredSize: const Size.fromHeight(186),
+                preferredSize: const Size.fromHeight(262),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   child: Column(
@@ -191,6 +192,14 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                         (icon: Icons.notifications_active_rounded, label: 'Ring', onTap: online ? () => sendDevicePacket(context, ref, peer, 'ring') : null),
                         (icon: Icons.waving_hand_rounded, label: 'Ping', onTap: online ? () => sendDevicePacket(context, ref, peer, 'user_ping') : null),
                         (icon: Icons.wifi_rounded, label: 'Wi-Fi', onTap: online ? () => shareWifiTo(context, peer) : null),
+                        (
+                          icon: Icons.play_circle_outline_rounded,
+                          label: 'Media',
+                          onTap: online
+                              ? () => Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => MediaScreen(device: peer.deviceName)))
+                              : null
+                        ),
                         (
                           icon: Icons.router_rounded,
                           label: 'Internet',

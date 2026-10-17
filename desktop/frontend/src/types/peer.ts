@@ -72,3 +72,31 @@ export interface ClipboardHelper {
   running: boolean;
   installed: boolean;
 }
+
+/** One app playing media on a device (Go MediaPlayer). */
+export interface MediaPlayer {
+  id: string;
+  name: string;
+  title: string;
+  artist: string;
+  album: string;
+  /** web URL or data: URL, '' none */
+  art: string;
+  playing: boolean;
+  canNext: boolean;
+  canPrev: boolean;
+  canSeek: boolean;
+  canControl: boolean;
+  /** ms, as of when the state arrived */
+  position: number;
+  /** ms, 0 unknown */
+  length: number;
+  volume: number;
+}
+
+/** What a device reports about its media (Go MediaState). */
+export interface MediaState {
+  players: MediaPlayer[];
+  volume: { level: number; muted: boolean };
+  at: number;
+}
