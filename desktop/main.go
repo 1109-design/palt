@@ -12,6 +12,7 @@ import (
 	"embed"
 	"os"
 	"slices"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -36,9 +37,14 @@ func main() {
 
 	// With a tray to come back from, closing the window keeps PALT running,
 	// and the login entry starts it straight in the tray.
-	app.trayEnabled = trayAvailable()
 	cliCommand := len(os.Args) > 1 && (os.Args[1] == "--send" || os.Args[1] == "--ring")
-	startHidden := app.trayEnabled && (slices.Contains(os.Args[1:], startHiddenFlag) || cliCommand)
+	wantHidden := slices.Contains(os.Args[1:], startHiddenFlag) || cliCommand
+	if wantHidden {
+		app.trayEnabled = waitForTray(30 * time.Second)
+	} else {
+		app.trayEnabled = trayAvailable()
+	}
+	startHidden := app.trayEnabled && wantHidden
 	app.windowHidden.Store(startHidden)
 
 	err := wails.Run(&options.App{

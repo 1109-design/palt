@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -72,7 +73,31 @@ func installClipboardHelper() error {
 	// Turning user extensions on is a GNOME setting; enabling ours adds it
 	// to the enabled list (takes effect once the shell has loaded it).
 	exec.Command("gsettings", "set", "org.gnome.shell", "disable-user-extensions", "false").Run()
-	return exec.Command("gnome-extensions", "enable", clipHelperUUID).Run()
+	if exec.Command("gnome-extensions", "enable", clipHelperUUID).Run() == nil {
+		return nil
+	}
+	// The shell only learns about a new extension at login, and until then
+	// gnome-extensions refuses to enable it, so add it to the list directly.
+	return enableExtensionAtLogin(clipHelperUUID)
+}
+
+// enableExtensionAtLogin adds uuid to GNOME's enabled-extensions list.
+func enableExtensionAtLogin(uuid string) error {
+	out, err := exec.Command("gsettings", "get", "org.gnome.shell", "enabled-extensions").Output()
+	if err != nil {
+		return err
+	}
+	list := strings.TrimSpace(string(out))
+	if strings.Contains(list, "'"+uuid+"'") {
+		return nil
+	}
+	list = strings.TrimSuffix(strings.TrimPrefix(list, "@as "), "]")
+	if strings.TrimSpace(list) == "[" {
+		list = "['" + uuid + "']"
+	} else {
+		list += ", '" + uuid + "']"
+	}
+	return exec.Command("gsettings", "set", "org.gnome.shell", "enabled-extensions", list).Run()
 }
 
 // watchClipboard calls onChange with each new clipboard text.

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"fyne.io/systray"
 	"github.com/godbus/dbus/v5"
@@ -47,6 +48,23 @@ func trayAvailable() bool {
 	var owned bool
 	err = conn.BusObject().Call("org.freedesktop.DBus.NameHasOwner", 0, "org.kde.StatusNotifierWatcher").Store(&owned)
 	return err == nil && owned
+}
+
+// waitForTray is trayAvailable that gives the tray host up to timeout to
+// appear. At login PALT can start before GNOME Shell's AppIndicator
+// extension, and without the wait it would open its window and skip the tray.
+func waitForTray(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if trayAvailable() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			log.Printf("[tray] No tray host after %v", timeout)
+			return false
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 }
 
 // signalRunningInstance hands this launch to an instance that is already

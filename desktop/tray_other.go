@@ -3,11 +3,15 @@
 // tray_other.go: the tray and start on login are Linux-only for now.
 package main
 
+import "time"
+
 const startHiddenFlag = "--hidden"
 
 type trayState struct{}
 
 func trayAvailable() bool { return false }
+
+func waitForTray(time.Duration) bool { return false }
 
 func signalRunningInstance(string) bool { return false }
 
