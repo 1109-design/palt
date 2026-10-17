@@ -238,16 +238,26 @@ class DiscoveryService {
         if (query) 'q': true,
       }));
 
-  void _query() {
+  Future<void> _query() async {
     final udp = _udp;
     if (udp == null) return;
     final msg = _beaconMsg(query: true);
     final targets = {'255.255.255.255'};
-    // The subnet broadcast too: some routers only pass that one.
-    final ip = InternetAddress.tryParse(_localIp);
-    if (ip != null && ip.type == InternetAddressType.IPv4) {
-      final b = ip.rawAddress;
-      targets.add('${b[0]}.${b[1]}.${b[2]}.255');
+    // Each network's own broadcast too: 255.255.255.255 leaves through one
+    // interface only (Wi-Fi and a USB cable can both be up), and some
+    // routers only pass the subnet broadcast.
+    final ips = <String>{_localIp};
+    try {
+      for (final i in await NetworkInterface.list(type: InternetAddressType.IPv4)) {
+        ips.addAll(i.addresses.map((a) => a.address));
+      }
+    } catch (_) {}
+    for (final s in ips) {
+      final ip = InternetAddress.tryParse(s);
+      if (ip != null && ip.type == InternetAddressType.IPv4 && !ip.isLoopback) {
+        final b = ip.rawAddress;
+        targets.add('${b[0]}.${b[1]}.${b[2]}.255');
+      }
     }
     for (final t in targets) {
       try {

@@ -46,6 +46,9 @@ type knownDevice struct {
 	Name     string    `json:"name"`
 	OS       string    `json:"os"`
 	LastIP   string    `json:"lastIp,omitempty"`
+	// LanIP is the last address reached other than over a USB cable, tried
+	// when the device says it is back on Wi-Fi but discovery hasn't seen it.
+	LanIP    string    `json:"lanIp,omitempty"`
 	LastSeen time.Time `json:"lastSeen"`
 }
 
@@ -75,6 +78,9 @@ func (a *App) rememberDevice(l *link.Link) {
 	d.Name, d.OS, d.LastSeen = l.Peer.Name, l.Peer.OS, time.Now()
 	if ip := l.RemoteIP(); ip != "" {
 		d.LastIP = ip
+		if pathKind(ip) != "usb" {
+			d.LanIP = ip
+		}
 	}
 	devices[l.Peer.ID] = d
 	if f := knownDevicesFile(); f != "" {
@@ -189,6 +195,10 @@ func (a *App) runConnector() {
 				if c := get(id); len(c.lan) == 0 {
 					c.addLAN(d.LastIP, paltPort)
 				}
+			}
+			// Back on Wi-Fi but not seen there yet: try where it was before.
+			if d.LanIP != "" && id != self && a.statusOf(d.Name).Network == "wifi" {
+				get(id).addLAN(d.LanIP, paltPort)
 			}
 		}
 
