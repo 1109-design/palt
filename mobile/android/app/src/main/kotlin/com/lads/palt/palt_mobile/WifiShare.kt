@@ -133,6 +133,15 @@ class WifiAddActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        // Saved, but apps can't switch Wi-Fi on (Android 10+): show the
+        // Wi-Fi panel so one tap turns it on and the phone joins.
+        if (requestCode == 1 && !getSystemService(android.net.wifi.WifiManager::class.java).isWifiEnabled) {
+            try {
+                startActivity(Intent(Settings.Panel.ACTION_WIFI))
+            } catch (_: Exception) {
+                WifiShare.openWifiSettings(this)
+            }
+        }
         finish()
     }
 }
