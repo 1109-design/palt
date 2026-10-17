@@ -30,6 +30,10 @@ import (
 	"time"
 )
 
+// conflictProbe is how long an old link has to answer when a new one to the
+// same device would lose to it.
+const conflictProbe = 2 * time.Second
+
 const (
 	maxPacket    = 1 << 20
 	pingInterval = 20 * time.Second
@@ -367,7 +371,18 @@ func (m *Manager) register(l *Link, selfID string) bool {
 	}
 	if old != nil && !better(l, old, selfID) {
 		m.mu.Unlock()
-		return false
+		// The peer only dials again when it lost the old link (its network
+		// changed), so check that the old one still works before refusing.
+		if old.Probe(conflictProbe) {
+			return false
+		}
+		log.Printf("[link] %s: old link stopped answering, taking the new one", l.Peer.Name)
+		old.Close()
+		m.mu.Lock()
+		if cur := m.links[l.Peer.ID]; cur != nil && cur != old {
+			m.mu.Unlock()
+			return false
+		}
 	}
 	m.links[l.Peer.ID] = l
 	m.mu.Unlock()

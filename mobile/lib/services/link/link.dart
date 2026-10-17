@@ -242,8 +242,13 @@ class LinkManager {
 
     final old = _links[l.peer.id];
     if (old != null && !old.isClosed && !_better(l, old, me.id)) {
-      l.close();
-      throw StateError('already linked');
+      // The peer only dials again when it lost the old link (its network
+      // changed), so check that the old one still works before refusing.
+      if (await old.probe(const Duration(seconds: 2)) || _links[l.peer.id] != old) {
+        l.close();
+        throw StateError('already linked');
+      }
+      _log('${l.peer.name}: old link stopped answering, taking the new one');
     }
     _links[l.peer.id] = l;
     old?.close();

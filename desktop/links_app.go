@@ -155,6 +155,7 @@ func (a *App) runConnector() {
 	}
 	var mu sync.Mutex
 	states := map[string]*state{}
+	probed := map[string]time.Time{} // when a link was last checked for a stale path
 
 	t := time.NewTicker(connectInterval)
 	defer t.Stop()
@@ -196,6 +197,18 @@ func (a *App) runConnector() {
 			switch {
 			case l == nil:
 			case l.Route == link.RouteDirect:
+				// The device showing up at another address can mean its old
+				// path died (its Wi-Fi went off) without this side noticing.
+				if c.seen && len(c.lan) > 1 && time.Since(probed[id]) > 10*time.Second {
+					probed[id] = time.Now()
+					go func(l *link.Link) {
+						if !l.Probe(probeLinkTimeout) {
+							log.Printf("[link] %s stopped answering; reconnecting", l.Peer.Name)
+							l.Close()
+							a.kickConnector()
+						}
+					}(l)
+				}
 				// Move to a clearly faster path (a USB cable or Wi-Fi).
 				if c.lan = c.switchTo(l); len(c.lan) == 0 {
 					continue
