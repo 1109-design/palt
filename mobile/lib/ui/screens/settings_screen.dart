@@ -18,7 +18,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBindingObserver {
   bool _access = true;
-  bool _autoClip = false;
+  bool _autoLogs = false;
+  bool _autoOnTop = false;
 
   @override
   void initState() {
@@ -40,14 +41,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
 
   Future<void> _check() async {
     final ok = await hasNotificationAccess();
-    var auto = false;
+    var logs = false, onTop = false;
     try {
-      auto = await const MethodChannel('palt/clipboard').invokeMethod<bool>('autoAvailable') ?? false;
+      final r = await const MethodChannel('palt/clipboard').invokeMethod<Map>('autoAvailable');
+      logs = r?['logs'] == true;
+      onTop = r?['onTop'] == true;
     } catch (_) {}
     if (mounted) {
       setState(() {
         _access = ok;
-        _autoClip = auto;
+        _autoLogs = logs;
+        _autoOnTop = onTop;
       });
     }
   }
@@ -91,15 +95,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
             contentPadding: EdgeInsets.zero,
             title: const Text('Send this phone\'s clipboard', style: TextStyle(color: kText)),
             subtitle: Text(
-                _autoClip
+                _autoLogs && _autoOnTop
                     ? 'Automatically, whenever you copy something'
-                    : 'When you open PALT, from the "Send clipboard" button on its notification, '
-                        'or the Quick Settings tile. For automatic: connect by USB and run '
-                        'adb shell pm grant com.h200137j.palt.palt_mobile android.permission.READ_LOGS',
+                    : _autoLogs
+                        ? 'Almost automatic: allow "Appear on top" below to finish'
+                        : 'When you open PALT, from the "Send clipboard" button on its notification, '
+                            'or the Quick Settings tile. For automatic: connect by USB and run '
+                            'adb shell pm grant com.h200137j.palt.palt_mobile android.permission.READ_LOGS',
                 style: const TextStyle(color: kTextSecondary, fontSize: 12.5)),
             value: clip.send,
             onChanged: ref.read(clipboardSettingsProvider.notifier).setSend,
           ),
+          if (_autoLogs && !_autoOnTop)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.layers_rounded, color: kRelay),
+              title: const Text('Allow "Appear on top"', style: TextStyle(color: kText)),
+              subtitle: const Text('Lets PALT read a copy the moment you make it',
+                  style: TextStyle(color: kTextSecondary, fontSize: 12.5)),
+              trailing: const Icon(Icons.open_in_new_rounded, size: 18, color: kTextFaint),
+              onTap: () => const MethodChannel('palt/clipboard').invokeMethod('openAppearOnTop'),
+            ),
           const SizedBox(height: 18),
           Text('NOTIFICATIONS ON YOUR COMPUTER', style: overline()),
           const SizedBox(height: 8),

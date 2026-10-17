@@ -182,7 +182,19 @@ object Channels {
                 "get" -> result.success(ClipboardBridge.get(app))
                 "autoAvailable" -> {
                     ClipboardWatcher.start(app)
-                    result.success(ClipboardWatcher.available(app))
+                    result.success(
+                        mapOf(
+                            "logs" to ClipboardWatcher.available(app),
+                            "onTop" to ClipboardWatcher.canAppearOnTop(app),
+                        )
+                    )
+                }
+                "openAppearOnTop" -> {
+                    app.startActivity(
+                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${app.packageName}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                    result.success(null)
                 }
                 else -> result.notImplemented()
             }

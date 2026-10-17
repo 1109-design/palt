@@ -28,6 +28,9 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <!-- Granted only over adb; lets PALT notice copies (ClipboardWatcher). -->
     <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
+    <!-- "Appear on top": lets the copy watcher open its invisible clipboard
+         reader from the background (Android blocks that otherwise). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Who is calling, for the computer -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />

@@ -55,6 +55,9 @@ object ClipboardBridge {
  * Since Android 13 a log reader sees other apps' lines only after the user
  * allows it in a prompt that appears only while PALT is on screen, so
  * [start] is called from MainActivity and the reader is kept running.
+ * Opening the reader from the background also needs "Appear on top"
+ * (SYSTEM_ALERT_WINDOW), which exempts PALT from Android's block on
+ * background activity starts.
  */
 object ClipboardWatcher {
     private const val TAG = "PaltClipboard"
@@ -64,6 +67,8 @@ object ClipboardWatcher {
 
     fun available(context: Context) =
         context.checkSelfPermission(Manifest.permission.READ_LOGS) == PackageManager.PERMISSION_GRANTED
+
+    fun canAppearOnTop(context: Context) = android.provider.Settings.canDrawOverlays(context)
 
     @Synchronized
     fun start(context: Context) {
