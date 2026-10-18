@@ -21,6 +21,8 @@ export function CopyFromHistory(arg1:string):Promise<void>;
 
 export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
 
+export function DisableUnlock():Promise<void>;
+
 export function DismissPhoneNotification(arg1:string,arg2:string):Promise<void>;
 
 export function EndCall(arg1:string):Promise<void>;
@@ -77,6 +79,8 @@ export function GetStartupError():Promise<string>;
 
 export function GetThread(arg1:string,arg2:number,arg3:number):Promise<Array<main.SMSMessage>>;
 
+export function GetUnlockStatus():Promise<main.UnlockStatus>;
+
 export function GetZoom():Promise<number>;
 
 export function InstallClipboardHelper():Promise<void>;
@@ -132,6 +136,8 @@ export function SetDeviceSetting(arg1:string,arg2:string,arg3:boolean):Promise<v
 export function SetRelayServer(arg1:string):Promise<void>;
 
 export function SetZoom(arg1:number):Promise<boolean>;
+
+export function SetupUnlock(arg1:string):Promise<void>;
 
 export function ShareInternet(arg1:string):Promise<void>;
 

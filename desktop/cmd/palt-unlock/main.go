@@ -240,7 +240,8 @@ func install(keyFile string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := trustedSelf(); err != nil {
+	self, err := trustedSelf()
+	if err != nil {
 		return err
 	}
 	b, err := os.ReadFile(keyFile)
@@ -263,7 +264,7 @@ func install(keyFile string) error {
 	if err := os.Rename(tmp, filepath.Join(keyDir, name+".pub")); err != nil {
 		return err
 	}
-	return addPAM()
+	return addPAM(self)
 }
 
 func uninstall() error {
@@ -319,19 +320,18 @@ func trustedSelf() (string, error) {
 	}
 }
 
-func addPAM() error {
-	self, err := trustedSelf()
-	if err != nil {
-		return err
-	}
+// Where PAM reads its services: /etc overrides the system defaults.
+var pamDir, vendorPamDir = "/etc/pam.d", "/usr/lib/pam.d"
+
+func addPAM(self string) error {
 	for _, svc := range services {
-		path := filepath.Join("/etc/pam.d", svc)
+		path := filepath.Join(pamDir, svc)
 		data, err := os.ReadFile(path)
 		created := false
 		if errors.Is(err, os.ErrNotExist) {
 			// Newer systems keep defaults in /usr/lib/pam.d; a copy in
 			// /etc/pam.d overrides it.
-			data, err = os.ReadFile(filepath.Join("/usr/lib/pam.d", svc))
+			data, err = os.ReadFile(filepath.Join(vendorPamDir, svc))
 			created = true
 		}
 		if err != nil {
@@ -368,7 +368,7 @@ func addPAM() error {
 
 func removePAM() error {
 	for _, svc := range services {
-		path := filepath.Join("/etc/pam.d", svc)
+		path := filepath.Join(pamDir, svc)
 		data, err := os.ReadFile(path)
 		if err != nil || !strings.Contains(string(data), pamMarker) {
 			continue

@@ -38,6 +38,10 @@ export function DeleteHistoryEntry(arg1, arg2) {
   return window['go']['main']['App']['DeleteHistoryEntry'](arg1, arg2);
 }
 
+export function DisableUnlock() {
+  return window['go']['main']['App']['DisableUnlock']();
+}
+
 export function DismissPhoneNotification(arg1, arg2) {
   return window['go']['main']['App']['DismissPhoneNotification'](arg1, arg2);
 }
@@ -150,6 +154,10 @@ export function GetThread(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetThread'](arg1, arg2, arg3);
 }
 
+export function GetUnlockStatus() {
+  return window['go']['main']['App']['GetUnlockStatus']();
+}
+
 export function GetZoom() {
   return window['go']['main']['App']['GetZoom']();
 }
@@ -260,6 +268,10 @@ export function SetRelayServer(arg1) {
 
 export function SetZoom(arg1) {
   return window['go']['main']['App']['SetZoom'](arg1);
+}
+
+export function SetupUnlock(arg1) {
+  return window['go']['main']['App']['SetupUnlock'](arg1);
 }
 
 export function ShareInternet(arg1) {

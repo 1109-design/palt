@@ -226,6 +226,24 @@ export namespace main {
 	        this.subscription = source["subscription"];
 	    }
 	}
+	export class UnlockStatus {
+	    supported: boolean;
+	    enabled: boolean;
+	    device: string;
+	    deviceId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UnlockStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.supported = source["supported"];
+	        this.enabled = source["enabled"];
+	        this.device = source["device"];
+	        this.deviceId = source["deviceId"];
+	    }
+	}
 	export class UpdateInfo {
 	    isNewer: boolean;
 	    latestVersion: string;
