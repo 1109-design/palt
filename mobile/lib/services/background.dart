@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/link_provider.dart';
 import '../providers/peer_provider.dart';
 import '../providers/relay_provider.dart';
+import '../features/bluetooth.dart';
 import '../features/calls.dart';
 import '../features/clipboard.dart';
 import '../features/media.dart';
@@ -69,6 +70,7 @@ void startCore(ProviderContainer c) {
   setupMessages(c);
   setupUnlock(c);
   setupPhoneFiles(c);
+  setupBluetooth(c);
 
   // Keep the notification saying who is connected.
   void showLinks(List<Link> links) {

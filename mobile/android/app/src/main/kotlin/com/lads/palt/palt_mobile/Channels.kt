@@ -349,6 +349,25 @@ object Channels {
             mainThread.post { files.invokeMethod("sendWifi", mapOf("path" to path, "computer" to computer)) }
         }
 
+        // palt/bluetooth: this phone's Bluetooth for computers
+        // (lib/features/bluetooth.dart). Changes are pushed as "changed".
+        val bt = MethodChannel(messenger, "palt/bluetooth")
+        bt.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "state" -> {
+                    BluetoothInfo.watch(app)
+                    result.success(BluetoothInfo.state(app))
+                }
+                "set" -> try {
+                    result.success(BluetoothInfo.set(app, call.argument<Boolean>("on") ?: false))
+                } catch (e: Exception) {
+                    result.error("bluetooth", e.message ?: e.toString(), null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        BluetoothInfo.onChange = { mainThread.post { bt.invokeMethod("changed", null) } }
+
         // palt/unlock: fingerprint unlock for computers (lib/features/unlock.dart).
         MethodChannel(messenger, "palt/unlock").setMethodCallHandler { call, result ->
             val computer = call.argument<String>("computer") ?: ""

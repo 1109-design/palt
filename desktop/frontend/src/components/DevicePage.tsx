@@ -57,6 +57,7 @@ import { networkLabel } from './DeviceStatusChip';
 import NowPlaying from './NowPlaying';
 import UnlockMenuItem from './UnlockMenuItem';
 import WakeMenuItem from './WakeMenuItem';
+import BluetoothPanel from './BluetoothPanel';
 import PhoneFilesDialog from './PhoneFilesDialog';
 import CommandsDialog from './CommandsDialog';
 
@@ -827,6 +828,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
       </Button>
 
       <Vitals status={status} peer={peer} online={online} />
+      {online && <BluetoothPanel device={peer.deviceName} />}
     </Box>
   );
 

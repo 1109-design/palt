@@ -149,6 +149,7 @@ func (a *App) startup(ctx context.Context) {
 	a.setupCommands()
 	a.setupKeepAwake()
 	a.setupProximityLock()
+	a.setupBluetooth()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {

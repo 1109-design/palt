@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:math';
 
+import '../../features/bluetooth.dart';
 import '../../features/phone_features.dart';
 
 import '../../providers/peer_provider.dart';
@@ -60,7 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (offer != null) _showOfferSheet(offer);
       final intake = ref.read(intakeProvider);
       if (intake != null) _handleIntake(intake);
-      _askPhonePermission().then((_) => _askSmsPermission());
+      _askPhonePermission().then((_) => _askSmsPermission()).then((_) => _askBluetoothPermission());
     });
   }
 
@@ -81,6 +82,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await prefs.setBool('palt_asked_sms_calls_perms', true);
     // Phone covers calling, answering and the call log.
     await [Permission.sms, Permission.contacts, Permission.phone].request();
+  }
+
+  /// Names and batteries of connected Bluetooth devices, for computers.
+  /// Asked once.
+  Future<void> _askBluetoothPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('palt_asked_bluetooth_perm') == true) return;
+    await prefs.setBool('palt_asked_bluetooth_perm', true);
+    await Permission.bluetoothConnect.request();
+    refreshBluetooth();
   }
 
   void _handleIntake(Map<String, dynamic> m) {
