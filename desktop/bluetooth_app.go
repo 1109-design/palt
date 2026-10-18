@@ -36,6 +36,9 @@ type BluetoothState struct {
 	Available bool              `json:"available"` // has a Bluetooth adapter
 	On        bool              `json:"on"`
 	Devices   []BluetoothDevice `json:"devices"` // connected ones
+	// Hidden: a phone without the "Nearby devices" permission can't list
+	// what's connected.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 var peerBluetooth = struct {

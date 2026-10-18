@@ -77,7 +77,8 @@ object BluetoothInfo {
             } catch (_: SecurityException) {
             }
         }
-        return mapOf("available" to true, "on" to on, "devices" to devices)
+        // Without "Nearby devices" the connected ones can't be listed.
+        return mapOf("available" to true, "on" to on, "devices" to devices, "hidden" to (on && !canConnect(context)))
     }
 
     // isConnected and getBatteryLevel are hidden but allowed APIs.

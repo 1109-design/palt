@@ -75,6 +75,8 @@ export function GetMediaPreview(arg1:string,arg2:string):Promise<main.MediaPrevi
 
 export function GetPairing():Promise<main.PairingInfo>;
 
+export function GetPeerBluetooth(arg1:string):Promise<main.BluetoothState>;
+
 export function GetPeerMedia():Promise<Record<string, main.MediaState>>;
 
 export function GetPeers():Promise<Array<models.Peer>>;
@@ -156,6 +158,8 @@ export function SetAlias(arg1:string,arg2:string):Promise<void>;
 export function SetAutoCopy(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetDeviceSetting(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function SetPeerBluetooth(arg1:string,arg2:boolean):Promise<string>;
 
 export function SetRelayServer(arg1:string):Promise<void>;
 

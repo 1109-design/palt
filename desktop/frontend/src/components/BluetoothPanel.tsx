@@ -22,6 +22,7 @@ interface BluetoothState {
   available: boolean;
   on: boolean;
   devices: { name: string; kind: string; battery: number }[];
+  hidden?: boolean;
 }
 
 const kindIcon = (kind: string) => {
@@ -65,7 +66,14 @@ const BluetoothPanel: React.FC<{ device: string }> = ({ device }) => {
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: '0.9rem', fontWeight: 700 }}>Bluetooth</Typography>
           <Typography sx={{ fontSize: '0.76rem', color: beacon.textSecondary }}>
-            {note || (!st.on ? 'Off' : st.devices.length === 0 ? 'On · nothing connected' : `On · ${st.devices.length} connected`)}
+            {note ||
+              (!st.on
+                ? 'Off'
+                : st.hidden
+                  ? `On · allow “Nearby devices” for PALT on ${device} to see what's connected`
+                  : st.devices.length === 0
+                    ? 'On · nothing connected'
+                    : `On · ${st.devices.length} connected`)}
           </Typography>
         </Box>
         <Switch checked={st.on} onChange={toggle} />

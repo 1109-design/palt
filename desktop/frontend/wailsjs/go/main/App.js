@@ -146,6 +146,10 @@ export function GetPairing() {
   return window['go']['main']['App']['GetPairing']();
 }
 
+export function GetPeerBluetooth(arg1) {
+  return window['go']['main']['App']['GetPeerBluetooth'](arg1);
+}
+
 export function GetPeerMedia() {
   return window['go']['main']['App']['GetPeerMedia']();
 }
@@ -308,6 +312,10 @@ export function SetAutoCopy(arg1, arg2) {
 
 export function SetDeviceSetting(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetDeviceSetting'](arg1, arg2, arg3);
+}
+
+export function SetPeerBluetooth(arg1, arg2) {
+  return window['go']['main']['App']['SetPeerBluetooth'](arg1, arg2);
 }
 
 export function SetRelayServer(arg1) {
