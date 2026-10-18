@@ -3,7 +3,7 @@
   <br/><br/>
   <h1>PALT</h1>
   <p><b>P</b>eer <b>A</b>nd <b>L</b>ocal <b>T</b>ransfer</p>
-  <p>Frictionless, high-speed local network file transfer — Linux Desktop and Android.</p>
+  <p>Frictionless, high-speed local network file transfer — Linux and macOS Desktop, and Android.</p>
 
   [![CI/CD](https://github.com/h200137j/palt/actions/workflows/release.yml/badge.svg)](https://github.com/h200137j/palt/actions/workflows/release.yml)
 </div>
@@ -40,7 +40,7 @@ Full spec in [`design.md`](design.md).
 
 - **Blazing Fast TCP:** Core transfer runs strictly over local interfaces — unthrottled, no cloud hops.
 - **Zero-Config Discovery:** ZeroConf / mDNS (`_palt._tcp.local.`) — devices see each other the moment the app opens.
-- **Cross-Platform:** Linux Desktop (Wails + React + MUI) and Android (Flutter + Material 3 + Riverpod).
+- **Cross-Platform:** Linux and macOS Desktop (Wails + React + MUI) and Android (Flutter + Material 3 + Riverpod).
 - **Drag & Drop:** Drop files straight onto a device card on desktop to send them.
 - **Inbound Safety:** Manual accept/reject handshake on every incoming transfer.
 - **Native Downloads:** Received files land directly in the Android public `Downloads` directory.
@@ -53,10 +53,10 @@ Full spec in [`design.md`](design.md).
 
 ```
 palt/
-├── .github/workflows/     # CI/CD — .apk and .deb release automation
+├── .github/workflows/     # CI/CD — .apk, .deb and macOS .zip release automation
 ├── assets/                # Shared assets (icon.svg source)
 ├── relay/                 # palt-relay server (optional, for remote transfers)
-├── desktop/               # Wails Linux app
+├── desktop/               # Wails desktop app (Linux, macOS)
 │   ├── main.go
 │   ├── app.go             # Wails bindings
 │   └── internal/
@@ -93,6 +93,27 @@ go mod tidy
 wails dev -tags webkit2_41          # dev mode (live reload)
 wails build -platform linux/amd64 -tags webkit2_41  # release binary
 ```
+
+### Desktop (macOS)
+
+Needs the Xcode Command Line Tools (`xcode-select --install`).
+
+```bash
+cd desktop
+wails dev                                # dev mode (live reload)
+wails build -platform darwin/universal   # build/bin/palt.app (Intel + Apple silicon)
+```
+
+Release builds are ad-hoc signed, not notarized: the first time, right-click
+`PALT.app` → **Open**, or run `xattr -dr com.apple.quarantine PALT.app`.
+macOS asks for **Local Network** access on first launch — allow it, or PALT
+can't see your devices.
+
+On macOS, sending/receiving files, chat, clipboard sync, media volume,
+battery/network status, keep-awake and joining shared Wi-Fi work.
+Notifications have no action buttons (answer in the window), and the tray,
+start on login, Bluetooth, USB, hotspot, media players and fingerprint
+unlock are still Linux-only.
 
 ### Mobile (Android)
 
