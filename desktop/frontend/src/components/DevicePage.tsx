@@ -16,7 +16,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Typography, IconButton, Tooltip, Button, InputBase, CircularProgress, Switch,
-  Menu, MenuItem, ListItemIcon, ListItemText, Skeleton, Slider, Badge,
+  Menu, MenuItem, ListItemIcon, ListItemText, Skeleton, Badge,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -33,12 +33,6 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FolderOpenIcon from '@mui/icons-material/FolderOpenOutlined';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import PlayArrowIcon from '@mui/icons-material/PlayArrowRounded';
-import PauseIcon from '@mui/icons-material/PauseRounded';
-import SkipNextIcon from '@mui/icons-material/SkipNextRounded';
-import SkipPreviousIcon from '@mui/icons-material/SkipPreviousRounded';
-import VolumeUpIcon from '@mui/icons-material/VolumeUpRounded';
-import VolumeOffIcon from '@mui/icons-material/VolumeOffRounded';
-import MusicNoteIcon from '@mui/icons-material/MusicNoteRounded';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import NotificationsIcon from '@mui/icons-material/NotificationsOutlined';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -49,7 +43,7 @@ import SmsIcon from '@mui/icons-material/SmsOutlined';
 import CallIcon from '@mui/icons-material/CallOutlined';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutwardRounded';
 import BoltIcon from '@mui/icons-material/Bolt';
-import type { DeviceStatus, MediaPlayer, MediaState, Peer } from '../types/peer';
+import type { DeviceStatus, MediaState, Peer } from '../types/peer';
 import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
 import { useLayoutWidth } from '../utils/zoom';
@@ -57,6 +51,7 @@ import { beacon, fonts } from '../theme/theme';
 import { formatSize, formatTime, dayLabel } from './HistoryView';
 import RouteBadge, { routeColor, routeLabel } from './RouteBadge';
 import { networkLabel } from './DeviceStatusChip';
+import NowPlaying from './NowPlaying';
 
 /** Must match MaxTextBytes in internal/transfer/protocol.go */
 const MAX_TEXT_BYTES = 16 * 1024;
@@ -512,151 +507,6 @@ const Bubble: React.FC<{
 };
 
 // ── Control ─────────────────────────────────────────────────────────────────
-
-const clock = (ms: number) => {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = String(s % 60).padStart(2, '0');
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
-};
-
-/** What the device is playing: art, title, seek bar, transport, volume. */
-const NowPlaying: React.FC<{
-  device: string;
-  state?: MediaState;
-  receivedAt?: number;
-  onAction: (player: string, action: string, value?: number) => void;
-}> = ({ device, state, receivedAt, onAction }) => {
-  const [, tick] = useState(0);
-  const [seek, setSeek] = useState<number | null>(null);
-  const [vol, setVol] = useState<number | null>(null);
-  useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const players = state?.players ?? [];
-  const p: MediaPlayer | undefined = players.find((x) => x.playing) ?? players.find((x) => x.title);
-  if (!state || (!p && state.volume.level < 0)) return null;
-
-  const position = p
-    ? Math.min(p.position + (p.playing && receivedAt ? Date.now() - receivedAt : 0), p.length || Infinity)
-    : 0;
-  const transport = { color: beacon.text, '&.Mui-disabled': { color: beacon.textFaint } };
-
-  return (
-    <Box sx={{ p: 2, borderRadius: '22px', background: beacon.cardGradient, border: `1px solid ${beacon.hairline}` }}>
-      {p && (
-        <>
-          <Box sx={{ display: 'flex', gap: 1.75, alignItems: 'center' }}>
-            <Box
-              sx={{
-                width: 72,
-                height: 72,
-                borderRadius: '14px',
-                overflow: 'hidden',
-                flexShrink: 0,
-                backgroundColor: beacon.surfaceRaised,
-                display: 'grid',
-                placeItems: 'center',
-              }}
-            >
-              {p.art ? (
-                <img src={p.art} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <MusicNoteIcon sx={{ color: beacon.textFaint }} />
-              )}
-            </Box>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography
-                noWrap
-                sx={{ fontFamily: fonts.mono, fontSize: '0.62rem', letterSpacing: '0.08em', color: p.playing ? beacon.accent : beacon.textFaint, textTransform: 'uppercase' }}
-              >
-                {p.name} · on {device}
-              </Typography>
-              <Typography noWrap sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1.08rem', color: beacon.text, mt: 0.25 }}>
-                {p.title || 'Unknown'}
-              </Typography>
-              {p.artist && (
-                <Typography noWrap sx={{ fontSize: '0.82rem', color: beacon.textSecondary }}>
-                  {p.artist}
-                </Typography>
-              )}
-            </Box>
-          </Box>
-
-          {p.canSeek && p.length > 0 && (
-            <Box sx={{ mt: 1.5 }}>
-              <Slider
-                size="small"
-                value={seek ?? position}
-                max={p.length}
-                onChange={(_, v) => setSeek(v as number)}
-                onChangeCommitted={(_, v) => {
-                  onAction(p.id, 'seek', v as number);
-                  setTimeout(() => setSeek(null), 1000);
-                }}
-                aria-label="seek"
-                sx={{ py: 0.75, '& .MuiSlider-thumb': { width: 12, height: 12 } }}
-              />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: -0.5 }}>
-                <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', color: beacon.textFaint }}>{clock(seek ?? position)}</Typography>
-                <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.66rem', color: beacon.textFaint }}>{clock(p.length)}</Typography>
-              </Box>
-            </Box>
-          )}
-
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2.5, mt: 1 }}>
-            <IconButton disabled={!p.canPrev} onClick={() => onAction(p.id, 'previous')} aria-label="previous" sx={transport}>
-              <SkipPreviousIcon sx={{ fontSize: 30 }} />
-            </IconButton>
-            <IconButton
-              onClick={() => onAction(p.id, 'playpause')}
-              aria-label={p.playing ? 'pause' : 'play'}
-              sx={{
-                width: 56,
-                height: 56,
-                backgroundColor: beacon.accent,
-                color: beacon.onAccent,
-                '&:hover': { backgroundColor: beacon.accentHover },
-              }}
-            >
-              {p.playing ? <PauseIcon sx={{ fontSize: 30 }} /> : <PlayArrowIcon sx={{ fontSize: 30 }} />}
-            </IconButton>
-            <IconButton disabled={!p.canNext} onClick={() => onAction(p.id, 'next')} aria-label="next" sx={transport}>
-              <SkipNextIcon sx={{ fontSize: 30 }} />
-            </IconButton>
-          </Box>
-        </>
-      )}
-      {state.volume.level >= 0 && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mt: p ? 1.25 : 0 }}>
-          <Tooltip title={state.volume.muted ? `Unmute ${device}` : `Mute ${device}`}>
-            <IconButton size="small" onClick={() => onAction('', 'mute')} sx={{ color: state.volume.muted ? beacon.danger : beacon.textSecondary }}>
-              {state.volume.muted ? <VolumeOffIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-          <Slider
-            size="small"
-            value={vol ?? state.volume.level}
-            max={100}
-            onChange={(_, v) => setVol(v as number)}
-            onChangeCommitted={(_, v) => {
-              onAction('', 'volume', v as number);
-              setTimeout(() => setVol(null), 1000);
-            }}
-            aria-label={`${device} volume`}
-            sx={{ '& .MuiSlider-thumb': { width: 12, height: 12 } }}
-          />
-          <Typography sx={{ fontFamily: fonts.mono, fontSize: '0.7rem', color: beacon.textSecondary, minWidth: 32, textAlign: 'right' }}>
-            {Math.round(vol ?? state.volume.level)}%
-          </Typography>
-        </Box>
-      )}
-    </Box>
-  );
-};
 
 /** One square action in the Control grid. */
 const Tile: React.FC<{
