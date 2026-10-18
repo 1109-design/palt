@@ -154,6 +154,10 @@ export function GetPhoneNotifications(arg1) {
   return window['go']['main']['App']['GetPhoneNotifications'](arg1);
 }
 
+export function GetPhoneStorage(arg1) {
+  return window['go']['main']['App']['GetPhoneStorage'](arg1);
+}
+
 export function GetRelayStatus() {
   return window['go']['main']['App']['GetRelayStatus']();
 }

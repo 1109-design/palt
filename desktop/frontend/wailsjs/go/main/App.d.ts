@@ -79,6 +79,8 @@ export function GetPeers():Promise<Array<models.Peer>>;
 
 export function GetPhoneNotifications(arg1:string):Promise<Array<main.PhoneNotification>>;
 
+export function GetPhoneStorage(arg1:string):Promise<main.PhoneStorage>;
+
 export function GetRelayStatus():Promise<main.RelayStatus>;
 
 export function GetReleaseNotes(arg1:string):Promise<string>;

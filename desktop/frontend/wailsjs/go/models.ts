@@ -196,6 +196,30 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class PhoneMemory {
+	    total: number;
+	    available: number;
+	    low: boolean;
+	    threshold: number;
+	    cached: number;
+	    swapTotal: number;
+	    swapFree: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PhoneMemory(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.available = source["available"];
+	        this.low = source["low"];
+	        this.threshold = source["threshold"];
+	        this.cached = source["cached"];
+	        this.swapTotal = source["swapTotal"];
+	        this.swapFree = source["swapFree"];
+	    }
+	}
 	export class PhoneNotification {
 	    id: string;
 	    device: string;
@@ -225,6 +249,106 @@ export namespace main {
 	        this.replyable = source["replyable"];
 	        this.icon = source["icon"];
 	    }
+	}
+	export class StorageVolume {
+	    name: string;
+	    path: string;
+	    removable: boolean;
+	    total: number;
+	    free: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StorageVolume(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.removable = source["removable"];
+	        this.total = source["total"];
+	        this.free = source["free"];
+	    }
+	}
+	export class StorageItem {
+	    name: string;
+	    path: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StorageItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.size = source["size"];
+	    }
+	}
+	export class StorageKinds {
+	    images: number;
+	    videos: number;
+	    audio: number;
+	    documents: number;
+	    other: number;
+	    system: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StorageKinds(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.images = source["images"];
+	        this.videos = source["videos"];
+	        this.audio = source["audio"];
+	        this.documents = source["documents"];
+	        this.other = source["other"];
+	        this.system = source["system"];
+	    }
+	}
+	export class PhoneStorage {
+	    total: number;
+	    free: number;
+	    categories: StorageKinds;
+	    folders: StorageItem[];
+	    largest: StorageItem[];
+	    volumes: StorageVolume[];
+	    ram: PhoneMemory;
+	
+	    static createFrom(source: any = {}) {
+	        return new PhoneStorage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.free = source["free"];
+	        this.categories = this.convertValues(source["categories"], StorageKinds);
+	        this.folders = this.convertValues(source["folders"], StorageItem);
+	        this.largest = this.convertValues(source["largest"], StorageItem);
+	        this.volumes = this.convertValues(source["volumes"], StorageVolume);
+	        this.ram = this.convertValues(source["ram"], PhoneMemory);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class RelayStatus {
 	    configured: boolean;
@@ -296,6 +420,9 @@ export namespace main {
 	        this.subscription = source["subscription"];
 	    }
 	}
+	
+	
+	
 	export class UnlockStatus {
 	    supported: boolean;
 	    enabled: boolean;

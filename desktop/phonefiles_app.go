@@ -49,43 +49,52 @@ type PhoneFolder struct {
 	Access bool `json:"access"`
 }
 
+// StorageKinds splits used space by kind of file. Sizes are bytes.
+type StorageKinds struct {
+	Images    int64 `json:"images"`
+	Videos    int64 `json:"videos"`
+	Audio     int64 `json:"audio"`
+	Documents int64 `json:"documents"`
+	Other     int64 `json:"other"`
+	System    int64 `json:"system"` // apps, system and anything unindexed
+}
+
+// StorageItem is a folder or file and how much it takes.
+type StorageItem struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+// StorageVolume is another volume, like an SD card.
+type StorageVolume struct {
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Removable bool   `json:"removable"`
+	Total     int64  `json:"total"`
+	Free      int64  `json:"free"`
+}
+
+// PhoneMemory is the phone's RAM and swap.
+type PhoneMemory struct {
+	Total     int64 `json:"total"`
+	Available int64 `json:"available"`
+	Low       bool  `json:"low"`
+	Threshold int64 `json:"threshold"`
+	Cached    int64 `json:"cached"`
+	SwapTotal int64 `json:"swapTotal"`
+	SwapFree  int64 `json:"swapFree"`
+}
+
 // PhoneStorage is a phone's space and memory. Sizes are bytes.
 type PhoneStorage struct {
-	Total      int64 `json:"total"`
-	Free       int64 `json:"free"`
-	Categories struct {
-		Images    int64 `json:"images"`
-		Videos    int64 `json:"videos"`
-		Audio     int64 `json:"audio"`
-		Documents int64 `json:"documents"`
-		Other     int64 `json:"other"`
-		System    int64 `json:"system"` // apps, system and anything unindexed
-	} `json:"categories"`
-	Folders []struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
-		Size int64  `json:"size"`
-	} `json:"folders"`
-	Largest []struct {
-		Path string `json:"path"`
-		Size int64  `json:"size"`
-	} `json:"largest"`
-	Volumes []struct {
-		Name      string `json:"name"`
-		Path      string `json:"path"`
-		Removable bool   `json:"removable"`
-		Total     int64  `json:"total"`
-		Free      int64  `json:"free"`
-	} `json:"volumes"`
-	RAM struct {
-		Total     int64 `json:"total"`
-		Available int64 `json:"available"`
-		Low       bool  `json:"low"`
-		Threshold int64 `json:"threshold"`
-		Cached    int64 `json:"cached"`
-		SwapTotal int64 `json:"swapTotal"`
-		SwapFree  int64 `json:"swapFree"`
-	} `json:"ram"`
+	Total      int64           `json:"total"`
+	Free       int64           `json:"free"`
+	Categories StorageKinds    `json:"categories"`
+	Folders    []StorageItem   `json:"folders"`
+	Largest    []StorageItem   `json:"largest"`
+	Volumes    []StorageVolume `json:"volumes"`
+	RAM        PhoneMemory     `json:"ram"`
 }
 
 const (
