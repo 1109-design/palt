@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "PALT Now Playing",
+  "version": "1.0.0",
+  "description": "Tells your browser what show is playing on Netflix, so PALT (and your desktop's media controls) can show it instead of just \"Netflix\".",
+  "content_scripts": [
+    {
+      "matches": ["https://www.netflix.com/*"],
+      "js": ["netflix.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    }
+  ]
+}
