@@ -286,6 +286,61 @@ object Channels {
         Messages.onReceived = { m -> mainThread.post { messages.invokeMethod("received", m) } }
         Messages.onChanged = { what -> mainThread.post { messages.invokeMethod("changed", what) } }
 
+        // palt/files: phone storage for computers' file browser, photos and
+        // Wi-Fi QR screenshots (lib/features/phone_files.dart).
+        val files = MethodChannel(messenger, "palt/files")
+        files.setMethodCallHandler { call, result ->
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                result.error("files", "Needs Android 11 or newer", null)
+                return@setMethodCallHandler
+            }
+            when (call.method) {
+                "hasAccess" -> result.success(PhoneFiles.hasAccess())
+                "allow" -> {
+                    PhoneFiles.openAccessSettings(app)
+                    result.success(null)
+                }
+                "thumb" -> {
+                    val path = call.argument<String>("path") ?: ""
+                    val size = call.argument<Int>("size") ?: 256
+                    worker.execute {
+                        val bytes = PhoneFiles.thumbnail(path, size)
+                        mainThread.post { result.success(bytes) }
+                    }
+                }
+                "scan" -> {
+                    PhoneFiles.scan(app, call.argument<List<String>>("paths") ?: emptyList())
+                    result.success(null)
+                }
+                "photo" -> try {
+                    PhoneFiles.takePhoto(app)
+                    result.success(null)
+                } catch (e: Exception) {
+                    result.error("files", e.message ?: e.toString(), null)
+                }
+                "watchScreenshots" -> {
+                    PhoneFiles.watchScreenshots(app)
+                    result.success(null)
+                }
+                "offerWifi" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    PhoneFiles.offerWifi(
+                        app,
+                        call.argument<String>("path") ?: "",
+                        call.argument<String>("ssid") ?: "",
+                        (call.argument<List<Map<String, String>>>("computers") ?: emptyList()),
+                    )
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        PhoneFiles.onPhoto = { path -> mainThread.post { files.invokeMethod("photo", path) } }
+        PhoneFiles.onScreenshot = { path -> mainThread.post { files.invokeMethod("screenshot", path) } }
+        PhoneFiles.onSendWifi = { path, computer ->
+            mainThread.post { files.invokeMethod("sendWifi", mapOf("path" to path, "computer" to computer)) }
+        }
+
         // palt/unlock: fingerprint unlock for computers (lib/features/unlock.dart).
         MethodChannel(messenger, "palt/unlock").setMethodCallHandler { call, result ->
             val computer = call.argument<String>("computer") ?: ""

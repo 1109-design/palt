@@ -29,7 +29,9 @@ import '../../features/media.dart';
 import '../../features/phone_features.dart';
 import '../../providers/link_provider.dart';
 import '../widgets/device_status.dart';
+import '../widgets/commands_card.dart';
 import '../widgets/media_player.dart';
+import '../widgets/restricted_hint.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/peer_provider.dart';
 import '../../services/transfer_service.dart';
@@ -57,6 +59,8 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
   final _focus = FocusNode();
   bool _sending = false;
   int _tab = 0; // 0 Control, 1 Activity
+  // Activity counts as read up to here (opening it, or leaving it).
+  DateTime _seenActivity = DateTime.now();
   final _pages = PageController();
   String? _sendError;
   late final StateController<String?> _openDevice;
@@ -298,6 +302,9 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
               if (paired)
                 _Tabs(
                   selected: _tab,
+                  unread: _tab == 1
+                      ? 0
+                      : thread.where((e) => e.direction == 'incoming' && e.timestamp.isAfter(_seenActivity)).length,
                   onSelect: (i) =>
                       _pages.animateToPage(i, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic),
                 ),
@@ -306,7 +313,10 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                 child: paired
                     ? PageView(
                         controller: _pages,
-                        onPageChanged: (i) => setState(() => _tab = i),
+                        onPageChanged: (i) => setState(() {
+                          _tab = i;
+                          _seenActivity = DateTime.now();
+                        }),
                         children: [_ControlTab(peer: peer, online: online), threadView],
                       )
                     : threadView,
@@ -344,12 +354,13 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
 /// Control | Activity
 class _Tabs extends StatelessWidget {
   final int selected;
+  final int unread; // new on Activity since it was last seen
   final ValueChanged<int> onSelect;
-  const _Tabs({required this.selected, required this.onSelect});
+  const _Tabs({required this.selected, required this.unread, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
-    Widget tab(int i, String label) {
+    Widget tab(int i, String label, [int count = 0]) {
       final on = i == selected;
       return Expanded(
         child: Material(
@@ -360,14 +371,23 @@ class _Tabs extends StatelessWidget {
             onTap: () => onSelect(i),
             child: SizedBox(
               height: 40,
-              child: Center(
-                child: Text(label,
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(label,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: on ? FontWeight.w600 : FontWeight.w500,
                       color: on ? kText : kTextSecondary,
                     )),
-              ),
+                if (count > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(gradient: kAccentGradient, borderRadius: BorderRadius.circular(999)),
+                    child: Text(count > 99 ? '99+' : '$count',
+                        style: const TextStyle(color: kOnAccent, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ]),
             ),
           ),
         ),
@@ -378,7 +398,7 @@ class _Tabs extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(16)),
-      child: Row(children: [tab(0, 'Control'), const SizedBox(width: 4), tab(1, 'Activity')]),
+      child: Row(children: [tab(0, 'Control'), const SizedBox(width: 4), tab(1, 'Activity', unread)]),
     );
   }
 }
@@ -465,6 +485,8 @@ class _ControlTab extends ConsumerWidget {
             ),
           ),
         ),
+        if (online) CommandsCard(key: ValueKey(peer.deviceName), peer: peer),
+        if (peer.os != 'android') RestrictedHint(computer: peer.deviceName),
       ],
     );
   }

@@ -116,6 +116,27 @@ class Link {
 
   bool supports(String t) => peer.handles.contains(t);
 
+  final _waiting = <String, Completer<LinkPacket>>{};
+  int _nextId = 0;
+
+  /// Sends a packet and waits for the reply carrying the same id (the peer
+  /// answers "<t>.reply").
+  Future<LinkPacket> request(String t,
+      {Map<String, dynamic>? body, Duration timeout = const Duration(seconds: 20)}) async {
+    final id = 'p${++_nextId}';
+    final c = Completer<LinkPacket>();
+    _waiting[id] = c;
+    try {
+      await send(t, body: body, id: id);
+      return await Future.any([
+        c.future,
+        done.then<LinkPacket>((_) => throw const SocketException('link closed')),
+      ]).timeout(timeout, onTimeout: () => throw TimeoutException('${peer.name} didn\'t answer'));
+    } finally {
+      _waiting.remove(id);
+    }
+  }
+
   /// Pings the peer and reports whether anything came back within
   /// [timeout]. Used after a network change to drop a dead link in seconds.
   Future<bool> probe([Duration timeout = const Duration(seconds: 3)]) async {
@@ -282,6 +303,11 @@ class LinkManager {
           case 'pong' || 'identity':
             break;
           default:
+            final waiter = p.id == null ? null : l._waiting[p.id];
+            if (waiter != null) {
+              if (!waiter.isCompleted) waiter.complete(p);
+              continue;
+            }
             final h = _handlers[p.t];
             if (h != null) {
               try {

@@ -22,6 +22,11 @@ var (
 // and streams the chosen files sequentially from local disk.
 // OnProgress tracks chunks traversing the network.
 func SendFiles(dial Dialer, filePaths []string, transferID string, senderName string, onProgress func(written int64, total int64, sentItems int, totalItems int, currentFile string)) error {
+	return SendFilesTo(dial, filePaths, "", transferID, senderName, onProgress)
+}
+
+// SendFilesTo is SendFiles asking the receiver to save into folder dest.
+func SendFilesTo(dial Dialer, filePaths []string, dest string, transferID string, senderName string, onProgress func(written int64, total int64, sentItems int, totalItems int, currentFile string)) error {
 	var totalSize int64 = 0
 	var metaFiles []FileMeta
 
@@ -62,6 +67,7 @@ func SendFiles(dial Dialer, filePaths []string, transferID string, senderName st
 		Files:      metaFiles,
 		TotalSize:  totalSize,
 		SenderName: senderName,
+		Dest:       dest,
 	}
 
 	if err := WriteOffer(conn, meta); err != nil {

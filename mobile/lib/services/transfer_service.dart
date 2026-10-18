@@ -20,6 +20,7 @@ import 'discovery_service.dart';
 import 'lan_protocol.dart';
 import 'palt_conn.dart';
 import '../utils/media.dart';
+import '../utils/storage_path.dart';
 
 /// Must match MaxTextBytes in desktop/internal/transfer/protocol.go
 const kMaxTextBytes = 16 * 1024;
@@ -69,6 +70,9 @@ class OfferData {
   final String senderName;
   final String? text;
 
+  /// Folder a paired computer asked the files to go in (its file browser).
+  final String? dest;
+
   /// How this offer reached us ('direct' or 'relay'). Local only.
   final String route;
 
@@ -83,6 +87,7 @@ class OfferData {
     required this.totalSize,
     required this.senderName,
     this.text,
+    this.dest,
     this.route = Route.direct,
     this.paired = false,
     this.senderId,
@@ -101,6 +106,7 @@ class OfferData {
         totalSize: json['totalSize'] ?? 0,
         senderName: json['senderName'],
         text: json['text'],
+        dest: json['dest'] as String?,
         route: route,
         paired: paired,
         senderId: senderId,
@@ -303,7 +309,9 @@ class TransferService {
         print('[TransferService] Could not create PALT directory: $e');
       }
     }
-    final dirPath = publicDir.path;
+    // A paired computer's file browser picks the folder.
+    final dest = offer.paired ? storagePath(offer.dest) : null;
+    final dirPath = offer.dest != null && dest != null && await Directory(dest).exists() ? dest : publicDir.path;
     final stopwatch = Stopwatch()..start();
     final totalFiles = offer.files.length;
     final hFiles = [for (final f in offer.files) HistoryFile(name: f.name, size: f.size)];
@@ -368,6 +376,10 @@ class TransferService {
       }
       ref.read(receivedFilesProvider.notifier).state =
           ReceivedFiles(offer.senderName, [for (final f in hFiles) f.name]);
+      // So the gallery and other apps see them.
+      unawaited(const MethodChannel('palt/files')
+          .invokeMethod('scan', {'paths': [for (final f in hFiles) if (f.path != null) f.path!]})
+          .catchError((Object _) {}));
       ref.read(transferProgressProvider.notifier).state = TransferProgress(
           offer.transferId, totalWritten, offer.totalSize,
           sentItems: totalFiles,

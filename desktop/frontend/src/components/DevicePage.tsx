@@ -43,6 +43,9 @@ import SmsIcon from '@mui/icons-material/SmsOutlined';
 import CallIcon from '@mui/icons-material/CallOutlined';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutwardRounded';
 import BoltIcon from '@mui/icons-material/Bolt';
+import FolderIcon from '@mui/icons-material/FolderOutlined';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCameraOutlined';
+import TerminalIcon from '@mui/icons-material/TerminalRounded';
 import type { DeviceStatus, MediaState, Peer } from '../types/peer';
 import type { HistoryEntry, HistoryFile } from '../types/history';
 import { getOsInfo } from '../utils/osHelpers';
@@ -53,6 +56,8 @@ import RouteBadge, { routeColor, routeLabel } from './RouteBadge';
 import { networkLabel } from './DeviceStatusChip';
 import NowPlaying from './NowPlaying';
 import UnlockMenuItem from './UnlockMenuItem';
+import PhoneFilesDialog from './PhoneFilesDialog';
+import CommandsDialog from './CommandsDialog';
 
 /** Must match MaxTextBytes in internal/transfer/protocol.go */
 const MAX_TEXT_BYTES = 16 * 1024;
@@ -108,6 +113,7 @@ const SETTING_LABELS: [string, string][] = [
   ['clipboardSend', 'Send my clipboard to it'],
   ['clipboardReceive', 'Take its clipboard'],
   ['pauseOnCall', 'Pause media during calls'],
+  ['keepAwake', 'Keep this computer awake while it\'s connected'],
 ];
 
 /** Received files fall back to the download folder by name; sent files need a recorded path. */
@@ -518,14 +524,16 @@ const Tile: React.FC<{
   disabled?: boolean;
   primary?: boolean;
   tall?: boolean;
+  wide?: boolean;
   tint?: string;
-}> = ({ icon, label, sub, onClick, disabled, primary, tall, tint }) => (
+}> = ({ icon, label, sub, onClick, disabled, primary, tall, wide, tint }) => (
   <Box
     component="button"
     disabled={disabled}
     onClick={onClick}
     sx={{
       gridRow: tall ? 'span 2' : undefined,
+      gridColumn: wide ? 'span 2' : undefined,
       minHeight: 92,
       p: 1.75,
       border: 'none',
@@ -651,11 +659,29 @@ const DevicePage: React.FC<DevicePageProps> = ({
   onSetSetting,
 }) => {
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [photoNote, setPhotoNote] = useState('');
+  const takePhoto = () => {
+    setPhotoNote('look at the phone');
+    (window as any).go?.main?.App?.TakePhoto(peer.deviceName)
+      .then(() => setTimeout(() => setPhotoNote(''), 8000))
+      .catch((e: unknown) => {
+        setPhotoNote(String(e));
+        setTimeout(() => setPhotoNote(''), 6000);
+      });
+  };
   const osInfo = getOsInfo(peer.os);
   const OsIcon = osInfo.Icon;
   const displayName = alias || peer.deviceName;
   const twoPane = useLayoutWidth() >= TWO_PANE_MIN;
   const [tab, setTab] = useState<'control' | 'activity'>('control');
+  // Activity counts as read up to here (opening it, or leaving it).
+  const [seenActivity, setSeenActivity] = useState(() => Date.now());
+  const switchTab = (t: 'control' | 'activity') => {
+    setTab(t);
+    setSeenActivity(Date.now());
+  };
   const showControl = paired && (twoPane || tab === 'control');
   const showActivity = !paired || twoPane || tab === 'activity';
 
@@ -670,6 +696,11 @@ const DevicePage: React.FC<DevicePageProps> = ({
     () => history.filter((e) => e.partnerName === peer.deviceName).reverse(),
     [history, peer.deviceName],
   );
+
+  const unread =
+    twoPane || tab === 'activity'
+      ? 0
+      : thread.filter((e) => e.direction === 'incoming' && Date.parse(e.timestamp) > seenActivity).length;
 
   const groups = useMemo(() => {
     const out: { label: string; entries: HistoryEntry[] }[] = [];
@@ -769,6 +800,12 @@ const DevicePage: React.FC<DevicePageProps> = ({
         <Tile disabled={!online} icon={<NotificationsActiveIcon className="tile-icon" />} label="Ring" sub="find it" onClick={() => onRing(peer)} />
         <Tile disabled={!online} icon={<WavingHandIcon className="tile-icon" />} label="Ping" sub="say hi" onClick={() => onPing(peer)} />
         <Tile disabled={!online} icon={<WifiIcon className="tile-icon" />} label="Wi-Fi" sub="share network" onClick={() => onShareWifi(peer)} />
+        {peer.os === 'android' && (
+          <>
+            <Tile wide disabled={!online} icon={<FolderIcon className="tile-icon" />} label="Files" sub="browse the phone" onClick={() => setFilesOpen(true)} />
+            <Tile disabled={!online} icon={<PhotoCameraIcon className="tile-icon" />} label="Take photo" sub={photoNote || 'opens here'} onClick={takePhoto} />
+          </>
+        )}
       </Box>
 
       <Button
@@ -1030,7 +1067,19 @@ const DevicePage: React.FC<DevicePageProps> = ({
                 </MenuItem>
               ))}
               {peer.os === 'android' && <UnlockMenuItem device={peer.deviceName} />}
+              <MenuItem
+                onClick={() => {
+                  setSettingsAnchor(null);
+                  setCommandsOpen(true);
+                }}
+                sx={{ gap: 1.5 }}
+              >
+                <TerminalIcon sx={{ fontSize: 20, color: beacon.accent, mx: 1.1 }} />
+                <Typography sx={{ fontSize: '0.86rem' }}>Commands phones can run…</Typography>
+              </MenuItem>
             </Menu>
+            <CommandsDialog open={commandsOpen} onClose={() => setCommandsOpen(false)} />
+            {peer.os === 'android' && <PhoneFilesDialog device={peer.deviceName} open={filesOpen} onClose={() => setFilesOpen(false)} />}
           </>
         )}
         {!paired && (
@@ -1049,7 +1098,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
               component="button"
               role="tab"
               aria-selected={tab === t}
-              onClick={() => setTab(t)}
+              onClick={() => switchTab(t)}
               sx={{
                 flex: 1,
                 border: 'none',
@@ -1064,6 +1113,11 @@ const DevicePage: React.FC<DevicePageProps> = ({
               }}
             >
               {t === 'control' ? 'Control' : 'Activity'}
+              {t === 'activity' && unread > 0 && (
+                <Box component="span" sx={{ ml: 0.75, px: 0.75, borderRadius: 999, fontSize: '0.72rem', fontWeight: 800, backgroundColor: beacon.accent, color: beacon.onAccent }}>
+                  {unread > 99 ? '99+' : unread}
+                </Box>
+              )}
             </Box>
           ))}
         </Box>

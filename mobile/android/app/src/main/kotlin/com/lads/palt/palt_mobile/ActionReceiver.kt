@@ -11,6 +11,11 @@ class ActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             STOP_RING -> Ringer.stop(context)
             RemoteMedia.ACTION -> RemoteMedia.send(intent.getStringExtra(RemoteMedia.EXTRA_COMMAND) ?: return)
+            PhoneFiles.SEND_WIFI -> PhoneFiles.sendWifi(
+                context,
+                intent.getStringExtra(PhoneFiles.EXTRA_PATH) ?: return,
+                intent.getStringExtra(PhoneFiles.EXTRA_COMPUTER) ?: return,
+            )
             OPEN_URL -> {
                 val url = intent.getStringExtra(EXTRA_URL) ?: return
                 Notifier.cancel(context, intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0))

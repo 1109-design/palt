@@ -11,10 +11,11 @@ import (
 
 // Defaults for every switch; a device without saved settings gets these.
 var deviceSettingDefaults = map[string]bool{
-	"notifications":    true, // show the device's notifications here
-	"clipboardSend":    true, // send this computer's clipboard to it
-	"clipboardReceive": true, // take its clipboard
-	"pauseOnCall":      true, // pause media when a call comes in
+	"notifications":    true,  // show the device's notifications here
+	"clipboardSend":    true,  // send this computer's clipboard to it
+	"clipboardReceive": true,  // take its clipboard
+	"pauseOnCall":      true,  // pause media when a call comes in
+	"keepAwake":        false, // keep this computer from going idle while linked
 }
 
 var settingsMu sync.Mutex

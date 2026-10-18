@@ -146,6 +146,8 @@ func (a *App) startup(ctx context.Context) {
 	a.setupMedia()
 	a.setupMessages()
 	a.setupUnlock()
+	a.setupCommands()
+	a.setupKeepAwake()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {
@@ -201,6 +203,7 @@ func (a *App) startup(ctx context.Context) {
 			Route:          meta.Route,
 		})
 		go a.scanForWifiQR(savedPaths, meta.SenderName)
+		openArrivedPhoto(meta.SenderName, savedPaths)
 	}
 
 	a.transferServer.OnError = func(meta transfer.Metadata, savedPaths []string, err error) {
@@ -778,6 +781,11 @@ func (a *App) SendText(peerIP string, peerPort int, peerName string, text string
 // sendPaths streams the given local file paths to a peer, emitting the same
 // transfer_* events the UI already listens to.
 func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths []string) error {
+	return a.sendPathsTo(peerIP, peerPort, peerName, filePaths, "")
+}
+
+// sendPathsTo is sendPaths into folder dest on a phone.
+func (a *App) sendPathsTo(peerIP string, peerPort int, peerName string, filePaths []string, dest string) error {
 	transferID := generateTransferID()
 	hostname, _ := os.Hostname()
 
@@ -806,7 +814,7 @@ func (a *App) sendPaths(peerIP string, peerPort int, peerName string, filePaths 
 			}
 			return conn, err
 		}
-		err := transfer.SendFiles(dial, filePaths, transferID, hostname, func(written, total int64, sentItems, totalItems int, currentFile string) {
+		err := transfer.SendFilesTo(dial, filePaths, dest, transferID, hostname, func(written, total int64, sentItems, totalItems int, currentFile string) {
 			elapsed := time.Since(start).Seconds()
 			var speed float64 = 0
 			if elapsed > 0 {

@@ -50,6 +50,10 @@ type Metadata struct {
 	TotalSize  int64      `json:"totalSize"`
 	SenderName string     `json:"senderName"`
 	Text       string     `json:"text,omitempty"` // only set for ActionText
+	// Dest asks a phone to save the files in this folder (its file
+	// browser's uploads). Phones honour it from paired devices only;
+	// computers ignore it.
+	Dest string `json:"dest,omitempty"`
 
 	// Route is how this connection reached us ("direct" or "relay"). It is
 	// set locally by the receiver, never trusted from the wire.

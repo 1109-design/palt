@@ -25,6 +25,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Find my phone, mobile signal -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Computers browse the phone's files (PhoneFiles.kt); sideload-OK -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <!-- Fingerprint unlock for computers (Unlock.kt) -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
@@ -103,6 +105,12 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <activity
             android:name=".WifiAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
+            android:name=".CameraActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
