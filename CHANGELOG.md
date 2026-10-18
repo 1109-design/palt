@@ -3,6 +3,11 @@
 What's new in each PALT release. The section for a tag becomes its GitHub
 release notes, which both apps show in "What's new".
 
+## v2.5.0
+
+- **Bluetooth on both devices**: see whether the other device's Bluetooth is on and what's connected (with battery), and switch it. The phone shows the laptop's Bluetooth with a real on/off switch; turning the phone's on from the laptop shows Android's prompt, and turning it off opens its Bluetooth settings (Android doesn't let apps do more).
+- The laptop app opens 25% bigger.
+
 ## v2.4.2
 
 - **Restart and shut down the laptop from the phone**: new Restart and Shut down buttons under "Run on <laptop>". The phone asks before restarting, shutting down or suspending.
