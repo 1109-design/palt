@@ -3,6 +3,17 @@
 What's new in each PALT release. The section for a tag becomes its GitHub
 release notes, which both apps show in "What's new".
 
+## v2.3.0
+
+- **New laptop look**: your devices up front on the home screen; each device page has a Control side (media, big action tiles, vitals) and an Activity side with chat bubbles and picture thumbnails.
+- **Zoom the laptop app**: Ctrl + and Ctrl − (or Ctrl + scroll), Ctrl 0 to reset, or the zoom buttons in the top bar.
+- **Laptop media in the phone's media controls**: whatever plays on the laptop shows in the phone's quick panel with play, pause, skip and seek, like GSConnect.
+- **New now-playing player** on both apps: cover art glow, a wavy time bar, smooth play/pause animations.
+- **Black look on the phone** with warm gradients on every page.
+- **Netflix shows the real title**: install the PALT browser extension (in `browser-extension/`) in Chrome or Edge and the phone shows the show and episode with its artwork instead of just "Netflix".
+- Fixed: the phone's volume slider now sets the laptop's volume (it could only mute before).
+- Fixed: old YouTube artwork no longer sticks around on other videos.
+
 ## v2.2.0
 
 - **New phone look**: your devices up front with their battery, network and the actions you use most; each device has a Control tab (media remote and big action tiles) and an Activity tab (a chat with picture thumbnails). Swipe between them.
