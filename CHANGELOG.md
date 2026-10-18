@@ -3,6 +3,10 @@
 What's new in each PALT release. The section for a tag becomes its GitHub
 release notes, which both apps show in "What's new".
 
+## v2.4.1
+
+- Fixed: the phone app showed an old version number and kept offering the update it already had.
+
 ## v2.4.0
 
 - **Unlock the laptop with your phone's fingerprint**: the lock screen, admin prompts and sudo ask the phone; touch the sensor and you're in. Your password still works any time. Turn it on in the phone's device settings on the laptop.

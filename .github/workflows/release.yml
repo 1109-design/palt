@@ -33,6 +33,18 @@ jobs:
           channel: 'stable'
           cache: true
 
+      # The tag, the phone app (pubspec.yaml) and the desktop app
+      # (AppVersion in app.go) must all name the same version.
+      - name: Check versions match the tag
+        run: |
+          PHONE=v$(sed -n 's/^version: *\([^+]*\).*/\1/p' mobile/pubspec.yaml)
+          DESK=$(sed -n 's/^const AppVersion = "\(.*\)"/\1/p' desktop/app.go)
+          echo "tag=$GITHUB_REF_NAME phone=$PHONE desktop=$DESK"
+          if [ "$PHONE" != "$GITHUB_REF_NAME" ] || [ "$DESK" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::versions don't match the tag"
+            exit 1
+          fi
+
       - name: Decode Keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > mobile/android/app/palt-release.keystore
@@ -48,7 +60,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=APP_VERSION=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
 
       - name: Rename APK
         run: |

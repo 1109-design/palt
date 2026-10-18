@@ -58,7 +58,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=APP_VERSION=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
 
       - name: Rename APK
         run: mv mobile/build/app/outputs/flutter-apk/app-release.apk "mobile/build/app/outputs/flutter-apk/palt-test-${GITHUB_SHA::7}.apk"

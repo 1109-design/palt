@@ -1,10 +1,11 @@
-/// version.dart — single source of truth for the PALT mobile app version.
+/// version.dart — the PALT mobile app version and where releases live.
 ///
-/// Bump [kAppVersion] to match the git tag when cutting a release.
-/// The CI pipeline can inject this via `--dart-define=APP_VERSION=$TAG`
-/// in the future, but for now it is a manual bump.
+/// The version comes from pubspec.yaml: CI builds pass it in with
+/// `--dart-define=APP_VERSION=<version>`, so there is nothing to bump here.
+library;
 
-const String kAppVersion = 'v2.2.0';
+const _version = String.fromEnvironment('APP_VERSION', defaultValue: '0.0.0');
+const String kAppVersion = 'v$_version';
 
 const String kGitHubApiUrl =
     'https://api.github.com/repos/h200137j/palt/releases/latest';
