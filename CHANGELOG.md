@@ -3,6 +3,10 @@
 What's new in each PALT release. The section for a tag becomes its GitHub
 release notes, which both apps show in "What's new".
 
+## v2.4.2
+
+- **Restart and shut down the laptop from the phone**: new Restart and Shut down buttons under "Run on <laptop>". The phone asks before restarting, shutting down or suspending.
+
 ## v2.4.1
 
 - Fixed: the phone app showed an old version number and kept offering the update it already had.
