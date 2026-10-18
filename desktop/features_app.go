@@ -41,6 +41,19 @@ type DeviceStatus struct {
 	Cellular string `json:"cellular"` // "5G", "LTE", ... when on mobile data
 	Signal   int    `json:"signal"`   // mobile signal 0-4, -1 unknown
 	Internet bool   `json:"internet"` // reaches the internet (not just the LAN)
+
+	// Computers only (computer_status_linux.go).
+	Locked    bool   `json:"locked,omitempty"`    // screen locked
+	CPU       int    `json:"cpu,omitempty"`       // load 0-100 since the last report
+	RAMUsed   int64  `json:"ramUsed,omitempty"`   // bytes
+	RAMTotal  int64  `json:"ramTotal,omitempty"`  // bytes
+	DiskFree  int64  `json:"diskFree,omitempty"`  // bytes, home's filesystem
+	DiskTotal int64  `json:"diskTotal,omitempty"` // bytes
+	Uptime    int64  `json:"uptime,omitempty"`    // seconds
+	Temp      int    `json:"temp,omitempty"`      // CPU °C, 0 unknown
+	WakeMAC   string `json:"wakeMac,omitempty"`   // for Wake-on-LAN from a phone
+	WakeAddr  string `json:"wakeAddr,omitempty"`  // LAN broadcast address
+	WakeReady bool   `json:"wakeReady,omitempty"` // the network card wakes on a magic packet
 }
 
 const statusInterval = 30 * time.Second
@@ -173,11 +186,14 @@ func (a *App) sendStatusLoop() {
 				delete(told, l)
 			}
 		}
-		if len(fresh) == 0 && time.Since(lastCheck) < statusInterval {
+		// Locking and unlocking reach phones within seconds.
+		lockChanged := screenLocked() != last.Locked
+		if len(fresh) == 0 && time.Since(lastCheck) < statusInterval && !lockChanged {
 			continue
 		}
 		lastCheck = time.Now()
 		st := localStatus()
+		addComputerStatus(&st)
 		changed := st != last
 		last = st
 		for _, l := range links {

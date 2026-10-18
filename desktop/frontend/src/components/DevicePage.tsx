@@ -56,6 +56,7 @@ import RouteBadge, { routeColor, routeLabel } from './RouteBadge';
 import { networkLabel } from './DeviceStatusChip';
 import NowPlaying from './NowPlaying';
 import UnlockMenuItem from './UnlockMenuItem';
+import WakeMenuItem from './WakeMenuItem';
 import PhoneFilesDialog from './PhoneFilesDialog';
 import CommandsDialog from './CommandsDialog';
 
@@ -114,6 +115,7 @@ const SETTING_LABELS: [string, string][] = [
   ['clipboardReceive', 'Take its clipboard'],
   ['pauseOnCall', 'Pause media during calls'],
   ['keepAwake', 'Keep this computer awake while it\'s connected'],
+  ['proximityLock', 'Lock this computer when it goes away (2 min)'],
 ];
 
 /** Received files fall back to the download folder by name; sent files need a recorded path. */
@@ -1067,6 +1069,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
                 </MenuItem>
               ))}
               {peer.os === 'android' && <UnlockMenuItem device={peer.deviceName} />}
+              {peer.os === 'android' && <WakeMenuItem />}
               <MenuItem
                 onClick={() => {
                   setSettingsAnchor(null);

@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/link_provider.dart';
 import '../services/link/link.dart';
 import '../services/transfer_service.dart';
+import 'wake.dart';
 
 const _device = MethodChannel('palt/device');
 const _intent = MethodChannel('palt/intent');
@@ -32,6 +33,15 @@ class DeviceStatus {
   final int signal; // 0-4, -1 unknown
   final bool internet; // reaches the internet, not just the LAN
 
+  // Computers only (desktop/computer_status_linux.go); never sent by phones.
+  final bool locked;
+  final int cpu; // % load
+  final int ramUsed, ramTotal, diskFree, diskTotal; // bytes
+  final int uptime; // seconds
+  final int temp; // °C, 0 unknown
+  final String wakeMac, wakeAddr;
+  final bool wakeReady;
+
   const DeviceStatus({
     this.battery = -1,
     this.charging = false,
@@ -40,7 +50,21 @@ class DeviceStatus {
     this.cellular = '',
     this.signal = -1,
     this.internet = false,
+    this.locked = false,
+    this.cpu = 0,
+    this.ramUsed = 0,
+    this.ramTotal = 0,
+    this.diskFree = 0,
+    this.diskTotal = 0,
+    this.uptime = 0,
+    this.temp = 0,
+    this.wakeMac = '',
+    this.wakeAddr = '',
+    this.wakeReady = false,
   });
+
+  /// True when the device reported computer details.
+  bool get isComputer => ramTotal > 0;
 
   factory DeviceStatus.fromJson(Map<String, dynamic> j) => DeviceStatus(
         battery: (j['battery'] as num?)?.toInt() ?? -1,
@@ -50,6 +74,17 @@ class DeviceStatus {
         cellular: j['cellular'] as String? ?? '',
         signal: (j['signal'] as num?)?.toInt() ?? -1,
         internet: j['internet'] as bool? ?? false,
+        locked: j['locked'] as bool? ?? false,
+        cpu: (j['cpu'] as num?)?.toInt() ?? 0,
+        ramUsed: (j['ramUsed'] as num?)?.toInt() ?? 0,
+        ramTotal: (j['ramTotal'] as num?)?.toInt() ?? 0,
+        diskFree: (j['diskFree'] as num?)?.toInt() ?? 0,
+        diskTotal: (j['diskTotal'] as num?)?.toInt() ?? 0,
+        uptime: (j['uptime'] as num?)?.toInt() ?? 0,
+        temp: (j['temp'] as num?)?.toInt() ?? 0,
+        wakeMac: j['wakeMac'] as String? ?? '',
+        wakeAddr: j['wakeAddr'] as String? ?? '',
+        wakeReady: j['wakeReady'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -133,7 +168,9 @@ void setupPhoneFeatures(ProviderContainer c) {
 
   links.handle('status', (l, p) {
     if (p.body == null) return;
-    c.read(peerStatusProvider.notifier).update((m) => {...m, l.peer.name: DeviceStatus.fromJson(p.body!)});
+    final st = DeviceStatus.fromJson(p.body!);
+    c.read(peerStatusProvider.notifier).update((m) => {...m, l.peer.name: st});
+    if (st.wakeMac.isNotEmpty) c.read(wakeTargetsProvider.notifier).remember(l.peer.name, st);
   });
 
   // This phone's status: to each device as it links up, and on any change.

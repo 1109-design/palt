@@ -30,6 +30,7 @@ import '../../features/phone_features.dart';
 import '../../providers/link_provider.dart';
 import '../widgets/device_status.dart';
 import '../widgets/commands_card.dart';
+import '../widgets/computer_vitals.dart';
 import '../widgets/media_player.dart';
 import '../widgets/restricted_hint.dart';
 import '../../providers/history_provider.dart';
@@ -485,6 +486,8 @@ class _ControlTab extends ConsumerWidget {
             ),
           ),
         ),
+        if (ref.watch(peerStatusProvider)[peer.deviceName] case final st? when st.isComputer)
+          ComputerVitals(status: st),
         if (online) CommandsCard(key: ValueKey(peer.deviceName), peer: peer),
         if (peer.os != 'android') RestrictedHint(computer: peer.deviceName),
       ],

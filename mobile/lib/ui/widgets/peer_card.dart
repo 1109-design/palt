@@ -196,6 +196,11 @@ class _PairedCard extends ConsumerWidget {
       if (status != null && networkLabel(status).isNotEmpty)
         _Stat(lead: Icon(networkIcon(status), size: 15, color: kTextSecondary), label: networkLabel(status)),
       if (playing) const _Stat(lead: Icon(Icons.music_note_rounded, size: 15, color: kTextSecondary), label: 'Playing'),
+      if (status != null && status.isComputer)
+        _Stat(
+          lead: Icon(status.locked ? Icons.lock_rounded : Icons.lock_open_rounded, size: 15, color: kTextSecondary),
+          label: status.locked ? 'Locked' : 'Unlocked',
+        ),
     ];
 
     return Container(

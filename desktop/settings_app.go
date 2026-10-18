@@ -16,6 +16,7 @@ var deviceSettingDefaults = map[string]bool{
 	"clipboardReceive": true,  // take its clipboard
 	"pauseOnCall":      true,  // pause media when a call comes in
 	"keepAwake":        false, // keep this computer from going idle while linked
+	"proximityLock":    false, // lock this computer when the device goes away
 }
 
 var settingsMu sync.Mutex

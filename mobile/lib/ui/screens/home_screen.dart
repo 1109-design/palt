@@ -29,6 +29,7 @@ import '../widgets/peer_card.dart';
 import '../widgets/route_badge.dart';
 import 'pair_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/asleep_devices.dart';
 import '../widgets/background_banner.dart';
 import '../../providers/link_provider.dart';
 import '../widgets/update_banner.dart';
@@ -335,6 +336,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
         ],
+
+        const SliverToBoxAdapter(child: AsleepDevices()),
 
         if (nearby.isNotEmpty) ...[
           _sectionHeader('NEARBY', 'not paired'),
