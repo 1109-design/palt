@@ -1,5 +1,5 @@
 // commands_app.go lets paired phones run named commands on this computer:
-// Lock, Suspend and Mute built in, plus shell commands the user adds here
+// Lock, Suspend, Mute, Restart and Shut down built in, plus shell commands the user adds here
 // (~/.config/palt/commands.json). Phones only see names and ids; they can
 // never send a command line of their own.
 //
@@ -43,6 +43,8 @@ var builtInCommands = []Command{
 	{ID: "lock", Name: "Lock screen", BuiltIn: true},
 	{ID: "suspend", Name: "Suspend", BuiltIn: true},
 	{ID: "mute", Name: "Mute / unmute", BuiltIn: true},
+	{ID: "reboot", Name: "Restart", BuiltIn: true},
+	{ID: "poweroff", Name: "Shut down", BuiltIn: true},
 }
 
 var commandsMu sync.Mutex
@@ -101,6 +103,20 @@ func (a *App) runCommand(id string) (string, error) {
 		return "", exec.Command("systemctl", "suspend").Run()
 	case "mute":
 		return "", setSystemVolume("mute", 0)
+	case "reboot", "poweroff":
+		// Answer the phone before the link goes down with the computer.
+		go func() {
+			time.Sleep(2 * time.Second)
+			// Through GNOME first: it closes apps cleanly and acts for the
+			// active session, so no password is asked.
+			flag := map[string]string{"reboot": "--reboot", "poweroff": "--power-off"}[id]
+			if err := exec.Command("gnome-session-quit", flag, "--no-prompt").Run(); err != nil {
+				if err := exec.Command("systemctl", id).Run(); err != nil {
+					log.Printf("[commands] %s: %v", id, err)
+				}
+			}
+		}()
+		return "", nil
 	}
 	for _, c := range a.GetCommands() {
 		if c.ID == id && !c.BuiltIn {

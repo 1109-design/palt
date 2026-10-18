@@ -1,5 +1,6 @@
 /// commands_card.dart — "Run on <computer>": the commands a paired computer
-/// offers (Lock, Suspend, Mute and the user's own), one tap each.
+/// offers (Lock, Suspend, Mute, Restart, Shut down and the user's own), one
+/// tap each; the ones that end the session ask first.
 ///
 /// Packets: commands.list / commands.run (desktop/commands_app.go).
 library;
@@ -42,9 +43,31 @@ class _CommandsCardState extends ConsumerState<CommandsCard> {
     } catch (_) {}
   }
 
+  /// Commands that end the computer's session ask first.
+  static const _confirm = {
+    'suspend': 'Put it to sleep?',
+    'reboot': 'Restart it? Unsaved work there may be lost.',
+    'poweroff': 'Shut it down? Unsaved work there may be lost.',
+  };
+
   Future<void> _run(String id, String name) async {
     final l = ref.read(linkManagerProvider).byName(widget.peer.deviceName);
     if (l == null) return;
+    final question = _confirm[id];
+    if (question != null) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('$name ${widget.peer.deviceName}'),
+          content: Text(question),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(name)),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
     setState(() => _running = id);
     String msg;
     try {
@@ -66,6 +89,8 @@ class _CommandsCardState extends ConsumerState<CommandsCard> {
         'lock' => Icons.lock_rounded,
         'suspend' => Icons.bedtime_rounded,
         'mute' => Icons.volume_off_rounded,
+        'reboot' => Icons.restart_alt_rounded,
+        'poweroff' => Icons.power_settings_new_rounded,
         _ => Icons.terminal_rounded,
       };
 
