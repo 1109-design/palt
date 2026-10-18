@@ -231,6 +231,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: kPageGlow))),
           RefreshIndicator(
             onRefresh: _rescan,
             color: kAccent,
@@ -407,7 +408,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _pairButton(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: CustomPaint(
-          painter: _DashedBorder(color: const Color(0xFF2C3B5A), radius: 18),
+          painter: _DashedBorder(color: kHairline, radius: 18),
           child: Material(
             color: Colors.transparent,
             child: InkWell(

@@ -29,7 +29,7 @@ import '../../features/media.dart';
 import '../../features/phone_features.dart';
 import '../../providers/link_provider.dart';
 import '../widgets/device_status.dart';
-import 'media_screen.dart';
+import '../widgets/media_player.dart';
 import '../../providers/history_provider.dart';
 import '../../providers/peer_provider.dart';
 import '../../services/transfer_service.dart';
@@ -65,8 +65,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
   void initState() {
     super.initState();
     _openDevice = ref.read(openDeviceNameProvider.notifier);
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _openDevice.state = widget.peer.deviceName);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openDevice.state = widget.peer.deviceName);
     _controller.addListener(() => setState(() {}));
   }
 
@@ -106,8 +105,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
       return;
     }
     if (utf8.encode(text).length > kMaxTextBytes) {
-      setState(() => _sendError =
-          'Clipboard is over ${kMaxTextBytes ~/ 1024} KB. Send it as a file instead.');
+      setState(() => _sendError = 'Clipboard is over ${kMaxTextBytes ~/ 1024} KB. Send it as a file instead.');
       return;
     }
     await _send(peer, text, clearDraft: false);
@@ -168,9 +166,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     ref.read(autoCopyProvider.notifier).set(name, !enabled);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(!enabled
-          ? 'Messages from this device will be copied to the clipboard'
-          : 'Auto-copy off'),
+      content: Text(!enabled ? 'Messages from this device will be copied to the clipboard' : 'Auto-copy off'),
     ));
   }
 
@@ -203,17 +199,13 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     // Unpaired devices only exchange files and text: no Control tab.
 
     // History is newest-first, which is exactly what a reversed list wants.
-    final thread = _groupTransfers(ref
-        .watch(historyProvider)
-        .where((e) => e.partnerName == peer.deviceName)
-        .toList());
+    final thread = _groupTransfers(ref.watch(historyProvider).where((e) => e.partnerName == peer.deviceName).toList());
 
     final progress = ref.watch(transferProgressProvider);
 
     final draftBytes = utf8.encode(_controller.text).length;
     final tooLong = draftBytes > kMaxTextBytes;
-    final canSend =
-        online && !_sending && _controller.text.trim().isNotEmpty && !tooLong;
+    final canSend = online && !_sending && _controller.text.trim().isNotEmpty && !tooLong;
 
     final notice = !online
         ? '$displayName is offline. Sending resumes when it reappears.'
@@ -237,8 +229,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
               // each day, i.e. when the next (older) item is from a
               // different day.
               final older = i + 1 < thread.length ? thread[i + 1] : null;
-              final showDay = older == null ||
-                  _dayLabel(older.timestamp) != _dayLabel(entry.timestamp);
+              final showDay = older == null || _dayLabel(older.timestamp) != _dayLabel(entry.timestamp);
               return Column(
                 // Stretch so each bubble can align left/right.
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -298,49 +289,52 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
           ),
         ),
       ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            if (paired)
-              _Tabs(
-                selected: _tab,
-                onSelect: (i) => _pages.animateToPage(i,
-                    duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: kPageGlow),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              if (paired)
+                _Tabs(
+                  selected: _tab,
+                  onSelect: (i) =>
+                      _pages.animateToPage(i, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic),
+                ),
+              Expanded(
+                // Paired: swipe between Control and Activity.
+                child: paired
+                    ? PageView(
+                        controller: _pages,
+                        onPageChanged: (i) => setState(() => _tab = i),
+                        children: [_ControlTab(peer: peer, online: online), threadView],
+                      )
+                    : threadView,
               ),
-            Expanded(
-              // Paired: swipe between Control and Activity.
-              child: paired
-                  ? PageView(
-                      controller: _pages,
-                      onPageChanged: (i) => setState(() => _tab = i),
-                      children: [_ControlTab(peer: peer, online: online), threadView],
-                    )
-                  : threadView,
-            ),
-            if (notice != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 2),
-                child: Text(
-                  notice,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: online ? kDanger : kTextSecondary,
+              if (notice != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 2),
+                  child: Text(
+                    notice,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: online ? kDanger : kTextSecondary,
+                    ),
                   ),
                 ),
+              _Composer(
+                controller: _controller,
+                focus: _focus,
+                enabled: online,
+                canSend: canSend,
+                sending: _sending,
+                hint: online ? 'Send text to $displayName…' : 'Device offline',
+                onAttach: () => pickAndSendFiles(ref, peer),
+                onPasteSend: () => _sendClipboard(peer),
+                onSend: () => _submit(peer),
               ),
-            _Composer(
-              controller: _controller,
-              focus: _focus,
-              enabled: online,
-              canSend: canSend,
-              sending: _sending,
-              hint: online ? 'Send text to $displayName…' : 'Device offline',
-              onAttach: () => pickAndSendFiles(ref, peer),
-              onPasteSend: () => _sendClipboard(peer),
-              onSend: () => _submit(peer),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -359,7 +353,7 @@ class _Tabs extends StatelessWidget {
       final on = i == selected;
       return Expanded(
         child: Material(
-          color: on ? const Color(0xFF1E2A42) : Colors.transparent,
+          color: on ? kSurfaceRaised : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -460,12 +454,12 @@ class _ControlTab extends ConsumerWidget {
         SizedBox(
           height: 52,
           child: OutlinedButton.icon(
-            onPressed: when(() => shareInternetWith(context, ref, peer,
-                phoneOnline: ref.read(localStatusProvider)?.internet ?? true)),
+            onPressed: when(() =>
+                shareInternetWith(context, ref, peer, phoneOnline: ref.read(localStatusProvider)?.internet ?? true)),
             icon: const Icon(Icons.public_rounded, size: 18),
             label: Text('Share internet with ${peer.deviceName}', maxLines: 1, overflow: TextOverflow.ellipsis),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFC9D3E6),
+              foregroundColor: kText.withValues(alpha: 0.85),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
@@ -488,47 +482,57 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null;
-    final fg = big ? kOnAccent : (enabled ? const Color(0xFFC9D3E6) : kTextFaint);
-    return Material(
-      color: big ? (enabled ? kAccent : kAccent.withValues(alpha: 0.35)) : kTile,
-      borderRadius: BorderRadius.circular(big ? 22 : 20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(big ? 22 : 20),
-        onTap: onTap,
-        child: SizedBox(
-          height: height,
-          child: big
-              ? Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Icon(icon, size: 28, color: fg),
-                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(label, style: display(fontSize: 21, fontWeight: FontWeight.w800, color: fg)),
-                        if (sub != null)
-                          Text(sub!, style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.75))),
-                      ]),
-                    ],
-                  ),
-                )
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: 21, color: fg),
-                    const SizedBox(height: 6),
-                    Text(label, style: TextStyle(fontSize: 12, color: fg), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
+    final fg = big ? kOnAccent : (enabled ? kText.withValues(alpha: 0.88) : kTextFaint);
+    // Ink paints on the nearest Material, so give it one inside the fade.
+    return Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: big ? kAccentGradient : kTileGradient,
+            borderRadius: BorderRadius.circular(big ? 22 : 20),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(big ? 22 : 20),
+            onTap: onTap,
+            child: SizedBox(
+              height: height,
+              child: big
+                  ? Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Icon(icon, size: 28, color: fg),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(label, style: display(fontSize: 21, fontWeight: FontWeight.w800, color: fg)),
+                            if (sub != null)
+                              Text(sub!, style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.75))),
+                          ]),
+                        ],
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, size: 21, color: fg),
+                        const SizedBox(height: 6),
+                        Text(label,
+                            style: TextStyle(fontSize: 12, color: fg), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// What the device is playing, with transport and its volume. Opens the
-/// full remote on tap. Nothing at all when the device reports no media.
+/// What the device is playing (NowPlayingCard) with its volume. Nothing at
+/// all when the device reports no media.
 class _NowPlaying extends ConsumerStatefulWidget {
   final String device;
   const _NowPlaying({required this.device});
@@ -538,23 +542,7 @@ class _NowPlaying extends ConsumerStatefulWidget {
 }
 
 class _NowPlayingState extends ConsumerState<_NowPlaying> {
-  Timer? _tick;
   double? _volumeDrag;
-
-  @override
-  void initState() {
-    super.initState();
-    // The progress bar moves on its own while playing.
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _tick?.cancel();
-    super.dispose();
-  }
 
   void _act(String player, String action, [double value = 0]) =>
       sendMediaAction(ref.read(linkManagerProvider), widget.device, player, action, value);
@@ -565,111 +553,26 @@ class _NowPlayingState extends ConsumerState<_NowPlaying> {
     if (state == null) return const SizedBox.shrink();
     final p = state.main;
     if (p == null && state.volume < 0) return const SizedBox.shrink();
-    final pos = p == null ? 0 : state.positionOf(p);
     final v = _volumeDrag ?? state.volume.toDouble();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(16, 16, 12, 10),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1B2640), Color(0xFF131C2E)],
-          stops: [0, 0.7],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: kHairline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (p != null) ...[
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => Navigator.push(
-                  context, MaterialPageRoute(builder: (_) => MediaScreen(device: widget.device))),
-              child: Row(children: [
-                MediaArt(url: p.art, size: 68),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${p.name.toUpperCase()} · ON ${widget.device.toUpperCase()}',
-                        style: mono(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Text(p.title.isEmpty ? 'Unknown' : p.title,
-                        style: display(fontSize: 18, fontWeight: FontWeight.w800),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    if (p.artist.isNotEmpty)
-                      Text(p.artist,
-                          style: const TextStyle(fontSize: 13, color: kTextSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                  ]),
-                ),
-              ]),
+    final volume = state.volume < 0
+        ? null
+        : Row(children: [
+            GestureDetector(
+              onTap: () => _act('', 'mute'),
+              child: Icon(state.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                  size: 20, color: state.muted ? kDanger : kText.withValues(alpha: 0.75)),
             ),
-            if (p.length > 0) ...[
-              const SizedBox(height: 14),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(
-                  value: (pos / p.length).clamp(0.0, 1.0),
-                  minHeight: 4,
-                  backgroundColor: kHairline,
-                  valueColor: const AlwaysStoppedAnimation(kText),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3,
+                  activeTrackColor: kText.withValues(alpha: 0.85),
+                  inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
+                  thumbColor: kText,
+                  overlayColor: kText.withValues(alpha: 0.1),
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Row(children: [
-                Text(_clock(pos), style: mono(fontSize: 10, color: kTextFaint)),
-                const Spacer(),
-                Text(_clock(p.length), style: mono(fontSize: 10, color: kTextFaint)),
-              ]),
-            ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  iconSize: 30,
-                  tooltip: 'Previous',
-                  onPressed: p.canPrev ? () => _act(p.id, 'previous') : null,
-                  icon: const Icon(Icons.skip_previous_rounded, color: kText),
-                ),
-                const SizedBox(width: 14),
-                SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: Material(
-                    color: kText,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => _act(p.id, 'playpause'),
-                      child: Icon(p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          size: 30, color: kBg),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                IconButton(
-                  iconSize: 30,
-                  tooltip: 'Next',
-                  onPressed: p.canNext ? () => _act(p.id, 'next') : null,
-                  icon: const Icon(Icons.skip_next_rounded, color: kText),
-                ),
-              ],
-            ),
-          ],
-          if (state.volume >= 0)
-            Row(children: [
-              GestureDetector(
-                onTap: () => _act('', 'mute'),
-                child: Icon(state.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                    size: 20, color: state.muted ? kDanger : kTextSecondary),
-              ),
-              Expanded(
                 child: Slider(
                   value: v.clamp(0, 100),
                   max: 100,
@@ -682,18 +585,21 @@ class _NowPlayingState extends ConsumerState<_NowPlaying> {
                   },
                 ),
               ),
-              SizedBox(width: 28, child: Text('${v.round()}', style: mono(fontSize: 11))),
-            ]),
-        ],
-      ),
-    );
-  }
+            ),
+            SizedBox(
+                width: 28, child: Text('${v.round()}', style: mono(fontSize: 11, color: kText.withValues(alpha: 0.7)))),
+          ]);
 
-  static String _clock(int ms) {
-    final s = ms ~/ 1000;
-    final h = s ~/ 3600, m = (s % 3600) ~/ 60, sec = s % 60;
-    final mm = h > 0 ? m.toString().padLeft(2, '0') : '$m';
-    return '${h > 0 ? '$h:' : ''}$mm:${sec.toString().padLeft(2, '0')}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: p == null
+          ? Container(
+              padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+              decoration: BoxDecoration(color: kTile, borderRadius: BorderRadius.circular(20)),
+              child: volume,
+            )
+          : NowPlayingCard(device: widget.device, player: p, state: state, act: _act, footer: volume),
+    );
   }
 }
 
@@ -768,16 +674,11 @@ Future<void> _openFile(BuildContext context, HistoryFile f, bool outgoing) async
 String _dayLabel(DateTime t) {
   final d = t.toLocal();
   final now = DateTime.now();
-  final diff = DateTime(now.year, now.month, now.day)
-      .difference(DateTime(d.year, d.month, d.day))
-      .inDays;
+  final diff = DateTime(now.year, now.month, now.day).difference(DateTime(d.year, d.month, d.day)).inDays;
   if (diff == 0) return 'Today';
   if (diff == 1) return 'Yesterday';
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return '${weekdays[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
 }
 
@@ -806,8 +707,7 @@ class _DayDivider extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(top: 14, bottom: 8),
         child: Center(
-          child: Text(label.toUpperCase(),
-              style: mono(fontSize: 10, color: kTextFaint).copyWith(letterSpacing: 1.2)),
+          child: Text(label.toUpperCase(), style: mono(fontSize: 10, color: kTextFaint).copyWith(letterSpacing: 1.2)),
         ),
       );
 }
@@ -891,9 +791,7 @@ class _ImageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isVideoName(file.name)) {
-      final video = outgoing
-          ? file.path
-          : (file.path ?? '$kPaltDownloadDir/${safeFileName(file.name)}');
+      final video = outgoing ? file.path : (file.path ?? '$kPaltDownloadDir/${safeFileName(file.name)}');
       return FutureBuilder<VideoThumb?>(
         future: video == null ? Future.value(null) : videoThumb(video),
         builder: (context, snap) {
@@ -916,9 +814,7 @@ class _ImageTile extends StatelessWidget {
     }
 
     // Sent pictures: the kept preview outlives the picker's temporary copy.
-    final src = outgoing
-        ? (file.preview ?? file.path)
-        : (file.path ?? '$kPaltDownloadDir/${safeFileName(file.name)}');
+    final src = outgoing ? (file.preview ?? file.path) : (file.path ?? '$kPaltDownloadDir/${safeFileName(file.name)}');
     if (src == null) return fallback;
     return _frame(context, src);
   }
@@ -956,8 +852,7 @@ class _Bubble extends ConsumerWidget {
               children: [
                 Text(
                   f.name,
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: outgoing ? kOnSent : kText),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: outgoing ? kOnSent : kText),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -973,7 +868,7 @@ class _Bubble extends ConsumerWidget {
               child: TextButton(
                 onPressed: () => _openFile(context, f, outgoing),
                 style: TextButton.styleFrom(
-                  backgroundColor: outgoing ? Colors.black.withValues(alpha: 0.22) : const Color(0xFF1E2A42),
+                  backgroundColor: outgoing ? Colors.black.withValues(alpha: 0.22) : kSurfaceRaised,
                   foregroundColor: outgoing ? kOnSent : kText,
                   padding: const EdgeInsets.symmetric(horizontal: 11),
                   minimumSize: Size.zero,
@@ -999,7 +894,10 @@ class _Bubble extends ConsumerWidget {
           height: h,
           radius: r,
           onTap: () => _openFile(context, f, outgoing),
-          fallback: Container(width: w, height: h, color: kSurfaceRaised,
+          fallback: Container(
+              width: w,
+              height: h,
+              color: kSurfaceRaised,
               child: const Icon(Icons.image_not_supported_outlined, color: kTextFaint, size: 20)),
         );
     if (files.length == 1) {
@@ -1031,8 +929,7 @@ class _Bubble extends ConsumerWidget {
                 onTap: () {
                   Navigator.pop(sheet);
                   Clipboard.setData(ClipboardData(text: entry.text ?? ''));
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(const SnackBar(content: Text('Copied')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
                 },
               ),
             if (!entry.isText && entry.files.length == 1 && _canOpen(entry.files.first, outgoing))
@@ -1067,8 +964,7 @@ class _Bubble extends ConsumerWidget {
     final outgoing = entry.direction == 'outgoing';
     final failed = entry.status != 'completed';
     final maxWidth = MediaQuery.of(context).size.width * 0.76;
-    final picturesOnly =
-        !entry.isText && entry.files.isNotEmpty && entry.files.every(_isPicture);
+    final picturesOnly = !entry.isText && entry.files.isNotEmpty && entry.files.every(_isPicture);
     final metaColor = outgoing ? kSentMeta : kTextFaint;
     final total = entry.files.fold<int>(0, (n, f) => n + f.size);
 
@@ -1094,8 +990,7 @@ class _Bubble extends ConsumerWidget {
           Text('copied · ', style: mono(fontSize: 10, color: metaColor)),
         ],
         if (picturesOnly)
-          Text(
-              '${entry.files.length > 1 ? '${entry.files.length} photos · ' : ''}${_formatSize(total)} · ',
+          Text('${entry.files.length > 1 ? '${entry.files.length} photos · ' : ''}${_formatSize(total)} · ',
               style: mono(fontSize: 10, color: metaColor)),
         Text(_formatTime(entry.timestamp), style: mono(fontSize: 10, color: metaColor)),
         if (entry.route != null)
@@ -1117,9 +1012,7 @@ class _Bubble extends ConsumerWidget {
             onLongPress: () => _showActions(context, ref),
             child: Container(
               constraints: BoxConstraints(maxWidth: maxWidth),
-              padding: picturesOnly
-                  ? const EdgeInsets.all(4)
-                  : const EdgeInsets.fromLTRB(12, 9, 12, 7),
+              padding: picturesOnly ? const EdgeInsets.all(4) : const EdgeInsets.fromLTRB(12, 9, 12, 7),
               decoration: BoxDecoration(
                 color: outgoing ? kSent : kTile,
                 border: failed ? Border.all(color: kDanger.withValues(alpha: 0.6)) : null,
@@ -1138,9 +1031,7 @@ class _Bubble extends ConsumerWidget {
                   children: [
                     body,
                     Padding(
-                      padding: picturesOnly
-                          ? const EdgeInsets.fromLTRB(6, 5, 6, 2)
-                          : const EdgeInsets.only(top: 4),
+                      padding: picturesOnly ? const EdgeInsets.fromLTRB(6, 5, 6, 2) : const EdgeInsets.only(top: 4),
                       child: meta,
                     ),
                   ],
@@ -1325,7 +1216,7 @@ class _Composer extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFF1A2438))),
+        border: Border(top: BorderSide(color: kHairline)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -1404,11 +1295,9 @@ class _Composer extends StatelessWidget {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: kTextFaint),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: kTextFaint),
                         )
-                      : Icon(Icons.arrow_upward_rounded,
-                          size: 21, color: canSend ? kOnAccent : kTextFaint),
+                      : Icon(Icons.arrow_upward_rounded, size: 21, color: canSend ? kOnAccent : kTextFaint),
                 ),
               ),
             ),

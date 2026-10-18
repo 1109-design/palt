@@ -23,7 +23,6 @@ import '../../theme/app_theme.dart';
 
 import '../../providers/alias_provider.dart';
 import '../screens/device_screen.dart';
-import '../screens/media_screen.dart';
 import 'route_badge.dart';
 
 /// Opens the system file picker and streams the chosen files to [peer].
@@ -202,12 +201,7 @@ class _PairedCard extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1B2640), Color(0xFF141D30)],
-          stops: [0, 0.6],
-        ),
+        gradient: kCardGradient,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: kHairline),
       ),
@@ -293,8 +287,7 @@ class _PairedCard extends ConsumerWidget {
                     _CardAction(
                       icon: Icons.play_arrow_rounded,
                       label: 'Media',
-                      onTap: () => Navigator.push(
-                          context, MaterialPageRoute(builder: (_) => MediaScreen(device: peer.deviceName))),
+                      onTap: open,
                     ),
                   ],
                 ),
@@ -336,11 +329,14 @@ class _CardAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = primary ? kOnAccent : const Color(0xFFC9D3E6);
+    final fg = primary ? kOnAccent : kText.withValues(alpha: 0.85);
     return Expanded(
-      child: Material(
-        color: primary ? kAccent : const Color(0xFF0F1626),
-        borderRadius: BorderRadius.circular(16),
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: primary ? kAccentGradient : null,
+          color: primary ? null : Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: onTap,

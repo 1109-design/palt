@@ -1,6 +1,7 @@
 /// app_theme.dart — Beacon design tokens + ThemeData (see /design.md).
 ///
-/// Deep-ink night surfaces, signal-amber accent, mono data readouts.
+/// True-black background, near-black gradient surfaces, signal-amber accent,
+/// mono data readouts.
 ///   - Bricolage Grotesque: display / headings / device names
 ///   - Inter: UI body
 ///   - JetBrains Mono: every wire-derived value (IPs, sizes, speeds, versions)
@@ -10,13 +11,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ── Beacon palette ───────────────────────────────────────────────────────────
-const kBg            = Color(0xFF0C1220);
-const kSurface       = Color(0xFF131B2C);
-const kSurfaceRaised = Color(0xFF1A2438);
-const kHairline      = Color(0xFF263450);
-const kText          = Color(0xFFEAF0FB);
-const kTextSecondary = Color(0xFF8FA0BC);
-const kTextFaint     = Color(0xFF55637F);
+const kBg            = Color(0xFF000000);
+const kSurface       = Color(0xFF111216);
+const kSurfaceRaised = Color(0xFF1B1D23);
+const kHairline      = Color(0xFF26282F);
+const kText          = Color(0xFFF2F3F6);
+const kTextSecondary = Color(0xFF9A9EA9);
+const kTextFaint     = Color(0xFF5C606B);
 const kAccent        = Color(0xFFFFB454);
 const kAccentPressed = Color(0xFFE69A38);
 const kOnAccent      = Color(0xFF201503);
@@ -25,11 +26,42 @@ const kDanger        = Color(0xFFFF7B72);
 /// Route tag for peers/transfers going through the relay server.
 const kRelay         = Color(0xFF7AA2FF);
 /// Action tiles and received bubbles.
-const kTile          = Color(0xFF141E31);
+const kTile          = Color(0xFF14151A);
 /// Sent bubbles: dark amber, with light amber text and meta.
 const kSent          = Color(0xFF3A2B12);
 const kOnSent        = Color(0xFFFFE6C2);
 const kSentMeta      = Color(0xFFC9A46A);
+
+// ── Gradients ────────────────────────────────────────────────────────────────
+
+/// Hero cards: a warm amber breath in the corner, fading to black.
+const kCardGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF2A2116), Color(0xFF15161A), Color(0xFF0B0B0D)],
+  stops: [0, 0.45, 1],
+);
+
+/// Tiles and secondary surfaces.
+const kTileGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF1C1E24), Color(0xFF111216)],
+);
+
+/// Primary amber actions.
+const kAccentGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFFFFCB7A), Color(0xFFFFA63D)],
+);
+
+/// A soft amber glow at the top of a page, over the black.
+const kPageGlow = RadialGradient(
+  center: Alignment(0, -1.15),
+  radius: 1.1,
+  colors: [Color(0x26FFB454), Color(0x00FFB454)],
+);
 
 // ── Type helpers ─────────────────────────────────────────────────────────────
 
