@@ -44,6 +44,7 @@ export namespace main {
 	    available: boolean;
 	    on: boolean;
 	    devices: BluetoothDevice[];
+	    hidden?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new BluetoothState(source);
@@ -54,6 +55,7 @@ export namespace main {
 	        this.available = source["available"];
 	        this.on = source["on"];
 	        this.devices = this.convertValues(source["devices"], BluetoothDevice);
+	        this.hidden = source["hidden"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

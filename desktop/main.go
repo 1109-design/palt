@@ -49,8 +49,8 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:     "PALT — Local File Transfer",
-		Width:     1100,
-		Height:    720,
+		Width:     1375,
+		Height:    900,
 		MinWidth:  800,
 		MinHeight: 560,
 		AssetServer: &assetserver.Options{
