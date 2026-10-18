@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -113,6 +114,12 @@ func listPlayers() []MediaPlayer {
 		if art, _ := meta["mpris:artUrl"].Value().(string); art != "" {
 			p.Art = artData(art)
 		}
+		// Full-size art from the PALT browser extension (browsers pass on
+		// only a ~150px thumbnail): album "Netflix ⟨art:URL⟩".
+		if m := albumArtRe.FindStringSubmatch(p.Album); m != nil {
+			p.Album = strings.TrimSpace(p.Album[:len(p.Album)-len(m[0])])
+			p.Art = m[1]
+		}
 		out = append(out, p)
 	}
 	return out
@@ -127,6 +134,8 @@ func trackID(meta map[string]dbus.Variant) string {
 	}
 	return ""
 }
+
+var albumArtRe = regexp.MustCompile(`\s*⟨art:(https?://[^⟩\s]+)⟩$`)
 
 var artCache struct {
 	sync.Mutex
