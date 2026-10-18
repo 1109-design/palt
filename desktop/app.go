@@ -145,6 +145,7 @@ func (a *App) startup(ctx context.Context) {
 	a.setupWifiShare()
 	a.setupMedia()
 	a.setupMessages()
+	a.setupUnlock()
 	a.transferServer.OnOffer = func(meta transfer.Metadata) bool {
 		// Paired devices proved they hold our key: their files come straight in.
 		if meta.Paired {

@@ -286,6 +286,37 @@ object Channels {
         Messages.onReceived = { m -> mainThread.post { messages.invokeMethod("received", m) } }
         Messages.onChanged = { what -> mainThread.post { messages.invokeMethod("changed", what) } }
 
+        // palt/unlock: fingerprint unlock for computers (lib/features/unlock.dart).
+        MethodChannel(messenger, "palt/unlock").setMethodCallHandler { call, result ->
+            val computer = call.argument<String>("computer") ?: ""
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                result.error("unlock", "Fingerprint unlock needs Android 11 or newer", null)
+                return@setMethodCallHandler
+            }
+            when (call.method) {
+                "setup" -> worker.execute {
+                    try {
+                        val key = Unlock.setup(app, computer)
+                        mainThread.post { result.success(key) }
+                    } catch (e: Exception) {
+                        mainThread.post { result.error("unlock", e.message ?: e.toString(), null) }
+                    }
+                }
+                "sign" -> Unlock.sign(
+                    app, computer,
+                    call.argument<String>("name") ?: "",
+                    call.argument<String>("message") ?: "",
+                ) { sig, err ->
+                    mainThread.post { if (sig != null) result.success(sig) else result.error("unlock", err, null) }
+                }
+                "forget" -> {
+                    Unlock.forget(computer)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         // palt/calls: incoming calls for computers (lib/features/calls.dart).
         val calls = MethodChannel(messenger, "palt/calls")
         calls.setMethodCallHandler { call, result ->

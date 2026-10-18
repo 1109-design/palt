@@ -20,6 +20,7 @@ import '../features/media.dart';
 import '../features/messages.dart';
 import '../features/notification_sync.dart';
 import '../features/phone_features.dart';
+import '../features/unlock.dart';
 import '../services/link/link.dart';
 import '../services/palt_conn.dart';
 import 'transfer_service.dart';
@@ -65,6 +66,7 @@ void startCore(ProviderContainer c) {
   setupClipboard(c);
   setupMedia(c);
   setupMessages(c);
+  setupUnlock(c);
 
   // Keep the notification saying who is connected.
   void showLinks(List<Link> links) {

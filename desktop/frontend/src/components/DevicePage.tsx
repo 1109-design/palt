@@ -52,6 +52,7 @@ import { formatSize, formatTime, dayLabel } from './HistoryView';
 import RouteBadge, { routeColor, routeLabel } from './RouteBadge';
 import { networkLabel } from './DeviceStatusChip';
 import NowPlaying from './NowPlaying';
+import UnlockMenuItem from './UnlockMenuItem';
 
 /** Must match MaxTextBytes in internal/transfer/protocol.go */
 const MAX_TEXT_BYTES = 16 * 1024;
@@ -1028,6 +1029,7 @@ const DevicePage: React.FC<DevicePageProps> = ({
                   <Typography sx={{ fontSize: '0.86rem' }}>{label}</Typography>
                 </MenuItem>
               ))}
+              {peer.os === 'android' && <UnlockMenuItem device={peer.deviceName} />}
             </Menu>
           </>
         )}

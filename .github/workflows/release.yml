@@ -114,6 +114,10 @@ jobs:
           # Move binary & icon
           cp build/bin/palt build/deb/usr/local/bin/
           chmod +x build/deb/usr/local/bin/palt
+
+          # Fingerprint unlock helper that PAM runs (cmd/palt-unlock)
+          CGO_ENABLED=0 go build -trimpath -o build/deb/usr/local/bin/palt-unlock ./cmd/palt-unlock
+          chmod 755 build/deb/usr/local/bin/palt-unlock
           
           if [ -f "build/appicon.png" ]; then
             cp build/appicon.png build/deb/usr/share/icons/hicolor/512x512/apps/palt.png
@@ -133,7 +137,7 @@ jobs:
           Section: base
           Priority: optional
           Architecture: amd64
-          Recommends: python3-nautilus, pulseaudio-utils
+          Recommends: python3-nautilus, pulseaudio-utils, pkexec
           Maintainer: h200137j <h200137j@users.noreply.github.com>
           Description: PALT
            Peer And Local Transfer - A frictionless cross-platform local network file transfer app.
@@ -151,7 +155,7 @@ jobs:
           EOF
           
           # Build .deb package
-          dpkg-deb --build build/deb palt-${GITHUB_REF_NAME}-linux-amd64.deb
+          dpkg-deb --root-owner-group --build build/deb palt-${GITHUB_REF_NAME}-linux-amd64.deb
 
       - name: Upload DEB Artifact
         uses: actions/upload-artifact@v4
