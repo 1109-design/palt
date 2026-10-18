@@ -62,6 +62,10 @@ export function DownloadPhoneFiles(arg1, arg2) {
   return window['go']['main']['App']['DownloadPhoneFiles'](arg1, arg2);
 }
 
+export function EnableWake() {
+  return window['go']['main']['App']['EnableWake']();
+}
+
 export function EndCall(arg1) {
   return window['go']['main']['App']['EndCall'](arg1);
 }
@@ -180,6 +184,10 @@ export function GetThread(arg1, arg2, arg3) {
 
 export function GetUnlockStatus() {
   return window['go']['main']['App']['GetUnlockStatus']();
+}
+
+export function GetWakeStatus() {
+  return window['go']['main']['App']['GetWakeStatus']();
 }
 
 export function GetZoom() {

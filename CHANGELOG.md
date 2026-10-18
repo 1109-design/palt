@@ -3,6 +3,21 @@
 What's new in each PALT release. The section for a tag becomes its GitHub
 release notes, which both apps show in "What's new".
 
+## v2.4.0
+
+- **Unlock the laptop with your phone's fingerprint**: the lock screen, admin prompts and sudo ask the phone; touch the sensor and you're in. Your password still works any time. Turn it on in the phone's device settings on the laptop.
+- **Browse the phone's files from the laptop**: folders with picture and video previews, download, upload into any folder, new folder, delete.
+- **Phone storage and memory**: used and free space split into photos, videos, audio, documents and apps, the biggest folders and files, SD card, RAM and swap.
+- **Take a photo with the phone from the laptop**: the camera opens on the phone and the picture opens on the laptop.
+- **Run commands from the phone**: Lock, Suspend, Mute, plus your own commands added on the laptop.
+- **Laptop status on the phone**: locked or unlocked, CPU, memory, disk, temperature and uptime.
+- **Proximity lock**: the laptop locks when the phone has been away for 2 minutes (optional).
+- **Wake the laptop from the phone**: sleeping computers show on the phone's home screen with a Wake button (same network, from sleep).
+- **Keep the laptop awake** while the phone is connected (optional).
+- **Wi-Fi QR screenshots**: take a screenshot of a Wi-Fi QR code and the phone offers to send it to the laptop.
+- Unread count on the Activity tab; a hint on the phone when Android blocks texts and calls for PALT.
+- Fixed: the .deb now installs files owned by root.
+
 ## v2.3.0
 
 - **New laptop look**: your devices up front on the home screen; each device page has a Control side (media, big action tiles, vitals) and an Activity side with chat bubbles and picture thumbnails.

@@ -459,6 +459,24 @@ export namespace main {
 	        this.releaseNotes = source["releaseNotes"];
 	    }
 	}
+	export class WakeStatus {
+	    ready: boolean;
+	    wifi: boolean;
+	    iface: string;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WakeStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ready = source["ready"];
+	        this.wifi = source["wifi"];
+	        this.iface = source["iface"];
+	        this.error = source["error"];
+	    }
+	}
 
 }
 

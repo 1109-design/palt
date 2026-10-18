@@ -33,6 +33,8 @@ export function DismissPhoneNotification(arg1:string,arg2:string):Promise<void>;
 
 export function DownloadPhoneFiles(arg1:string,arg2:Array<string>):Promise<void>;
 
+export function EnableWake():Promise<void>;
+
 export function EndCall(arg1:string):Promise<void>;
 
 export function GetActiveCalls():Promise<Array<main.ActiveCall>>;
@@ -92,6 +94,8 @@ export function GetStartupError():Promise<string>;
 export function GetThread(arg1:string,arg2:number,arg3:number):Promise<Array<main.SMSMessage>>;
 
 export function GetUnlockStatus():Promise<main.UnlockStatus>;
+
+export function GetWakeStatus():Promise<main.WakeStatus>;
 
 export function GetZoom():Promise<number>;
 
