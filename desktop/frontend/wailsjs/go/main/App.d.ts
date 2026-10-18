@@ -5,6 +5,8 @@ import {models} from '../models';
 
 export function AcceptOffer(arg1:string):Promise<void>;
 
+export function AllowPhoneFiles(arg1:string):Promise<void>;
+
 export function AnswerCall(arg1:string):Promise<void>;
 
 export function AskForInternet(arg1:string):Promise<void>;
@@ -19,11 +21,17 @@ export function ContactPhotos(arg1:string):Promise<Record<string, string>>;
 
 export function CopyFromHistory(arg1:string):Promise<void>;
 
+export function DeleteCommand(arg1:string):Promise<void>;
+
 export function DeleteHistoryEntry(arg1:string,arg2:string):Promise<void>;
+
+export function DeletePhoneFiles(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function DisableUnlock():Promise<void>;
 
 export function DismissPhoneNotification(arg1:string,arg2:string):Promise<void>;
+
+export function DownloadPhoneFiles(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function EndCall(arg1:string):Promise<void>;
 
@@ -40,6 +48,8 @@ export function GetCallLog(arg1:string,arg2:number):Promise<Array<main.CallLogEn
 export function GetClipboardHelper():Promise<main.ClipboardHelper>;
 
 export function GetClipboardHistory():Promise<Array<main.ClipboardEntry>>;
+
+export function GetCommands():Promise<Array<main.Command>>;
 
 export function GetContacts(arg1:string):Promise<Array<main.Contact>>;
 
@@ -87,7 +97,11 @@ export function InstallClipboardHelper():Promise<void>;
 
 export function JoinPairing(arg1:string):Promise<void>;
 
+export function ListPhoneFiles(arg1:string,arg2:string):Promise<main.PhoneFolder>;
+
 export function MuteRinger(arg1:string):Promise<void>;
+
+export function NewPhoneFolder(arg1:string,arg2:string):Promise<void>;
 
 export function OpenDownloadFolder():Promise<void>;
 
@@ -96,6 +110,8 @@ export function OpenHistoryFile(arg1:string,arg2:string):Promise<void>;
 export function OpenURL(arg1:string):Promise<void>;
 
 export function PeerMediaAction(arg1:string,arg2:string,arg3:string,arg4:number):Promise<void>;
+
+export function PhoneThumbnail(arg1:string,arg2:string):Promise<string>;
 
 export function PingDevice(arg1:string):Promise<void>;
 
@@ -114,6 +130,8 @@ export function RevealHistoryFile(arg1:string,arg2:string):Promise<void>;
 export function RingDevice(arg1:string):Promise<void>;
 
 export function RunPhoneNotificationAction(arg1:string,arg2:string,arg3:number):Promise<void>;
+
+export function SaveCommand(arg1:main.Command):Promise<void>;
 
 export function SaveLastSeenVersion(arg1:string):Promise<void>;
 
@@ -146,3 +164,9 @@ export function ShareWifi(arg1:string):Promise<void>;
 export function StopRinging():Promise<void>;
 
 export function StopSharingInternet():Promise<void>;
+
+export function TakePhoto(arg1:string):Promise<void>;
+
+export function UploadPathsToPhone(arg1:string,arg2:string,arg3:Array<string>):Promise<void>;
+
+export function UploadToPhone(arg1:string,arg2:string):Promise<void>;

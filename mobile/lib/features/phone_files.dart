@@ -14,6 +14,8 @@
 ///   files.delete  desktop → phone  {paths} → {}
 ///   files.mkdir   desktop → phone  {path} → {}
 ///   files.allow   desktop → phone  {} → {} opens "All files access"
+///   storage.info  desktop → phone  {} → {total, free, categories, folders,
+///                                  largest, volumes, ram} (PhoneFiles.kt)
 ///   camera.photo  desktop → phone  {} → {} opens the camera; the photo
 ///                                  follows as a transfer
 library;
@@ -123,6 +125,11 @@ void setupPhoneFiles(ProviderContainer c) {
     final p = paths([b['path']]).first;
     await Directory(p).create(recursive: true);
     return {};
+  });
+
+  answer('storage.info', (l, b) async {
+    final info = await _channel.invokeMethod<Map>('storage');
+    return Map<String, dynamic>.from(info ?? const {});
   });
 
   answer('files.allow', (l, b) async {

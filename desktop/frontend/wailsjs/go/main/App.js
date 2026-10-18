@@ -6,6 +6,10 @@ export function AcceptOffer(arg1) {
   return window['go']['main']['App']['AcceptOffer'](arg1);
 }
 
+export function AllowPhoneFiles(arg1) {
+  return window['go']['main']['App']['AllowPhoneFiles'](arg1);
+}
+
 export function AnswerCall(arg1) {
   return window['go']['main']['App']['AnswerCall'](arg1);
 }
@@ -34,8 +38,16 @@ export function CopyFromHistory(arg1) {
   return window['go']['main']['App']['CopyFromHistory'](arg1);
 }
 
+export function DeleteCommand(arg1) {
+  return window['go']['main']['App']['DeleteCommand'](arg1);
+}
+
 export function DeleteHistoryEntry(arg1, arg2) {
   return window['go']['main']['App']['DeleteHistoryEntry'](arg1, arg2);
+}
+
+export function DeletePhoneFiles(arg1, arg2) {
+  return window['go']['main']['App']['DeletePhoneFiles'](arg1, arg2);
 }
 
 export function DisableUnlock() {
@@ -44,6 +56,10 @@ export function DisableUnlock() {
 
 export function DismissPhoneNotification(arg1, arg2) {
   return window['go']['main']['App']['DismissPhoneNotification'](arg1, arg2);
+}
+
+export function DownloadPhoneFiles(arg1, arg2) {
+  return window['go']['main']['App']['DownloadPhoneFiles'](arg1, arg2);
 }
 
 export function EndCall(arg1) {
@@ -76,6 +92,10 @@ export function GetClipboardHelper() {
 
 export function GetClipboardHistory() {
   return window['go']['main']['App']['GetClipboardHistory']();
+}
+
+export function GetCommands() {
+  return window['go']['main']['App']['GetCommands']();
 }
 
 export function GetContacts(arg1) {
@@ -170,8 +190,16 @@ export function JoinPairing(arg1) {
   return window['go']['main']['App']['JoinPairing'](arg1);
 }
 
+export function ListPhoneFiles(arg1, arg2) {
+  return window['go']['main']['App']['ListPhoneFiles'](arg1, arg2);
+}
+
 export function MuteRinger(arg1) {
   return window['go']['main']['App']['MuteRinger'](arg1);
+}
+
+export function NewPhoneFolder(arg1, arg2) {
+  return window['go']['main']['App']['NewPhoneFolder'](arg1, arg2);
 }
 
 export function OpenDownloadFolder() {
@@ -188,6 +216,10 @@ export function OpenURL(arg1) {
 
 export function PeerMediaAction(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['PeerMediaAction'](arg1, arg2, arg3, arg4);
+}
+
+export function PhoneThumbnail(arg1, arg2) {
+  return window['go']['main']['App']['PhoneThumbnail'](arg1, arg2);
 }
 
 export function PingDevice(arg1) {
@@ -224,6 +256,10 @@ export function RingDevice(arg1) {
 
 export function RunPhoneNotificationAction(arg1, arg2, arg3) {
   return window['go']['main']['App']['RunPhoneNotificationAction'](arg1, arg2, arg3);
+}
+
+export function SaveCommand(arg1) {
+  return window['go']['main']['App']['SaveCommand'](arg1);
 }
 
 export function SaveLastSeenVersion(arg1) {
@@ -288,4 +324,16 @@ export function StopRinging() {
 
 export function StopSharingInternet() {
   return window['go']['main']['App']['StopSharingInternet']();
+}
+
+export function TakePhoto(arg1) {
+  return window['go']['main']['App']['TakePhoto'](arg1);
+}
+
+export function UploadPathsToPhone(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UploadPathsToPhone'](arg1, arg2, arg3);
+}
+
+export function UploadToPhone(arg1, arg2) {
+  return window['go']['main']['App']['UploadToPhone'](arg1, arg2);
 }

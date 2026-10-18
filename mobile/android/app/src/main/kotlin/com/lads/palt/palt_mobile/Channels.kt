@@ -296,6 +296,14 @@ object Channels {
             }
             when (call.method) {
                 "hasAccess" -> result.success(PhoneFiles.hasAccess())
+                "storage" -> worker.execute {
+                    val info = try {
+                        PhoneFiles.storageInfo(app)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    mainThread.post { if (info != null) result.success(info) else result.error("files", "couldn't read storage", null) }
+                }
                 "allow" -> {
                     PhoneFiles.openAccessSettings(app)
                     result.success(null)

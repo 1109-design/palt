@@ -12,6 +12,7 @@
 //	files.delete  desktop → phone  {paths} → {}
 //	files.mkdir   desktop → phone  {path} → {}
 //	files.allow   desktop → phone  {} → {} opens "All files access" settings
+//	storage.info  desktop → phone  {} → PhoneStorage
 //	camera.photo  desktop → phone  {} → {} opens the camera; the photo
 //	                               follows as a transfer
 //
@@ -46,6 +47,45 @@ type PhoneFolder struct {
 	Entries []PhoneFile `json:"entries"`
 	// Access is false until "All files access" is allowed on the phone.
 	Access bool `json:"access"`
+}
+
+// PhoneStorage is a phone's space and memory. Sizes are bytes.
+type PhoneStorage struct {
+	Total      int64 `json:"total"`
+	Free       int64 `json:"free"`
+	Categories struct {
+		Images    int64 `json:"images"`
+		Videos    int64 `json:"videos"`
+		Audio     int64 `json:"audio"`
+		Documents int64 `json:"documents"`
+		Other     int64 `json:"other"`
+		System    int64 `json:"system"` // apps, system and anything unindexed
+	} `json:"categories"`
+	Folders []struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+	} `json:"folders"`
+	Largest []struct {
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+	} `json:"largest"`
+	Volumes []struct {
+		Name      string `json:"name"`
+		Path      string `json:"path"`
+		Removable bool   `json:"removable"`
+		Total     int64  `json:"total"`
+		Free      int64  `json:"free"`
+	} `json:"volumes"`
+	RAM struct {
+		Total     int64 `json:"total"`
+		Available int64 `json:"available"`
+		Low       bool  `json:"low"`
+		Threshold int64 `json:"threshold"`
+		Cached    int64 `json:"cached"`
+		SwapTotal int64 `json:"swapTotal"`
+		SwapFree  int64 `json:"swapFree"`
+	} `json:"ram"`
 }
 
 const (
@@ -166,6 +206,24 @@ func (a *App) DeletePhoneFiles(device string, paths []string) error {
 // NewPhoneFolder makes a folder on the phone.
 func (a *App) NewPhoneFolder(device, path string) error {
 	return a.filesRequest(device, "files.mkdir", map[string]string{"path": path}, nil)
+}
+
+// GetPhoneStorage reads the phone's storage, what fills it, and its memory.
+func (a *App) GetPhoneStorage(device string) (PhoneStorage, error) {
+	var st PhoneStorage
+	l, err := a.filesLink(device)
+	if err != nil {
+		return st, err
+	}
+	if !l.Supports("storage.info") {
+		return st, errors.New("update PALT on " + device + " to see its storage")
+	}
+	p, err := l.Request("storage.info", map[string]any{}, 45*time.Second)
+	if err != nil {
+		return st, err
+	}
+	err = smsReply(p, &st)
+	return st, err
 }
 
 // AllowPhoneFiles opens "All files access" for PALT on the phone.

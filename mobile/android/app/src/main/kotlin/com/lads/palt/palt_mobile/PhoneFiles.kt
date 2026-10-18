@@ -2,6 +2,8 @@ package com.lads.palt.palt_mobile
 
 import android.Manifest
 import android.annotation.TargetApi
+import android.app.ActivityManager
+import android.app.usage.StorageStatsManager
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationManager
@@ -21,6 +23,8 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.os.StatFs
+import android.os.storage.StorageManager
 import android.provider.Settings
 import android.util.Size
 import java.io.ByteArrayOutputStream
@@ -90,6 +94,97 @@ object PhoneFiles {
         context.startActivity(
             Intent(context, CameraActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        )
+    }
+
+    // ── Storage and memory ──────────────────────────────────────────────────
+
+    /**
+     * Everything about the phone's space: storage totals (as Settings shows
+     * them), what the files are, the biggest folders and files, other
+     * volumes (SD card), RAM and swap. Files come from the media index.
+     */
+    fun storageInfo(context: Context): Map<String, Any?> {
+        val stats = context.getSystemService(StorageStatsManager::class.java)
+        val total = stats.getTotalBytes(StorageManager.UUID_DEFAULT)
+        val free = stats.getFreeBytes(StorageManager.UUID_DEFAULT)
+
+        val root = Environment.getExternalStorageDirectory().absolutePath
+        var images = 0L; var videos = 0L; var audio = 0L; var documents = 0L; var other = 0L
+        val folders = HashMap<String, Long>()
+        val largest = java.util.PriorityQueue<Pair<String, Long>>(compareBy { it.second })
+        val docExt = setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "odt", "ods", "odp", "csv", "epub", "md")
+        try {
+            context.contentResolver.query(
+                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL),
+                arrayOf(MediaStore.Files.FileColumns.DATA, MediaStore.Files.FileColumns.SIZE, MediaStore.Files.FileColumns.MEDIA_TYPE),
+                "${MediaStore.Files.FileColumns.SIZE} > 0", null, null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val path = c.getString(0) ?: continue
+                    if (!path.startsWith("$root/")) continue
+                    val size = c.getLong(1)
+                    when (c.getInt(2)) {
+                        MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE -> images += size
+                        MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO -> videos += size
+                        MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO -> audio += size
+                        else -> if (path.substringAfterLast('.', "").lowercase() in docExt) documents += size else other += size
+                    }
+                    val top = path.substring(root.length + 1).substringBefore('/', "")
+                    if (top.isNotEmpty()) folders[top] = (folders[top] ?: 0) + size
+                    largest.add(path to size)
+                    if (largest.size > 12) largest.poll()
+                }
+            }
+        } catch (_: Exception) {
+        }
+        val files = images + videos + audio + documents + other
+
+        val am = context.getSystemService(ActivityManager::class.java)
+        val mem = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        val meminfo = try {
+            File("/proc/meminfo").readLines().associate { l ->
+                l.substringBefore(':') to (l.substringAfter(':').trim().substringBefore(' ').toLongOrNull() ?: 0L) * 1024
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+        val volumes = context.getSystemService(StorageManager::class.java).storageVolumes
+            .filter { !it.isPrimary && it.directory != null }
+            .map { v ->
+                val st = StatFs(v.directory!!.absolutePath)
+                mapOf(
+                    "name" to (v.getDescription(context) ?: "Storage"),
+                    "path" to v.directory!!.absolutePath,
+                    "removable" to v.isRemovable,
+                    "total" to st.totalBytes,
+                    "free" to st.availableBytes,
+                )
+            }
+
+        return mapOf(
+            "total" to total,
+            "free" to free,
+            "categories" to mapOf(
+                "images" to images, "videos" to videos, "audio" to audio,
+                "documents" to documents, "other" to other,
+                "system" to (total - free - files).coerceAtLeast(0),
+            ),
+            "folders" to folders.entries.sortedByDescending { it.value }.take(10)
+                .map { mapOf("name" to it.key, "path" to "$root/${it.key}", "size" to it.value) },
+            "largest" to largest.sortedByDescending { it.second }
+                .map { mapOf("path" to it.first, "size" to it.second) },
+            "volumes" to volumes,
+            "ram" to mapOf(
+                "total" to mem.totalMem,
+                "available" to mem.availMem,
+                "low" to mem.lowMemory,
+                "threshold" to mem.threshold,
+                "cached" to (meminfo["Cached"] ?: 0L),
+                "swapTotal" to (meminfo["SwapTotal"] ?: 0L),
+                "swapFree" to (meminfo["SwapFree"] ?: 0L),
+            ),
         )
     }
 

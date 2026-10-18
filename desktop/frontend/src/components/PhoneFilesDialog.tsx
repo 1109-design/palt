@@ -21,6 +21,7 @@ import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightRounded';
 import { beacon, fonts } from '../theme/theme';
 import { formatSize } from './HistoryView';
+import PhoneStoragePanel from './PhoneStoragePanel';
 
 const go = () => (window as any).go?.main?.App;
 const events = () => (window as any).runtime;
@@ -93,9 +94,10 @@ const PhoneFilesDialog: React.FC<{ device: string; open: boolean; onClose: () =>
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const thumbs = useRef(new Map<string, string>()).current;
+  const [storageKey, setStorageKey] = useState(0);
 
   const load = useCallback(
-    async (p: string) => {
+    async (p: string, select?: string) => {
       setLoading(true);
       setError('');
       try {
@@ -103,7 +105,7 @@ const PhoneFilesDialog: React.FC<{ device: string; open: boolean; onClose: () =>
         setPath(f.path || p);
         setAccess(f.access);
         setEntries(f.entries || []);
-        setSelected(new Set());
+        setSelected(new Set(select ? [select] : []));
       } catch (e) {
         setError(String(e));
       }
@@ -185,7 +187,13 @@ const PhoneFilesDialog: React.FC<{ device: string; open: boolean; onClose: () =>
           </span>
         </Tooltip>
         <Tooltip title="Refresh">
-          <IconButton onClick={() => load(path)} sx={iconButton}>
+          <IconButton
+            onClick={() => {
+              load(path);
+              setStorageKey((k) => k + 1);
+            }}
+            sx={iconButton}
+          >
             <RefreshIcon />
           </IconButton>
         </Tooltip>
@@ -209,6 +217,8 @@ const PhoneFilesDialog: React.FC<{ device: string; open: boolean; onClose: () =>
           <CloseIcon />
         </IconButton>
       </Box>
+
+      {open && <PhoneStoragePanel device={device} refreshKey={storageKey} onOpen={(dir, file) => load(dir, file)} />}
 
       {/* Breadcrumbs */}
       <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', px: 2.5, pb: 1 }}>
@@ -264,7 +274,10 @@ const PhoneFilesDialog: React.FC<{ device: string; open: boolean; onClose: () =>
                 variant="contained"
                 onClick={() => {
                   setConfirmDelete(false);
-                  run('Deleting…', () => go().DeletePhoneFiles(device, chosen), () => load(path));
+                  run('Deleting…', () => go().DeletePhoneFiles(device, chosen), () => {
+                    load(path);
+                    setStorageKey((k) => k + 1);
+                  });
                 }}
               >
                 Delete
